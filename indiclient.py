@@ -2,186 +2,188 @@
 #	This program is free software; you can redistribute it and/or
 #	modify it under the terms of the GNU General Public License as
 #	published by the Free Software Foundation, version 2.
+#
+#   Updated to support python 3.x by T. E. Pickering te (dot) pickering (at) gmail (dot) com
 
 """
 An INDI Client Library
 ======================
-	It implements the INDI Protocol for Python (see U{http://indi.sourceforge.net/}) \n
-	There are two major applications:
-		- writing telescope control scripts
-		- writing user interfaces for remote telescope control
-	Supported platforms are:
-		- Linux
-		- Windows
-		- any other platform supporting Python
+    It implements the INDI Protocol for Python (see U{http://indi.sourceforge.net/}) \n
+    There are two major applications:
+    - writing telescope control scripts
+    - writing user interfaces for remote telescope control
+    Supported platforms are:
+    - Linux
+    - Windows
+    - any other platform supporting Python
 
-	The simple way
-	--------------
-	The most easy way to write a script is demonstrated in the example below (same as file C{test.py})\n
-	B{Important:} make sure you got an B{indiserver} running B{tutorial_two} from the indi distribution and that the C{Connection} is set to C{On}.
+    The simple way
+    --------------
+    The most easy way to write a script is demonstrated in the example below (same as file C{test.py})\n
+    B{Important:} make sure you got an B{indiserver} running B{tutorial_two} from the indi distribution and that the C{Connection} is set to C{On}.
 
-		>>> from indiclient import *
-		>>> indi=indiclient("localhost",7624)
-		>>> time.sleep(1)
-		>>> indi.tell()
-		Telescope Simulator CONNECTION Connection SwitchVector OneOfMany
-			CONNECT On Switch On
-			DISCONNECT Off Switch Off
-		Telescope Simulator EQUATORIAL_COORD Equatorial J2000 NumberVector rw
-			RA RA H:M:S Number 3.5
-			DEC Dec D:M:S Number 0
-		>>> print time.time()
-		1126108172.88
-		>>> indi.set_and_send_float("Telescope Simulator","EQUATORIAL_COORD","RA",2.0).wait_for_ok_timeout(60.0)
-		>>> print time.time()
-		1126108211.44
-		>>> print indi.get_float("Telescope Simulator","EQUATORIAL_COORD","RA")
-		2.0
-		>>> print indi.get_text("Telescope Simulator","EQUATORIAL_COORD","RA")
-		2:0:0.00
-		>>> indi.set_and_send_text("Telescope Simulator","EQUATORIAL_COORD","RA","3:30:00").wait_for_ok_timeout(60.0)
-		>>> print indi.get_float("Telescope Simulator","EQUATORIAL_COORD","RA")
-		3.5
-		>>> indi.quit()
+    >>> from indiclient import *
+    >>> indi=indiclient("localhost",7624)
+    >>> time.sleep(1)
+    >>> indi.tell()
+    Telescope Simulator CONNECTION Connection SwitchVector OneOfMany
+    CONNECT On Switch On
+    DISCONNECT Off Switch Off
+    Telescope Simulator EQUATORIAL_COORD Equatorial J2000 NumberVector rw
+    RA RA H:M:S Number 3.5
+    DEC Dec D:M:S Number 0
+    >>> print time.time()
+    1126108172.88
+    >>> indi.set_and_send_float("Telescope Simulator","EQUATORIAL_COORD","RA",2.0).wait_for_ok_timeout(60.0)
+    >>> print time.time()
+    1126108211.44
+    >>> print indi.get_float("Telescope Simulator","EQUATORIAL_COORD","RA")
+    2.0
+    >>> print indi.get_text("Telescope Simulator","EQUATORIAL_COORD","RA")
+    2:0:0.00
+    >>> indi.set_and_send_text("Telescope Simulator","EQUATORIAL_COORD","RA","3:30:00").wait_for_ok_timeout(60.0)
+    >>> print indi.get_float("Telescope Simulator","EQUATORIAL_COORD","RA")
+    3.5
+    >>> indi.quit()
 
-	(if you omit the C{.wait_for_ok_timeout(60.0)} the command will still be send, but the function will not wait until the telescope moved to the new position.)
-	If this suits you needs you may take a look at:
-		- L{indiclient.get_bool}
-		- L{indiclient.get_float}
-		- L{indiclient.get_text}
-		- L{indiclient.set_and_send_bool}
-		- L{indiclient.set_and_send_float}
-		- L{indiclient.set_and_send_switchvector_by_elementlabel}
-		- L{indiclient.set_and_send_text}
+    (if you omit the C{.wait_for_ok_timeout(60.0)} the command will still be send, but the function will not wait until the telescope moved to the new position.)
+    If this suits you needs you may take a look at:
+    - L{indiclient.get_bool}
+    - L{indiclient.get_float}
+    - L{indiclient.get_text}
+    - L{indiclient.set_and_send_bool}
+    - L{indiclient.set_and_send_float}
+    - L{indiclient.set_and_send_switchvector_by_elementlabel}
+    - L{indiclient.set_and_send_text}
 
-	\n
+    \n
 
-	The object oriented way
-	-----------------------
-	Otherwise can use a more object oriented approach (same as file C{testobj.py}):
+    The object oriented way
+    -----------------------
+    Otherwise can use a more object oriented approach (same as file C{testobj.py}):
 
-		>>> from indiclient import *
-		>>> indi=indiclient("localhost",7624)
-		>>> vector=indi.get_vector("Telescope Simulator","CONNECTION")
-		>>> vector.set_by_elementname("CONNECT")
-		>>> indi.send_vector(vector)
-		>>> vector.wait_for_ok()
-		>>> vector.tell()
-		Telescope Simulator CONNECTION Connection SwitchVector OneOfMany
-			CONNECT On Switch On
-			DISCONNECT Off Switch Off
-		>>> vector.set_by_elementname("DISCONNECT")
-		>>> vector.wait_for_ok()
-		>>> vector.tell()
-		Telescope Simulator CONNECTION Connection SwitchVector OneOfMany
-			CONNECT On Switch Off
-			DISCONNECT Off Switch On
-		>>> element=vector.get_element("CONNECT")
-		>>> print element.get_active()
-		False
-		>>> indi.quit()
+    >>> from indiclient import *
+    >>> indi=indiclient("localhost",7624)
+    >>> vector=indi.get_vector("Telescope Simulator","CONNECTION")
+    >>> vector.set_by_elementname("CONNECT")
+    >>> indi.send_vector(vector)
+    >>> vector.wait_for_ok()
+    >>> vector.tell()
+    Telescope Simulator CONNECTION Connection SwitchVector OneOfMany
+    CONNECT On Switch On
+    DISCONNECT Off Switch Off
+    >>> vector.set_by_elementname("DISCONNECT")
+    >>> vector.wait_for_ok()
+    >>> vector.tell()
+    Telescope Simulator CONNECTION Connection SwitchVector OneOfMany
+    CONNECT On Switch Off
+    DISCONNECT Off Switch On
+    >>> element=vector.get_element("CONNECT")
+    >>> print element.get_active()
+    False
+    >>> indi.quit()
 
-	In order to do things like that you should first of all read the documentation of
-	classes in question (you will need roughly 30 minutes to do so) E{:}
-		- The INDI object classes:
-			- L{indivector}
-			- L{indielement}
-			- L{indiswitchvector}
-			- L{indiblob}
-			- L{indinumber}
-			- L{indiswitch}
-			- L{inditext}
-		- Two important L{indiclient} methods:
-			- L{indiclient.send_vector}
-			- L{indiclient.get_vector}
+    In order to do things like that you should first of all read the documentation of
+    classes in question (you will need roughly 30 minutes to do so) E{:}
+    - The INDI object classes:
+    - L{indivector}
+    - L{indielement}
+    - L{indiswitchvector}
+    - L{indiblob}
+    - L{indinumber}
+    - L{indiswitch}
+    - L{inditext}
+    - Two important L{indiclient} methods:
+    - L{indiclient.send_vector}
+    - L{indiclient.get_vector}
 
-	The event driven way
-	--------------------
-	Sometimes you want to act in a special way if a special element or a special vector has just been
-	received. You can write custom handlers inheriting from the classes:
-		- L{indi_custom_element_handler}
-		- L{indi_custom_vector_handler}
-	And add them with the functions:
-		- L{indiclient.add_custom_element_handler}
-		- L{indiclient.add_custom_vector_handler}
-	A custom hander function for an element is demonstrated in the example below
-	(same as file C{testevent.py}):
+    The event driven way
+    --------------------
+    Sometimes you want to act in a special way if a special element or a special vector has just been
+    received. You can write custom handlers inheriting from the classes:
+    - L{indi_custom_element_handler}
+    - L{indi_custom_vector_handler}
+    And add them with the functions:
+    - L{indiclient.add_custom_element_handler}
+    - L{indiclient.add_custom_vector_handler}
+    A custom hander function for an element is demonstrated in the example below
+    (same as file C{testevent.py}):
 
-		>>> from indiclient import *
-		>>> class demohandler(indi_custom_element_handler):
-		>>>	def on_indiobject_changed(self,vector,element):
-		>>>		print "RA= "+element.get_text()
-		>>>		print " has just been received on port "+str(self.indi.port)
-		>>> indi=indiclient("localhost",7624)
-		>>> print "Installing and calling hander"
-		Installing and calling hander
-		>>> indi.add_custom_element_handler(demohandler("Telescope Simulator","EQUATORIAL_COORD","RA"))
-		RA= 1:0:0.00
-		has just been received on port 7624
-		>>> print "Done"
-		Done
-		>>> indi.set_and_send_float("Telescope Simulator","EQUATORIAL_COORD","RA",2.0)
-		>>> time.sleep(0.0001)
-		>>> indi.set_and_send_float("Telescope Simulator","EQUATORIAL_COORD","RA",1.0)
-		>>> print "Staring hander"
-		Staring hander
-		>>> indi.process_events()
-		RA= 1:0:0.00
-		has just been received on port 7624
-		RA= 1:0:0.00
-		has just been received on port 7624
-		>>> print "Done"
-		Done
-		>>> indi.quit()
-
-
-	You have to call the L{indiclient.process_events} method during you main loop. As your handler will only be called
-	during the L{indiclient.process_events} method. Your handler will be called once for each time the element was
-	received. A main loop could for example look like this:
-
-		>>> while True:
-		>>>	do_my_stuff()
-		>>>	indi.process_events() # here your custom handler is called
-		>>>	time.sleep(0.01) # give some time to the operating system.
-		RA= 1:0:0.00
-		has just been received on port 7624
-		RA= 1:0:0.00
-		has just been received on port 7624
-
-	There is a threaded process that continuesly listens for data from the server and adds it to the list of available indivectors.
-	We still use the L{indiclient.process_events} sheme as GTK does not support threading well and L{gtkindiclient} is based on this library.
+    >>> from indiclient import *
+    >>> class demohandler(indi_custom_element_handler):
+    >>>	def on_indiobject_changed(self,vector,element):
+    >>>		print "RA= "+element.get_text()
+    >>>		print " has just been received on port "+str(self.indi.port)
+    >>> indi=indiclient("localhost",7624)
+    >>> print "Installing and calling hander"
+    Installing and calling hander
+    >>> indi.add_custom_element_handler(demohandler("Telescope Simulator","EQUATORIAL_COORD","RA"))
+    RA= 1:0:0.00
+    has just been received on port 7624
+    >>> print "Done"
+    Done
+    >>> indi.set_and_send_float("Telescope Simulator","EQUATORIAL_COORD","RA",2.0)
+    >>> time.sleep(0.0001)
+    >>> indi.set_and_send_float("Telescope Simulator","EQUATORIAL_COORD","RA",1.0)
+    >>> print "Staring hander"
+    Staring hander
+    >>> indi.process_events()
+    RA= 1:0:0.00
+    has just been received on port 7624
+    RA= 1:0:0.00
+    has just been received on port 7624
+    >>> print "Done"
+    Done
+    >>> indi.quit()
 
 
-	Events needed by dynamic clients
-	--------------------------------
-	If you want to build a dynamic client, you will want to install some more handlers using the methods:
-		- L{indiclient.set_timeout_handler}
-		- L{indiclient.set_message_handler}
-		- L{indiclient.set_def_handlers}
-	This is demonstrated in the example below (same as file C{testhandler.py}).
+    You have to call the L{indiclient.process_events} method during you main loop. As your handler will only be called
+    during the L{indiclient.process_events} method. Your handler will be called once for each time the element was
+    received. A main loop could for example look like this:
 
-	>>> def def_vector(vector,indiclientobject):
-	>>>	print "new vector defined by host: "+indiclientobject.host+" : "
-	>>>	vector.tell()
-	>>> def msg(message,indiclientobject):
-	>>>	print "got message by host :"+indiclientobject.host+" : "
-	>>>	message.tell()
-	>>> indi=indiclient("localhost",7624)
-	>>> indi.set_def_handlers(def_vector,def_vector,def_vector,def_vector,def_vector)
-	>>> indi.set_message_handler(msg)
-	>>> time.sleep(1)
-	>>> indi.process_events()
-	new vector defined by host: localhost :
-	Telescope Simulator CONNECTION Connection SwitchVector OneOfMany
-		CONNECT On Switch Off
-		DISCONNECT Off Switch On
-	new vector defined by host: localhost :
-	Telescope Simulator EQUATORIAL_COORD Equatorial J2000 NumberVector rw
-		RA RA H:M:S Number 0.180309
-		DEC Dec D:M:S Number 0
-	got message by host :localhost :
-		INDImessage Telescope Simulator Telescope is disconnected
-	>>> indi.quit()
+    >>> while True:
+    >>>	do_my_stuff()
+    >>>	indi.process_events() # here your custom handler is called
+    >>>	time.sleep(0.01) # give some time to the operating system.
+    RA= 1:0:0.00
+    has just been received on port 7624
+    RA= 1:0:0.00
+    has just been received on port 7624
+
+    There is a threaded process that continuesly listens for data from the server and adds it to the list of available indivectors.
+    We still use the L{indiclient.process_events} sheme as GTK does not support threading well and L{gtkindiclient} is based on this library.
+
+
+    Events needed by dynamic clients
+    --------------------------------
+    If you want to build a dynamic client, you will want to install some more handlers using the methods:
+    - L{indiclient.set_timeout_handler}
+    - L{indiclient.set_message_handler}
+    - L{indiclient.set_def_handlers}
+    This is demonstrated in the example below (same as file C{testhandler.py}).
+
+    >>> def def_vector(vector,indiclientobject):
+    >>>	print "new vector defined by host: "+indiclientobject.host+" : "
+    >>>	vector.tell()
+    >>> def msg(message,indiclientobject):
+    >>>	print "got message by host :"+indiclientobject.host+" : "
+    >>>	message.tell()
+    >>> indi=indiclient("localhost",7624)
+    >>> indi.set_def_handlers(def_vector,def_vector,def_vector,def_vector,def_vector)
+    >>> indi.set_message_handler(msg)
+    >>> time.sleep(1)
+    >>> indi.process_events()
+    new vector defined by host: localhost :
+    Telescope Simulator CONNECTION Connection SwitchVector OneOfMany
+    CONNECT On Switch Off
+    DISCONNECT Off Switch On
+    new vector defined by host: localhost :
+    Telescope Simulator EQUATORIAL_COORD Equatorial J2000 NumberVector rw
+    RA RA H:M:S Number 0.180309
+    DEC Dec D:M:S Number 0
+    got message by host :localhost :
+    INDImessage Telescope Simulator Telescope is disconnected
+    >>> indi.quit()
 
 
 @author: Dirk Huenniger
@@ -863,7 +865,7 @@ class indinumber(indielement):
         @rtype: FloatType
         """
         success = False
-        while success == False:
+        while success is False:
             success = True
             try:
                 x = float(self._value)
@@ -910,14 +912,14 @@ class indinumber(indielement):
         @return: C{True} if the format property requires sexagesimal display
         @rtype: BooleanType
         """
-        return (not (-1 == string.find(self.format, "m")))
+        return (not (-1 == self.format.find("m")))
 
     def get_text(self):
         """
         @return: a formated string representation of it value
         @rtype:  StringType
         """
-        if (-1 == string.find(self.format, "m")):
+        if (-1 == self.format.find("m")):
             return self.format % self.get_float()
         else:
             return _sexagesimal(self.format, self.get_float())
@@ -1088,13 +1090,14 @@ class indiblob(indielement):
         @return: the decoded version of value
         @rtype: StringType
         """
+        value = self._value.encode("utf8")
         if len(self.format) >= 2:
             if self.format[len(self.format) - 2] + self.format[len(self.format) - 1] == ".z":
-                return zlib.decompress(base64.decodestring(self._value))
+                return zlib.decompress(base64.decodestring(value))
             else:
-                return base64.decodestring(self._value)
+                return base64.decodestring(value)
         else:
-            return base64.decodestring(self._value)
+            return base64.decodestring(value)
 
     def _encode_and_set_value(self, value, format):
         """
@@ -2055,7 +2058,7 @@ class bigindiclient:
         self.socket.settimeout(0.001)
         self.host = host
         self.port = port
-        self.socket.send("<getProperties version='1.5'/>")
+        self.socket.send("<getProperties version='1.5'/>".encode("utf8"))
         self.receive_event_queue = queue.Queue()
         self.running_queue = queue.Queue()
         self.receive_vector_queue = queue.Queue()
@@ -2128,7 +2131,7 @@ class bigindiclient:
                 self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self.socket.settimeout(0.1)
                 self.socket.connect((self.host, self.port))
-                self.socket.send("<getProperties version='1.5'/>")
+                self.socket.send("<getProperties version='1.5'/>".encode("utf8"))
                 self.socket.settimeout(0.01)
             except:
                 time.sleep(1)
@@ -2215,7 +2218,7 @@ class bigindiclient:
         if not vector.tag.is_vector():
             return
         data = vector.get_xml(inditransfertypes.inew)
-        self.socket.send(data)
+        self.socket.send(data.encode("utf8"))
         vector._light._set_value("Busy")
 
     def wait_until_vector_available(self, devicename, vectorname):
@@ -2467,7 +2470,7 @@ class bigindiclient:
         """
         self.process_receive_vector_queue()
         try:
-            while self.receive_event_queue.empty() == False:
+            while self.receive_event_queue.empty() is False:
                 vector = self.receive_event_queue.get()
                 if not vector.tag.is_message():
                     vector = self.get_vector(vector.device, vector.name)
@@ -2554,7 +2557,7 @@ class bigindiclient:
             if self.currentElement is not None:
                 if self.currentElement.tag.get_initial_tag() == name:
                     self.currentData = "".join(self.currentData)
-                    self.currentData = string.replace(self.currentData, '\\n', '')
+                    self.currentData = self.currentData.replace('\\n', '')
                     self.currentData = _normalize_whitespace(self.currentData)
 
                     self.currentElement._set_value(self.currentData)
@@ -2569,10 +2572,10 @@ class bigindiclient:
                 self.receive_vector_queue.put(copy.deepcopy(self.currentVector))
                 self.currentVector = None
         """except:
-			a,b,c =sys.exc_info()
-			sys.excepthook(  a,b,c	)
-			raise Exception, "indiclient: Error during end element handler"
-		"""
+    a,b,c =sys.exc_info()
+    sys.excepthook(  a,b,c	)
+    raise Exception, "indiclient: Error during end element handler"
+    """
 
     def _start_element(self, name, attrs):
         """
@@ -2620,7 +2623,7 @@ class bigindiclient:
         @rtype: NoneType
         """
         data = "<enableBLOB>Also</enableBLOB>\n"
-        self.socket.send(data)
+        self.socket.send(data.encode("utf8"))
 
 
 class indiclient(bigindiclient):
