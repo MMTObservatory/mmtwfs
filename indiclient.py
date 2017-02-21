@@ -2509,7 +2509,7 @@ class bigindiclient:
                         raise Exception
         except:
             a, b, c = sys.exc_info()
-            sys.excepthook(a, b, c	)
+            sys.excepthook(a, b, c)
             self.quit()
             raise Exception("indiclient: Error during process events")
 
