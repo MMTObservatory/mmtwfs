@@ -1,0 +1,101 @@
+"""
+Classes and utility functions for communicating with SBIG cameras via the INDI protocol, http://www.indilib.org.
+"""
+
+import indiclient
+import time
+import io
+
+from astropy.io import fits
+
+class CCDCam(indiclient.indiclient):
+    """
+    Wrap indiclient.indiclient with some camera-specific utility functions to simplify things like taking,
+    exposures, configuring camera binning, etc.
+    """
+    def __init__(self, host, port, driver="CCD Simulator"):
+        super(CCDCam, self).__init__(host, port)
+        self.enable_blob()
+        self.driver = driver
+        if not self.connected:
+            self.connect()
+
+        # run this to clear any queued events
+        self.process_events()
+        self.defvectorlist = []
+
+    @property
+    def connected(self):
+        """
+        Check connection status and return True if connected, False otherwise.
+        """
+        status = self.get_text(self.driver, "CONNECTION", "CONNECT")
+        if status == 'On':
+            return True
+        else:
+            return False
+
+    def connect(self):
+        """
+        Enable camera connection
+        """
+        vec = self.set_and_send_switchvector_by_elementlabel(self.driver, "CONNECTION", "Connect")
+        vec.tell()
+        return vec
+
+    def disconnect(self):
+        """
+        Disable camera connection
+        """
+        vec = self.set_and_send_switchvector_by_elementlabel(self.driver, "CONNECTION", "Disonnect")
+        vec.tell()
+        return vec
+
+    def _default_def_handler(self, vector, indi):
+        """
+        Overload the default vector handler to do a vector.tell() so it's clear what's going on
+        """
+        vector.tell()
+
+    def expose(self, exptime=1.0, exptype="Light"):
+        """
+        Take exposure and return FITS data
+        """
+        if exptype not in ["Light", "Dark", "Bias", "Flat"]:
+            raise Exception("Invalid exposure type, %s. Must be one of 'Light', 'Dark', 'Bias', or 'Flat'." % exptype)
+
+        if exptime < 0.0 or exptime > 3600.0:
+            raise Exception("Invalid exposure time, %f. Must be >= 0 and <= 3600 sec." % exptime)
+
+        ft_vec = self.set_and_send_switchvector_by_elementlabel(self.driver, "CCD_FRAME_TYPE", exptype)
+        ft_vec.tell()
+
+        exp_vec = self.set_and_send_float(self.driver, "CCD_EXPOSURE", "CCD_EXPOSURE_VALUE", exptime)
+        exp_vec.tell()
+
+        self.defvectorlist = []
+        fitsdata = None
+        run = True
+
+        while run:
+            self.process_receive_vector_queue()
+            while self.receive_event_queue.empty() is False:
+                vector = self.receive_event_queue.get()
+                if vector.tag.get_type() == "BLOBVector":
+                    print("reading out...")
+                    blob = vector.get_first_element()
+                    if blob.get_plain_format() == ".fits":
+                        buf = io.BytesIO(blob.get_data())
+                        fitsdata = fits.open(buf)
+                    run = False
+                    break
+            time.sleep(0.1)
+        return fitsdata
+
+
+class SBIGCam(CCDCam):
+    """
+    Wrap CCDCam and set the driver to the SBIG driver.
+    """
+    def __init__(self, host="192.168.1.105", port=7624):
+        super(SBIGCam, self).__init__(host, port, driver="SBIG CCD")
