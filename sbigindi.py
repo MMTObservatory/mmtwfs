@@ -13,10 +13,11 @@ class CCDCam(indiclient.indiclient):
     Wrap indiclient.indiclient with some camera-specific utility functions to simplify things like taking,
     exposures, configuring camera binning, etc.
     """
-    def __init__(self, host, port, driver="CCD Simulator"):
+    def __init__(self, host, port, driver="CCD Simulator", debug=True):
         super(CCDCam, self).__init__(host, port)
         self.enable_blob()
         self.driver = driver
+        self.debug = debug
         if not self.connected:
             self.connect()
 
@@ -40,7 +41,8 @@ class CCDCam(indiclient.indiclient):
         Enable camera connection
         """
         vec = self.set_and_send_switchvector_by_elementlabel(self.driver, "CONNECTION", "Connect")
-        vec.tell()
+        if self.debug:
+            vec.tell()
         return vec
 
     def disconnect(self):
@@ -48,14 +50,17 @@ class CCDCam(indiclient.indiclient):
         Disable camera connection
         """
         vec = self.set_and_send_switchvector_by_elementlabel(self.driver, "CONNECTION", "Disonnect")
-        vec.tell()
+        if self.debug:
+            vec.tell()
         return vec
 
     def _default_def_handler(self, vector, indi):
         """
         Overload the default vector handler to do a vector.tell() so it's clear what's going on
         """
-        vector.tell()
+        if self.debug:
+            vector.tell()
+        pass
 
     def expose(self, exptime=1.0, exptype="Light"):
         """
@@ -68,10 +73,12 @@ class CCDCam(indiclient.indiclient):
             raise Exception("Invalid exposure time, %f. Must be >= 0 and <= 3600 sec." % exptime)
 
         ft_vec = self.set_and_send_switchvector_by_elementlabel(self.driver, "CCD_FRAME_TYPE", exptype)
-        ft_vec.tell()
+        if self.debug:
+            ft_vec.tell()
 
         exp_vec = self.set_and_send_float(self.driver, "CCD_EXPOSURE", "CCD_EXPOSURE_VALUE", exptime)
-        exp_vec.tell()
+        if self.debug:
+            exp_vec.tell()
 
         self.defvectorlist = []
         fitsdata = None
