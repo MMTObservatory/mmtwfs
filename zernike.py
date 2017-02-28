@@ -80,6 +80,10 @@ def radial_zernike(m, n, rho):
     -------
     wf: 2D ndarray
         Radial polynomial with identical shape as **rho**
+
+    Notes
+    -----
+    Adapted from https://en.wikipedia.org/wiki/Zernike_polynomials
     """
     if np.mod(n-m, 2) == 1:
         return 0.0
@@ -116,7 +120,7 @@ def zernike(m, n, rho, phi, norm=False):
 
     Notes
     -----
-    See <http://www.opt.indiana.edu/vsg/library/vsia/vsia-2000_taskforce/tops4_2.html>.
+    Adapted from https://en.wikipedia.org/wiki/Zernike_polynomials
     """
     nc = 1.0
     if norm:
