@@ -1,3 +1,11 @@
+# Licensed under GPL3 (see LICENSE)
+
+"""
+zernike.py -- A collection of functions and classes for performing wavefront analysis using Zernike polynomials.
+Several of these routines were adapted from https://github.com/tvwerkhoven/libtim-py. They have been updated to make them
+more applicable for MMTO usage and comments added to clarify what they do and how.
+"""
+
 import numpy as np
 
 from scipy.misc import factorial as fac
@@ -83,7 +91,7 @@ def radial_zernike(m, n, rho):
 
     Notes
     -----
-    Adapted from https://en.wikipedia.org/wiki/Zernike_polynomials
+    See https://en.wikipedia.org/wiki/Zernike_polynomials for details.
     """
     if np.mod(n-m, 2) == 1:
         return 0.0
@@ -120,7 +128,7 @@ def zernike(m, n, rho, phi, norm=False):
 
     Notes
     -----
-    Adapted from https://en.wikipedia.org/wiki/Zernike_polynomials
+    See https://en.wikipedia.org/wiki/Zernike_polynomials for details.
     """
     nc = 1.0
     if norm:
@@ -278,6 +286,13 @@ def calc_slope(im, slopes_inv=None):
     influence on a Shack-Hartmann image. If **slopes_inv** is given, use that (2, N) matrix for
     fitting, otherwise generate and pseudo-invert slopes ourselves.
 
+    An advantage of calculating image slopes in this way is that we do not need to know the derivatives
+    of the basis set we are using. We instead calculate them as mapped into pixel space. This makes it easy
+    to support different basis sets (e.g. mirror bending modes or annular zernikes) without also having to
+    determine the analytic derivatives of the basis sets.  An additional advantage over the previous MMT SHWFS
+    system is that this takes into account the integrated zernike slope across an aperture vs. the instantaneous
+    slope at the aperture center.
+
     Parameters
     ----------
     im: 2D ndarray
@@ -298,47 +313,48 @@ def calc_slope(im, slopes_inv=None):
     return np.dot(im.reshape(1, -1), slopes_inv).ravel()[:2]
 
 
-def calc_zern_infmat(subaps, nzern=20, zerncntr=None, zernrad=-1.0, singval=1.0, subapsize=22.0, pixsize=0.1):
+def calc_influence_matrix(subaps, basis_func=make_zernike_basis, nbasis=20, cntr=None,
+                          rad=-1.0, singval=1.0, subapsize=22.0, pixsize=0.1):
     """
     Given a sub-aperture array pattern, calculate a matrix that converts
-    image shift vectors in pixels to Zernike amplitudes and also its inverse.
-    The parameters **focus**, **wavelen**, **subapsize** and **pixsize** are
-    used for absolute calibration. If these are provided, the shifts in
-    pixel are translated to Zernike amplitudes where amplitude has unit
-    variance, i.e. the normalization used by Noll (1976).
+    image shift vectors in pixels to basis polynomial amplitudes (default: Zernike)
+    and also its inverse. The parameters **subapsize** and **pixsize** are used for
+    absolute calibration.
 
     The data returned is a tuple of the following:
-        1. Matrix to compute Zernike modes from image shifts
-        2. Matrix to image shifts from Zernike amplitudes
-        3. The set of Zernike polynomials used
-        4. The extent of the Zernike basis in units of **subaps**
+        1. Matrix to compute basis mode amplitudes from image shifts
+        2. Matrix to compute image shifts from basis mode amplitudes
+        3. The set of basis polynomials used
+        4. The extent of the basis polynomials in units of **subaps**
 
-    To calculate the above mentioned matrices, we measure the x, y-slope of all Zernike modes over
-    all sub-apertures, giving a matrix `zernslopes_mat` that converts slopes for each Zernike matrix:
-        subap_slopes_vec = zernslopes_mat . zern_amp_vec
+    To calculate the above mentioned matrices, we measure the x, y-slope of all basis modes over
+    all sub-apertures, giving a matrix `basisslopes_mat` that converts slopes for each basis polynomial matrix:
+        subap_slopes_vec = basisslopes_mat . basis_amp_vec
 
-    To obtain pixel shifts inside the sub images we multiply these slopes in radians/subaperture by
+    To obtain pixel shifts inside the sub-images we multiply these slopes in radians/subaperture by
         sfac = π * ap_width * pix_scale / 206265
     where ap_width is in pixels, pix_scale is arcsec/pixel, and 1/206265 converts arcsec to radians.
-    The factor of π comes from the normalization of the integral of the Zernike modes over all radii and angles.
+    The factor of π comes from the normalization of the integral of the basis modes over all radii and angles.
 
     We then have
-        subap_shift_vec = sfac * zernslopes_mat . zern_amp_vec
+        subap_shift_vec = sfac * basisslopes_mat . basis_amp_vec
 
-    To get the inverse relation, we invert `zernslopes_mat`, giving:
-        zern_amp_vec = (sfac * zernslopes_mat)^-1 . subap_shift_vec
-        zern_amp_vec = zern_inv_mat . subap_shift_vec
+    To get the inverse relation, we invert `basisslopes_mat`, giving:
+        basis_amp_vec = (sfac * basisslopes_mat)^-1 . subap_shift_vec
+        basis_amp_vec = basis_inv_mat . subap_shift_vec
 
     Parameters
     ----------
     subaps: list of 4-element list-likes
         List of subapertures formatted as (low0, high0, low1, high1)
-    nzern: int (default: 20)
-        Number of Zernike modes to model
-    zerncenter: 2-element list-like or None (default: None)
-        Coordinate to center Zernike set around. If None, use calculated center of **subaps**.
-    zernrad: float (default: -1.0)
-        Radius of the aperture to use. If negative, used as fraction **-zernrad**, otherwise used as radius in pixels.
+    basis_func: function reference (default: make_zernike_basis)
+        Function that generates an orthongal set of basis polynomials, e.g. Zernike polynomials.
+    nbasis: int (default: 20)
+        Number of basis modes to model
+    cntr: 2-element list-like or None (default: None)
+        Coordinate to center basis set around. If None, use calculated center of **subaps**.
+    rad: float (default: -1.0)
+        Radius of the aperture to use. If negative, used as fraction **-rad**, otherwise used as radius in pixels.
     singval: float (default: 1.0)
         Percentage of singular values to take into account when inverting the matrix
     subapsize: float (default: 22.0)
@@ -349,10 +365,10 @@ def calc_zern_infmat(subaps, nzern=20, zerncntr=None, zernrad=-1.0, singval=1.0,
     Returns
     -------
     Tuple of (
-        shift to Zernike matrix,
-        Zernike to shift matrix,
-        Zernike polynomials used,
-        Zernike base shape in units of **subaps**
+        shift to basis polynomial matrix,
+        basis polynomial to shift matrix,
+        basis polynomials used,
+        basis polynomial shape in units of **subaps**
     )
     """
     # we already know pixel size in arcsec so multiply by aperture width and convert to radians.
@@ -360,41 +376,42 @@ def calc_zern_infmat(subaps, nzern=20, zerncntr=None, zernrad=-1.0, singval=1.0,
 
     # Geometry: offset between subap pattern and Zernike modes
     sasize = np.median(subaps[:, 1::2] - subaps[:, ::2], axis=0)
-    if zerncntr is None:
-        zerncntr = np.mean(subaps[:, ::2], axis=0).astype(int)
+    if cntr is None:
+        cntr = np.mean(subaps[:, ::2], axis=0).astype(int)
 
-    if zernrad < 0:
-        pattrad = np.max(np.max(subaps[:, 1::2], 0) - np.min(subaps[:, ::2], 0))/2.0
-        rad = int((pattrad*-zernrad)+0.5)
+    # add 0.5 pixel to account for offset from where pixel is indexed and where its physical center is
+    if rad < 0:
+        pattrad = np.max(np.max(subaps[:, 1::2], 0) - np.min(subaps[:, ::2], 0)) / 2.0
+        rad = int((pattrad * -rad) + 0.5)
     else:
-        rad = int(zernrad+0.5)
-    saoffs = -zerncntr + np.r_[[rad, rad]]
+        rad = int(rad + 0.5)
+    saoffs = -cntr + np.r_[[rad, rad]]
 
-    extent = zerncntr[1]-rad, zerncntr[1]+rad, zerncntr[0]-rad, zerncntr[0]+rad
-    zbasis = make_zernike_basis(nzern, rad, modestart=2)
+    extent = cntr[1]-rad, cntr[1]+rad, cntr[0]-rad, cntr[0]+rad
+    basis = basis_func(nbasis, rad, modestart=2)
 
     slopes = (np.indices(sasize, dtype=float)/(np.r_[sasize].reshape(-1, 1, 1))).reshape(2, -1)
     slopes = np.vstack([slopes, np.ones(slopes.shape[1])])
     slopes_inv = np.linalg.pinv(slopes)
 
-    zernslopes = np.r_[
+    basisslopes = np.r_[
         [
             [
                 calc_slope(
-                    zbase[subap[0]+saoffs[0]:subap[1]+saoffs[0], subap[2]+saoffs[1]:subap[3]+saoffs[1]], slopes_inv=slopes_inv
+                    base[subap[0]+saoffs[0]:subap[1]+saoffs[0], subap[2]+saoffs[1]:subap[3]+saoffs[1]], slopes_inv=slopes_inv
                 ) for subap in subaps
-            ] for zbase in zbasis['modes']
+            ] for base in basis['modes']
         ]
-    ].reshape(nzern, -1)
+    ].reshape(nbasis, -1)
 
     # np.linalg.pinv() takes the cutoff wrt the *maximum*, we want a cut-off
     # based on the cumulative sum, i.e. the total included power, which is
-    # why we use svd() and not pinv().
-    U, s, Vh = np.linalg.svd(zernslopes * sfac, full_matrices=False)
+    # why we want to use svd() and not pinv().
+    U, s, Vh = np.linalg.svd(basisslopes * sfac, full_matrices=False)
     cums = s.cumsum() / s.sum()
     nvec = np.argwhere(cums >= singval)[0][0]
     singval = cums[nvec]
     s[nvec+1:] = np.inf
-    zern_inv_mat = np.dot(Vh.T, np.dot(np.diag(1.0/s), U.T))
+    basis_inv_mat = np.dot(Vh.T, np.dot(np.diag(1.0/s), U.T))
 
-    return zern_inv_mat, zernslopes*sfac, zbasis, extent
+    return basis_inv_mat, basisslopes*sfac, basis, extent
