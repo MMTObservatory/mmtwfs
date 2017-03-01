@@ -6,8 +6,11 @@ Several of these routines were adapted from https://github.com/tvwerkhoven/libti
 more applicable for MMTO usage and comments added to clarify what they do and how.
 """
 
+import re
+
 import numpy as np
 
+from collections import MutableMapping
 from scipy.misc import factorial as fac
 
 
@@ -415,3 +418,141 @@ def calc_influence_matrix(subaps, basis_func=make_zernike_basis, nbasis=20, cntr
     basis_inv_mat = np.dot(Vh.T, np.dot(np.diag(1.0/s), U.T))
 
     return basis_inv_mat, basisslopes*sfac, basis, extent
+
+
+class ZernikeVector(MutableMapping):
+    """
+    Class to wrap and visualize a vector of Zernike polynomial coefficients
+    """
+    __zernikelabels = {
+        "Z1": "Piston (0, 0)",
+        "Z2": "X Tilt (1, 1)",
+        "Z3": "Y Tilt (1, -1)",
+        "Z4": "Defocus (2, 0)",
+        "Z5": "Primary Astig at 45˚ (2, -2)",
+        "Z6": "Primary Astig at 0˚ (2, 2)",
+        "Z7": "Primary Y Coma (3, -1)",
+        "Z8": "Primary X Coma (3, 1)",
+        "Z9": "Y Trefoil (3, -3)",
+        "Z10": "X Trefoil (3, 3)",
+        "Z11": "Primary Spherical (4, 0)",
+        "Z12": "Secondary Astigmatism at 0˚ (4, 2)",
+        "Z13": "Secondary Astigmatism at 45˚ (4, -2)",
+        "Z14": "X Tetrafoil (4, 4)",
+        "Z15": "Y Tetrafoil (4, -4)",
+        "Z16": "Secondary X Coma (5, 1)",
+        "Z17": "Secondary Y Coma (5, -1)",
+        "Z18": "Secondary X Trefoil (5, 3)",
+        "Z19": "Secondary Y Trefoil (5, -3)",
+        "Z20": "X Pentafoil (5, 5)",
+        "Z21": "Y Pentafoil (5, -5)",
+        "Z22": "Secondary Spherical (6, 0)",
+        "Z23": "Tertiary Astigmatism at 45˚ (6, -2)",
+        "Z24": "Tertiary Astigmatism at 0˚ (6, 2)",
+        "Z25": "Secondary X Trefoil (6, -4)",
+        "Z26": "Secondary Y Trefoil (6, 4)",
+        "Z27": "Hexafoil Y (6, -6)",
+        "Z28": "Hexafoil X (6, 6)",
+        "Z29": "Tertiary Y Coma (7, -1)",
+        "Z30": "Tertiary X Coma (7, 1)",
+        "Z31": "Tertiary Y Trefoil (7, -3)",
+        "Z32": "Tertiary X Trefoil (7, 3)",
+        "Z33": "Secondary Pentafoil Y (7, -5)",
+        "Z34": "Secondary Pentafoil X (7, 5)",
+        "Z35": "Heptafoil Y (7, -7)",
+        "Z36": "Heptafoil X (7, 7)",
+        "Z37": "Tertiary Spherical (8, 0)"
+    }
+
+    def __init__(self, coeffs=[], modestart=2, **kwargs):
+        self.modestart = modestart
+        self.coeffs = {}
+        self.ignored = {}
+
+        # first load from input array/list-like
+        if len(coeffs) > 0:
+            for i, c in enumerate(coeffs):
+                key = self._l_to_key(i + self.modestart)
+                self.coeffs[key] = float(c)
+
+        # now load any keyword inputs
+        input_dict = dict(**kwargs)
+        for k in sorted(input_dict.keys()):
+            if self._valid_key(k):
+                self.coeffs[k] = float(input_dict[k])
+
+    def __iter__(self):
+        return iter(self.coeffs)
+
+    def __contains__(self, val):
+        return value in self.coeffs
+
+    def __len__(self):
+        return len(self.array)
+
+    def __getitem__(self, key):
+        if key in self.coeffs:
+            return self.coeffs[key]
+        else:
+            if self._valid_key(key):
+                return 0.0
+            else:
+                raise KeyError("Invalid Zernike term, %s" % key)
+
+    def __setitem__(self, key, item):
+        if self._valid_key(key):
+            self.coeffs[key] = float(item)
+        else:
+            raise KeyError("Malformed Zernike mode key, %s" % key)
+
+    def __delitem__(self, key):
+        if key in self.coeffs:
+            del self.coeffs[key]
+
+    def __repr__(self):
+        s = ""
+        for k in sorted(self.coeffs.keys()):
+            if k in self.__zernikelabels:
+                label = self.__zernikelabels[k]
+                s += "%4s: %12.2f \t %s" % (k, self.coeffs[k], label)
+            else:
+                s += "%4s: %12.2f" % (k, self.coeffs[k])
+            s += "\n"
+        return s
+
+    def _valid_key(self, key):
+        if re.match('Z\d', key):
+            return True
+        else:
+            return False
+
+    def _key_to_l(self, key):
+        try:
+            l = int(key.replace("Z", ""))
+        except:
+            raise Exception("Malformed Zernike mode key, %s" % key)
+        return l
+
+    def _l_to_key(self, l):
+        key = "Z%d" % l
+        return l
+
+    @property
+    def array(self):
+        keys = sorted(self.coeffs.keys())
+        last = self._key_to_l(keys[-1])
+        arr = np.zeros(last - self.modestart + 1)
+        for k in keys:
+            i = self._key_to_l(k) - self.modestart
+            arr[i] = self.coeffs[k]
+        return arr
+
+    def ignore(self, key):
+        if self._valid_key(key) and key in self.coeffs:
+            self.ignore[key] = self.coeffs[key]
+            self.coeffs[key] = 0.0
+
+    def restore(self, key):
+        if self._valid_key(key) and key in self.ignore:
+            self.coeffs[key] = self.ignore[key]
+            del self.ignore[key]
