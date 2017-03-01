@@ -208,7 +208,7 @@ def zernike_noll(j, rho, phi, norm=False):
     return zernike(m, n, rho, phi, norm)
 
 
-def noll_normalization(nmodes=30):
+def noll_normalization_vector(nmodes=30):
     """
     Calculate Noll normalization vector.
     This function calculates a **nmodes** element vector with Noll (i.e. unit variance)
@@ -223,10 +223,31 @@ def noll_normalization(nmodes=30):
     -------
     1D ndarray of length nmodes
     """
-
     nolls = (noll_to_zernike(j+1) for j in range(nmodes))
     norms = [np.sqrt(2 * (n + 1)/(1 + (m == 0))) for n, m in nolls]
     return np.asanyarray(norms)
+
+
+def noll_coefficient(l):
+    """
+    Calculate the Noll coefficent to normalize mode **l** to unit variance.
+
+    Parameters
+    ----------
+    l: int
+        Noll mode number
+
+    Returns
+    -------
+    norm_coeff: float
+        Noll normalization coefficient
+    """
+    if l < 0:
+        raise Exception("Noll modes start at l=1. l=%d is not valid." % l)
+
+    n, m = noll_to_zernike(l)
+    norm_coeff = np.sqrt(2 * (n + 1)/(1 + (m == 0)))
+    return norm_coeff
 
 
 def make_zernike_basis(nmodes, rad, modestart=2, calc_covmat=False):
@@ -564,6 +585,32 @@ class ZernikeVector(MutableMapping):
             arr[i] = u.Quantity(self.coeffs[k], self.units)
         return arr
 
+    @property
+    def norm_array(self):
+        if self.normalized:
+            return self.array
+        else:
+            self.normalize()
+            arr = self.array.copy()
+            self.denormalize()
+            return arr
+
+    def normalize(self):
+        if not self.normalized:
+            self.normalized = True
+            for k in self.coeffs:
+                l = self._key_to_l(k)
+                noll = noll_coefficient(l)
+                self.coeffs[k] /= noll
+
+    def denormalize(self):
+        if self.normalized:
+            self.normalized = False
+            for k in self.coeffs:
+                l = self._key_to_l(k)
+                noll = noll_coefficient(l)
+                self.coeffs[k] *= noll
+
     def from_array(self, coeffs):
         if len(coeffs) > 0:
             for i, c in enumerate(coeffs):
@@ -584,7 +631,11 @@ class ZernikeVector(MutableMapping):
         phase = 0.0
         for k, z in self.coeffs.items():
             l = self._key_to_l(k)
-            ph = z * zernike_noll(l, rho, phi)
+            if self.normalized:
+                norm = noll_coefficient(l)
+            else:
+                norm = 1.0
+            ph = z * norm * zernike_noll(l, rho, phi)
             phase += ph
         return phase
 
