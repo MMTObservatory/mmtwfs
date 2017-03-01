@@ -7,9 +7,11 @@ more applicable for MMTO usage and comments added to clarify what they do and ho
 """
 
 import re
-import matplotlib
 
+import matplotlib
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+
 import numpy as np
 import astropy.units as u
 
@@ -570,13 +572,13 @@ class ZernikeVector(MutableMapping):
 
     def ignore(self, key):
         if self._valid_key(key) and key in self.coeffs:
-            self.ignore[key] = self.coeffs[key]
+            self.ignored[key] = self.coeffs[key]
             self.coeffs[key] = 0.0 * self.units
 
     def restore(self, key):
-        if self._valid_key(key) and key in self.ignore:
-            self.coeffs[key] = self.ignore[key]
-            del self.ignore[key]
+        if self._valid_key(key) and key in self.ignored:
+            self.coeffs[key] = self.ignored[key]
+            del self.ignored[key]
 
     def total_phase(self, rho, phi):
         phase = 0.0
@@ -586,16 +588,34 @@ class ZernikeVector(MutableMapping):
             phase += ph
         return phase
 
-    def plot_map(self):
-        rho = np.linspace(0.0, 1.0, 400)
-        phi = np.linspace(0, 2*np.pi, 400)
+    def phase_map(self, n=400):
+        rho = np.linspace(0.0, 1.0, n)
+        phi = np.linspace(0, 2*np.pi, n)
         [p, r] = np.meshgrid(phi, rho)
         x = r * np.cos(p)
         y = r * np.sin(p)
         ph = self.total_phase(r, p)
+        return x, y, r, p, ph
+
+    def plot_map(self):
+        x, y, r, p, ph = self.phase_map(n=400)
         fig = plt.pcolormesh(x, y, ph)
         fig.axes.set_axis_off()
         fig.axes.set_aspect(1.0)
         cbar = plt.colorbar()
+        cbar.set_label(self.units.name, rotation=0)
+        plt.show()
+
+    def plot_surface(self):
+        x, y, r, p, ph = self.phase_map(n=100)
+        fig = plt.figure(figsize=(8, 6))
+        ax = fig.add_subplot(111, projection='3d')
+        surf = ax.plot_surface(x, y, ph, rstride=1, cstride=1, linewidth=0, alpha=0.6, cmap='plasma')
+        v = max(abs(ph.max().value), abs(ph.min().value))
+        ax.set_zlim(-v*5, v*5)
+        cset = ax.contourf(x, y, ph, zdir='z', offset=-v*5, cmap='plasma')
+        ax.xaxis.set_ticks([-1, 0, 1])
+        ax.yaxis.set_ticks([-1, 0, 1])
+        cbar = fig.colorbar(cset, shrink=1, aspect=30)
         cbar.set_label(self.units.name, rotation=0)
         plt.show()
