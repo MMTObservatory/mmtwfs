@@ -7,7 +7,9 @@ more applicable for MMTO usage and comments added to clarify what they do and ho
 """
 
 import re
+import matplotlib
 
+import matplotlib.pyplot as plt
 import numpy as np
 import astropy.units as u
 
@@ -179,7 +181,7 @@ def noll_to_zernike(j):
     return (n, m)
 
 
-def zernike_noll(j, rho, phi, norm=True):
+def zernike_noll(j, rho, phi, norm=False):
     """
     Calculate Noll Zernike mode **j** on grid **rho** and **phi**.
     **rho** and **phi** must be radial and azimuthal coordinate grids of identical shape, respectively.
@@ -575,3 +577,25 @@ class ZernikeVector(MutableMapping):
         if self._valid_key(key) and key in self.ignore:
             self.coeffs[key] = self.ignore[key]
             del self.ignore[key]
+
+    def total_phase(self, rho, phi):
+        phase = 0.0
+        for k, z in self.coeffs.items():
+            l = self._key_to_l(k)
+            ph = z * zernike_noll(l, rho, phi)
+            phase += ph
+        return phase
+
+    def plot_map(self):
+        rho = np.linspace(0.0, 1.0, 400)
+        phi = np.linspace(0, 2*np.pi, 400)
+        [p, r] = np.meshgrid(phi, rho)
+        x = r * np.cos(p)
+        y = r * np.sin(p)
+        ph = self.total_phase(r, p)
+        fig = plt.pcolormesh(x, y, ph)
+        fig.axes.set_axis_off()
+        fig.axes.set_aspect(1.0)
+        cbar = plt.colorbar()
+        cbar.set_label(self.units.name, rotation=0)
+        plt.show()
