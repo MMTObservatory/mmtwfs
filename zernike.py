@@ -425,15 +425,15 @@ class ZernikeVector(MutableMapping):
     Class to wrap and visualize a vector of Zernike polynomial coefficients
     """
     __zernikelabels = {
-        "Z1": "Piston (0, 0)",
-        "Z2": "X Tilt (1, 1)",
-        "Z3": "Y Tilt (1, -1)",
-        "Z4": "Defocus (2, 0)",
-        "Z5": "Primary Astig at 45˚ (2, -2)",
-        "Z6": "Primary Astig at 0˚ (2, 2)",
-        "Z7": "Primary Y Coma (3, -1)",
-        "Z8": "Primary X Coma (3, 1)",
-        "Z9": "Y Trefoil (3, -3)",
+        "Z01": "Piston (0, 0)",
+        "Z02": "X Tilt (1, 1)",
+        "Z03": "Y Tilt (1, -1)",
+        "Z04": "Defocus (2, 0)",
+        "Z05": "Primary Astig at 45˚ (2, -2)",
+        "Z06": "Primary Astig at 0˚ (2, 2)",
+        "Z07": "Primary Y Coma (3, -1)",
+        "Z08": "Primary X Coma (3, 1)",
+        "Z09": "Y Trefoil (3, -3)",
         "Z10": "X Trefoil (3, 3)",
         "Z11": "Primary Spherical (4, 0)",
         "Z12": "Secondary Astigmatism at 0˚ (4, 2)",
@@ -479,7 +479,7 @@ class ZernikeVector(MutableMapping):
         input_dict = dict(**kwargs)
         for k in sorted(input_dict.keys()):
             if self._valid_key(k):
-                self.coeffs[k] = float(input_dict[k])
+                self.__setitem__(k, float(input_dict[k]))
 
     def __iter__(self):
         return iter(self.coeffs)
@@ -501,6 +501,8 @@ class ZernikeVector(MutableMapping):
 
     def __setitem__(self, key, item):
         if self._valid_key(key):
+            l = self._key_to_l(key)
+            key = self._l_to_key(l)
             self.coeffs[key] = float(item)
         else:
             raise KeyError("Malformed Zernike mode key, %s" % key)
@@ -534,8 +536,8 @@ class ZernikeVector(MutableMapping):
         return l
 
     def _l_to_key(self, l):
-        key = "Z%d" % l
-        return l
+        key = "Z%02d" % l
+        return key
 
     @property
     def array(self):
