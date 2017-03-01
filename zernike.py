@@ -9,6 +9,7 @@ more applicable for MMTO usage and comments added to clarify what they do and ho
 import re
 
 import numpy as np
+import astropy.units as u
 
 from collections import MutableMapping
 from scipy.misc import factorial as fac
@@ -464,28 +465,28 @@ class ZernikeVector(MutableMapping):
         "Z37": "Tertiary Spherical (8, 0)"
     }
 
-    def __init__(self, coeffs=[], modestart=2, **kwargs):
+    def __init__(self, coeffs=[], modestart=2, normalized=False, units=u.nm, **kwargs):
         self.modestart = modestart
+        self.normalized = normalized
         self.coeffs = {}
         self.ignored = {}
 
+        # now set the units
+        self.units = units
+
         # first load from input array/list-like
-        if len(coeffs) > 0:
-            for i, c in enumerate(coeffs):
-                key = self._l_to_key(i + self.modestart)
-                self.coeffs[key] = float(c)
+        self.from_array(coeffs)
 
         # now load any keyword inputs
         input_dict = dict(**kwargs)
         for k in sorted(input_dict.keys()):
-            if self._valid_key(k):
-                self.__setitem__(k, float(input_dict[k]))
+            self.__setitem__(k, input_dict[k])
 
     def __iter__(self):
         return iter(self.coeffs)
 
     def __contains__(self, val):
-        return value in self.coeffs
+        return val in self.coeffs
 
     def __len__(self):
         return len(self.array)
@@ -495,7 +496,7 @@ class ZernikeVector(MutableMapping):
             return self.coeffs[key]
         else:
             if self._valid_key(key):
-                return 0.0
+                return 0.0 * self.units
             else:
                 raise KeyError("Invalid Zernike term, %s" % key)
 
@@ -503,7 +504,7 @@ class ZernikeVector(MutableMapping):
         if self._valid_key(key):
             l = self._key_to_l(key)
             key = self._l_to_key(l)
-            self.coeffs[key] = float(item)
+            self.coeffs[key] = u.Quantity(item, self.units)
         else:
             raise KeyError("Malformed Zernike mode key, %s" % key)
 
@@ -516,9 +517,9 @@ class ZernikeVector(MutableMapping):
         for k in sorted(self.coeffs.keys()):
             if k in self.__zernikelabels:
                 label = self.__zernikelabels[k]
-                s += "%4s: %12.2f \t %s" % (k, self.coeffs[k], label)
+                s += "%4s: %12s \t %s" % (k, "{0:0.03g}".format(self.coeffs[k]), label)
             else:
-                s += "%4s: %12.2f" % (k, self.coeffs[k])
+                s += "%4s: %12s" % (k, "{0:0.03g}".format(self.coeffs[k]))
             s += "\n"
         return s
 
@@ -540,19 +541,35 @@ class ZernikeVector(MutableMapping):
         return key
 
     @property
+    def units(self):
+        return self._units
+
+    @units.setter
+    def units(self, units):
+        self._units = units
+        for k in self.coeffs:
+            self.coeffs[k] = u.Quantity(self.coeffs[k], units)
+
+    @property
     def array(self):
         keys = sorted(self.coeffs.keys())
         last = self._key_to_l(keys[-1])
-        arr = np.zeros(last - self.modestart + 1)
+        arr = u.Quantity(np.zeros(last - self.modestart + 1), self.units)
         for k in keys:
             i = self._key_to_l(k) - self.modestart
-            arr[i] = self.coeffs[k]
+            arr[i] = u.Quantity(self.coeffs[k], self.units)
         return arr
+
+    def from_array(self, coeffs):
+        if len(coeffs) > 0:
+            for i, c in enumerate(coeffs):
+                key = self._l_to_key(i + self.modestart)
+                self.__setitem__(key, c)
 
     def ignore(self, key):
         if self._valid_key(key) and key in self.coeffs:
             self.ignore[key] = self.coeffs[key]
-            self.coeffs[key] = 0.0
+            self.coeffs[key] = 0.0 * self.units
 
     def restore(self, key):
         if self._valid_key(key) and key in self.ignore:
