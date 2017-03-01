@@ -597,13 +597,13 @@ class ZernikeVector(MutableMapping):
 
     @property
     def peak2valley(self):
-        ph = self.phase_map()
-        return (ph.max() - ph.min()) * self.units
+        x, y, r, p, ph = self.phase_map()
+        return u.Quantity(ph.max() - ph.min(), self.units)
 
     @property
     def rms(self):
-        ph = self.phase_map()
-        return np.sqrt(np.mean(np.square(ph))) * self.units
+        x, y, r, p, ph = self.phase_map()
+        return u.Quantity(np.sqrt(np.mean(np.square(ph))), self.units)
 
     def normalize(self):
         if not self.normalized:
