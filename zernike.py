@@ -595,6 +595,16 @@ class ZernikeVector(MutableMapping):
             self.denormalize()
             return arr
 
+    @property
+    def peak2valley(self):
+        ph = self.phase_map()
+        return (ph.max() - ph.min()) * self.units
+
+    @property
+    def rms(self):
+        ph = self.phase_map()
+        return np.sqrt(np.mean(np.square(ph))) * self.units
+
     def normalize(self):
         if not self.normalized:
             self.normalized = True
