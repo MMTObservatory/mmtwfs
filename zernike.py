@@ -448,7 +448,8 @@ def calc_influence_matrix(subaps, basis_func=make_zernike_basis, nbasis=20, cntr
 
 class ZernikeVector(MutableMapping):
     """
-    Class to wrap and visualize a vector of Zernike polynomial coefficients
+    Class to wrap and visualize a vector of Zernike polynomial coefficients. We build upon a MutableMapping
+    class to provide a way to access/modify coefficients in a dict-like way.
     """
     __zernikelabels = {
         "Z01": "Piston (0, 0)",
@@ -491,6 +492,33 @@ class ZernikeVector(MutableMapping):
     }
 
     def __init__(self, coeffs=[], modestart=2, normalized=False, units=u.nm, **kwargs):
+        """
+        Parameters
+        ----------
+        coeffs: list-like (default: [])
+            Vector of coefficients starting from **modestart**.
+        modestart: int (default: 2)
+            Noll mode number of the first included mode.
+        normalized: bool (default: False)
+            If True, coefficients are normalized to unit variance.  If False, coefficients
+            reflect the phase amplitude of the mode.
+        units: astropy.units.core.IrreducibleUnit or astropy.units.core.PrefixUnit (default: u.nm - nanometers)
+            Units of the coefficients.
+        **kwargs: kwargs
+            Keyword arguments for setting terms individually, e.g. Z09=10.0.
+
+        Attributes
+        ----------
+        modestart: int
+            Noll mode number of the first included mode.
+        normalized: bool
+            If True, coefficients are normalized to unit variance.  If False, coefficients
+            reflect the phase amplitude of the mode.
+        coeffs: dict
+            Contains the Zernike coefficients with keys of form "Z%02d"
+        ignored: dict
+            Used to store coefficients that are temporarily ignored. Managed via self.ignore()/self.restore().
+        """
         self.modestart = modestart
         self.normalized = normalized
         self.coeffs = {}
@@ -508,15 +536,29 @@ class ZernikeVector(MutableMapping):
             self.__setitem__(k, input_dict[k])
 
     def __iter__(self):
+        """
+        If instance is accessed as an iterator, iterate over the dict of coefficients.
+        """
         return iter(self.coeffs)
 
     def __contains__(self, val):
+        """
+        If testing for existence of a value, look in dict of coefficients for it.
+        """
         return val in self.coeffs
 
     def __len__(self):
+        """
+        The length of the Zernike vector will be the mode number of the highest term minus modestart.
+        The self.array property has the logic to work this out so use that length.
+        """
         return len(self.array)
 
     def __getitem__(self, key):
+        """
+        Overload __getitem__ so that coefficients can be accessed in a dict-like manner. Add logic to validate
+        keys and return amplitude of 0 if key is valid, but term not set in self.coeffs.
+        """
         if key in self.coeffs:
             return self.coeffs[key]
         else:
@@ -526,7 +568,11 @@ class ZernikeVector(MutableMapping):
                 raise KeyError("Invalid Zernike term, %s" % key)
 
     def __setitem__(self, key, item):
+        """
+        Overload __setitem__ so that coefficients can be set in a dict-like manner.
+        """
         if self._valid_key(key):
+            # this is a hacky way to get, say, Z4 to become Z04 to maintain consistency
             l = self._key_to_l(key)
             key = self._l_to_key(l)
             self.coeffs[key] = u.Quantity(item, self.units)
@@ -534,10 +580,16 @@ class ZernikeVector(MutableMapping):
             raise KeyError("Malformed Zernike mode key, %s" % key)
 
     def __delitem__(self, key):
+        """
+        Overload __delitem__ so that coefficients can be deleted in a dict-like manner.
+        """
         if key in self.coeffs:
             del self.coeffs[key]
 
     def __repr__(self):
+        """
+        Overload __repr__ to print out coefficients in a nice way including units and descriptive labels.
+        """
         s = ""
         for k in sorted(self.coeffs.keys()):
             if k in self.__zernikelabels:
@@ -549,12 +601,18 @@ class ZernikeVector(MutableMapping):
         return s
 
     def _valid_key(self, key):
+        """
+        Define valid format for coefficient keys.
+        """
         if re.match('Z\d', key):
             return True
         else:
             return False
 
     def _key_to_l(self, key):
+        """
+        Parse key to get Noll mode number.
+        """
         try:
             l = int(key.replace("Z", ""))
         except:
@@ -562,21 +620,33 @@ class ZernikeVector(MutableMapping):
         return l
 
     def _l_to_key(self, l):
+        """
+        Take Noll mode number and generate valid coefficient key.
+        """
         key = "Z%02d" % l
         return key
 
     @property
     def units(self):
+        """
+        Return the coefficient units currently being used.
+        """
         return self._units
 
     @units.setter
     def units(self, units):
+        """
+        When units are set, we need to go through each coefficient and perform the unit conversion to match.
+        """
         self._units = units
         for k in self.coeffs:
             self.coeffs[k] = u.Quantity(self.coeffs[k], units)
 
     @property
     def array(self):
+        """
+        Return coefficients in the form of a 1D np.ndarray.
+        """
         keys = sorted(self.coeffs.keys())
         last = self._key_to_l(keys[-1])
         arr = u.Quantity(np.zeros(last - self.modestart + 1), self.units)
@@ -587,9 +657,14 @@ class ZernikeVector(MutableMapping):
 
     @property
     def norm_array(self):
+        """
+        Return coefficients in the form of a 1D np.ndarray with each coefficient normalized to unit variance for its mode.
+        """
         if self.normalized:
             return self.array
         else:
+            # rather than repeat the logic used to normalize the coefficients, we use the existing methods
+            # to do the work and grab the results in between.
             self.normalize()
             arr = self.array.copy()
             self.denormalize()
@@ -597,15 +672,24 @@ class ZernikeVector(MutableMapping):
 
     @property
     def peak2valley(self):
+        """
+        Return the peak-to-valley amplitude of the Zernike set.
+        """
         x, y, r, p, ph = self.phase_map()
         return u.Quantity(ph.max() - ph.min(), self.units)
 
     @property
     def rms(self):
+        """
+        Return the RMS phase displacement of the Zernike set.
+        """
         x, y, r, p, ph = self.phase_map()
         return u.Quantity(np.sqrt(np.mean(np.square(ph))), self.units)
 
     def normalize(self):
+        """
+        Normalize coefficients to unit variance for each mode.
+        """
         if not self.normalized:
             self.normalized = True
             for k in self.coeffs:
@@ -614,6 +698,9 @@ class ZernikeVector(MutableMapping):
                 self.coeffs[k] /= noll
 
     def denormalize(self):
+        """
+        Restore normalized coefficients to phase amplitude.
+        """
         if self.normalized:
             self.normalized = False
             for k in self.coeffs:
@@ -621,23 +708,38 @@ class ZernikeVector(MutableMapping):
                 noll = noll_coefficient(l)
                 self.coeffs[k] *= noll
 
-    def from_array(self, coeffs):
+    def from_array(self, coeffs, modestart=None):
+        """
+        Load coefficients from a provided list/array starting from modestart. Array is assumed to start
+        from self.modestart if modestart is not provided.
+        """
         if len(coeffs) > 0:
+            if modestart is None:
+                modestart = self.modestart
             for i, c in enumerate(coeffs):
-                key = self._l_to_key(i + self.modestart)
+                key = self._l_to_key(i + modestart)
                 self.__setitem__(key, c)
 
     def ignore(self, key):
+        """
+        Set coefficient, key, aside for later recall if needed.
+        """
         if self._valid_key(key) and key in self.coeffs:
             self.ignored[key] = self.coeffs[key]
             self.coeffs[key] = 0.0 * self.units
 
     def restore(self, key):
+        """
+        Restore coefficient, key, back into set of coefficients.
+        """
         if self._valid_key(key) and key in self.ignored:
             self.coeffs[key] = self.ignored[key]
             del self.ignored[key]
 
     def total_phase(self, rho, phi):
+        """
+        Calculate total phase displacement at polar coordinates (rho, phi).
+        """
         phase = 0.0
         for k, z in self.coeffs.items():
             l = self._key_to_l(k)
@@ -650,6 +752,9 @@ class ZernikeVector(MutableMapping):
         return phase
 
     def phase_map(self, n=400):
+        """
+        Calculate a 2D polar map of total phase displacements with sampling of n points along rho and phi vectors.
+        """
         rho = np.linspace(0.0, 1.0, n)
         phi = np.linspace(0, 2*np.pi, n)
         [p, r] = np.meshgrid(phi, rho)
@@ -659,6 +764,9 @@ class ZernikeVector(MutableMapping):
         return x, y, r, p, ph
 
     def plot_map(self):
+        """
+        Plot 2D map of total phase displacement.
+        """
         x, y, r, p, ph = self.phase_map(n=400)
         fig = plt.pcolormesh(x, y, ph)
         fig.axes.set_axis_off()
@@ -668,6 +776,9 @@ class ZernikeVector(MutableMapping):
         plt.show()
 
     def plot_surface(self):
+        """
+        Plot total phase displacement as a 3D surface along with 2D contour map.
+        """
         x, y, r, p, ph = self.phase_map(n=100)
         fig = plt.figure(figsize=(8, 6))
         ax = fig.add_subplot(111, projection='3d')
