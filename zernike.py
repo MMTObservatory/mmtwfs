@@ -619,6 +619,9 @@ class ZernikeVector(MutableMapping):
         return ZernikeVector(**d)
 
     def __radd__(self, zv):
+        """
+        Order doesn't matter for the + operator so __radd__ is same as __add__
+        """
         return self.__add__(zv)
 
     def __sub__(self, zv):
@@ -640,7 +643,7 @@ class ZernikeVector(MutableMapping):
 
     def __rsub__(self, zv):
         """
-        Complement to __sub__
+        Complement to __sub__ so ZernikeVector can work on both sides of - operator.
         """
         d = {}
         if isinstance(zv, ZernikeVector):
@@ -655,44 +658,72 @@ class ZernikeVector(MutableMapping):
                 raise Exception("Invalid data-type, %s, for ZernikeVector - operation: zv = %s" % (type(zv), zv))
         return ZernikeVector(**d)
 
-    def __mul__(self, val):
+    def __mul__(self, zv):
         """
-        Create * operator to scale ZernikeVector by a constant value.
-        """
-        d = {}
-        try:
-            for k in self.coeffs:
-                d[k] = self.__getitem__(k) * float(val)
-        except:
-            raise Exception("Invalid data-type, %s, for ZernikeVector * operation: zv = %s" % (type(zv), zv))
-        return ZernikeVector(**d)
-
-    def __rmul__(self, val):
-        return self.__mul__(val)
-
-    def __truediv__(self, val):
-        """
-        Create / operator to divide ZernikeVector by a constant value.
+        Create * operator to scale ZernikeVector by a constant value or ZernikeVector.
         """
         d = {}
-        try:
-            for k in self.coeffs:
-                d[k] = self.__getitem__(k) / float(val)
-        except:
-            raise Exception("Invalid data-type, %s, for ZernikeVector / operation: zv = %s" % (type(zv), zv))
-        return ZernikeVector(**d)
+        if isinstance(zv, ZernikeVector):
+            # keys that are in one, but not the other are valid and will result in 0's in the result.
+            keys = set(self.coeffs.keys() | zv.coeffs.keys())
+            for k in keys:
+                d[k] = self.__getitem__(k) * zv[k].to(self.units)
+            outunits = self.units * self.units
+        else:
+            try:
+                for k in self.coeffs:
+                    d[k] = self.__getitem__(k) * float(zv)
+                outunits = self.units
+            except:
+                raise Exception("Invalid data-type, %s, for ZernikeVector * operation: zv = %s" % (type(zv), zv))
+        return ZernikeVector(**d, units=outunits)
 
-    def __rtruediv__(self, val):
+    def __rmul__(self, zv):
         """
-        Create / operator to divide a constant value by a ZernikeVector.
+        Multiplication works the same in any order so same as __mul__.
+        """
+        return self.__mul__(zv)
+
+    def __truediv__(self, zv):
+        """
+        Create / operator to divide ZernikeVector by a constant value or other ZernikeVector. Only terms in both ZernikeVectors
+        will be divided.
         """
         d = {}
-        try:
-            for k in self.coeffs:
-                d[k] = self.units * (float(val) / self.__getitem__(k).value)
-        except:
-            raise Exception("Invalid data-type, %s, for ZernikeVector / operation: zv = %s" % (type(zv), zv))
-        return ZernikeVector(**d)
+        if isinstance(zv, ZernikeVector):
+            # only meaningful to divide keys that exist in both cases. division by 0 otherwise ok and results in np.inf.
+            keys = set(self.coeffs.keys() & zv.coeffs.keys())
+            for k in keys:
+                d[k] = self.__getitem__(k) / zv[k].to(self.units)
+            outunits = u.dimensionless_unscaled
+        else:
+            try:
+                for k in self.coeffs:
+                    d[k] = self.__getitem__(k) / float(zv)
+                outunits = self.units
+            except:
+                raise Exception("Invalid data-type, %s, for ZernikeVector / operation: zv = %s" % (type(zv), zv))
+        return ZernikeVector(**d, units=outunits)
+
+    def __rtruediv__(self, zv):
+        """
+        Implement __truediv__ for the right side of the operator as well.
+        """
+        d = {}
+        if isinstance(zv, ZernikeVector):
+            # only meaningful to divide keys that exist in both cases. division by 0 otherwise ok and results in np.inf.
+            keys = set(self.coeffs.keys() & zv.coeffs.keys())
+            for k in keys:
+                d[k] = zv[k].to(self.units) / self.__getitem__(k)
+            outunits = u.dimensionless_unscaled
+        else:
+            try:
+                for k in self.coeffs:
+                    d[k] = float(zv) / self.__getitem__(k)
+                outunits = 1.0 / self.units
+            except:
+                raise Exception("Invalid data-type, %s, for ZernikeVector / operation: zv = %s" % (type(zv), zv))
+        return ZernikeVector(**d, units=outunits)
 
     def _valid_key(self, key):
         """
