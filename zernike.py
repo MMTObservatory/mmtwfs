@@ -600,6 +600,47 @@ class ZernikeVector(MutableMapping):
             s += "\n"
         return s
 
+    def __add__(self, zv):
+        """
+        Create + operator to add instances together to get a new instance. Use set() to collect the unique set of keys
+        and self.__getitem__() to use 0.0 as a default.
+        """
+        d = {}
+        keys = set(self.coeffs.keys() | zv.coeffs.keys())
+        for k in keys:
+            d[k] = self.__getitem__(k) + zv[k]
+        return ZernikeVector(**d)
+
+    def __radd__(self, zv):
+        """
+        Complement the __add__ with __radd__...
+        """
+        d = {}
+        keys = set(self.coeffs.keys() | zv.coeffs.keys())
+        for k in keys:
+            d[k] = zv[k] + self.__getitem__(k)
+        return ZernikeVector(**d)
+
+    def __sub__(self, zv):
+        """
+        Like __add__, but __sub__...
+        """
+        d = {}
+        keys = set(self.coeffs.keys() | zv.coeffs.keys())
+        for k in keys:
+            d[k] = self.__getitem__(k) - zv[k]
+        return ZernikeVector(**d)
+
+    def __rsub__(self, zv):
+        """
+        Complement to __sub__
+        """
+        d = {}
+        keys = set(self.coeffs.keys() | zv.coeffs.keys())
+        for k in keys:
+            d[k] = zv[k] - self.__getitem__(k)
+        return ZernikeVector(**d)
+
     def _valid_key(self, key):
         """
         Define valid format for coefficient keys.
@@ -782,7 +823,7 @@ class ZernikeVector(MutableMapping):
         x, y, r, p, ph = self.phase_map(n=100)
         fig = plt.figure(figsize=(8, 6))
         ax = fig.add_subplot(111, projection='3d')
-        surf = ax.plot_surface(x, y, ph, rstride=1, cstride=1, linewidth=0, alpha=0.6, cmap='plasma')
+        ax.plot_surface(x, y, ph, rstride=1, cstride=1, linewidth=0, alpha=0.6, cmap='plasma')
         v = max(abs(ph.max().value), abs(ph.min().value))
         ax.set_zlim(-v*5, v*5)
         cset = ax.contourf(x, y, ph, zdir='z', offset=-v*5, cmap='plasma')
