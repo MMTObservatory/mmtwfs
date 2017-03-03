@@ -602,33 +602,40 @@ class ZernikeVector(MutableMapping):
 
     def __add__(self, zv):
         """
-        Create + operator to add instances together to get a new instance. Use set() to collect the unique set of keys
-        and self.__getitem__() to use 0.0 as a default.
+        Create + operator to add instances together or add a constant to get a new instance.
+        Use set() to collect the unique set of keys and self.__getitem__() to use 0.0 as a default.
         """
         d = {}
-        keys = set(self.coeffs.keys() | zv.coeffs.keys())
-        for k in keys:
-            d[k] = self.__getitem__(k) + zv[k]
+        if isinstance(zv, ZernikeVector):
+            keys = set(self.coeffs.keys() | zv.coeffs.keys())
+            for k in keys:
+                d[k] = self.__getitem__(k) + zv[k]
+        else:
+            try:
+                for k in self.coeffs:
+                    d[k] = self.__getitem__(k) + float(zv) * self.units
+            except:
+                raise Exception("Invalid data-type, %s, for ZernikeVector + operation: zv = %s" % (type(zv), zv))
         return ZernikeVector(**d)
 
     def __radd__(self, zv):
-        """
-        Complement the __add__ with __radd__...
-        """
-        d = {}
-        keys = set(self.coeffs.keys() | zv.coeffs.keys())
-        for k in keys:
-            d[k] = zv[k] + self.__getitem__(k)
-        return ZernikeVector(**d)
+        return self.__add__(zv)
 
     def __sub__(self, zv):
         """
-        Like __add__, but __sub__...
+        Create - operator to substract an instance or a constant to get a new instant. Complement to __add__...
         """
         d = {}
-        keys = set(self.coeffs.keys() | zv.coeffs.keys())
-        for k in keys:
-            d[k] = self.__getitem__(k) - zv[k]
+        if isinstance(zv, ZernikeVector):
+            keys = set(self.coeffs.keys() | zv.coeffs.keys())
+            for k in keys:
+                d[k] = self.__getitem__(k) - zv[k]
+        else:
+            try:
+                for k in self.coeffs:
+                    d[k] = self.__getitem__(k) - float(zv) * self.units
+            except:
+                raise Exception("Invalid data-type, %s, for ZernikeVector - operation: zv = %s" % (type(zv), zv))
         return ZernikeVector(**d)
 
     def __rsub__(self, zv):
@@ -636,9 +643,55 @@ class ZernikeVector(MutableMapping):
         Complement to __sub__
         """
         d = {}
-        keys = set(self.coeffs.keys() | zv.coeffs.keys())
-        for k in keys:
-            d[k] = zv[k] - self.__getitem__(k)
+        if isinstance(zv, ZernikeVector):
+            keys = set(self.coeffs.keys() | zv.coeffs.keys())
+            for k in keys:
+                d[k] = zv[k] - self.__getitem__(k)
+        else:
+            try:
+                for k in self.coeffs:
+                    d[k] = float(zv) * self.units - self.__getitem__(k)
+            except:
+                raise Exception("Invalid data-type, %s, for ZernikeVector - operation: zv = %s" % (type(zv), zv))
+        return ZernikeVector(**d)
+
+    def __mul__(self, val):
+        """
+        Create * operator to scale ZernikeVector by a constant value.
+        """
+        d = {}
+        try:
+            for k in self.coeffs:
+                d[k] = self.__getitem__(k) * float(val)
+        except:
+            raise Exception("Invalid data-type, %s, for ZernikeVector * operation: zv = %s" % (type(zv), zv))
+        return ZernikeVector(**d)
+
+    def __rmul__(self, val):
+        return self.__mul__(val)
+
+    def __truediv__(self, val):
+        """
+        Create / operator to divide ZernikeVector by a constant value.
+        """
+        d = {}
+        try:
+            for k in self.coeffs:
+                d[k] = self.__getitem__(k) / float(val)
+        except:
+            raise Exception("Invalid data-type, %s, for ZernikeVector / operation: zv = %s" % (type(zv), zv))
+        return ZernikeVector(**d)
+
+    def __rtruediv__(self, val):
+        """
+        Create / operator to divide a constant value by a ZernikeVector.
+        """
+        d = {}
+        try:
+            for k in self.coeffs:
+                d[k] = self.units * (float(val) / self.__getitem__(k).value)
+        except:
+            raise Exception("Invalid data-type, %s, for ZernikeVector / operation: zv = %s" % (type(zv), zv))
         return ZernikeVector(**d)
 
     def _valid_key(self, key):
