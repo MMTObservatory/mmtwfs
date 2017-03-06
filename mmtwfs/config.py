@@ -8,7 +8,8 @@ import os
 
 import astropy.units as u
 
-wfsroot = os.environ.get("WFSROOT")
+#wfsroot = os.environ.get("WFSROOT")
+wfsroot = "/Users/tim/MMT/mmtwfs"
 
 
 def default_wfsroot(directory=None):
@@ -66,8 +67,8 @@ mmt_config = {
         "diameter": 6502.4 * u.mm,  # primary diameter
         "n_act": 104,  # number of actuator nodes
         "n_node": 3222,  # number of finite element nodes that sample mirror surface
-        "surf2act": os.path.join(wfsroot, "Surf2ActTEL_32.bin"),  # influence matrix to map actuator forces to surface displacement
-        "nodecoor": os.path.join(wfsroot, "bcv_node_coordinates.dat")  # coordinates of finite element nodes used in surf2act
+        "surf2act": os.path.join(wfsroot, "data", "Surf2ActTEL_32.bin"),  # influence matrix to map actuator forces to surface displacement
+        "nodecoor": os.path.join(wfsroot, "data", "bcv_node_coordinates.dat")  # coordinates of finite element nodes used in surf2act
     },
     "secondary": {
         "f5": {
@@ -84,7 +85,7 @@ mmt_config = {
             "zc_trans": 5.86 * u.um / u.arcsec,
             "focus_trans": 34.7 * u.nm / u.um
         }
-    }
+    },
     "wfs": {
         "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
         "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
