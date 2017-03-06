@@ -5,23 +5,36 @@ config.py - Configuration data and utility functions
 """
 
 import os
+import pkg_resources
 
 import astropy.units as u
 
-#wfsroot = os.environ.get("WFSROOT")
-wfsroot = "/Users/tim/MMT/mmtwfs"
 
+def recursive_subclasses(cls):
+    """
+    The __subclasses__() method only goes one level deep, but various classes can be separated by multiple
+    inheritance layers. This function recursively walks through the inheritance tree and returns a list of all
+    subclasses at all levels that inherit from the given class.
 
-def default_wfsroot(directory=None):
+    Parameters
+    ----------
+    cls: any python Class
+        Python class to get list of subclasses for
+
+    Returns
+    -------
+    all_subclasses: list
+        List of all subclasses that ultimately inherit from cls
     """
-    The MMT WFS code, configuration, and data files are all configured to live in a directory
-    defined by the environment variable $WFSROOT.  Map that to "wfsroot" internally and use this
-    function to set it explicitly.
-    """
-    global wfsroot
-    if directory is not None:
-        wfsroot = directory
-    return wfsroot
+    all_subclasses = []
+
+    top_subclasses = cls.__subclasses__()
+    all_subclasses.extend(top_subclasses)
+
+    for s in top_subclasses:
+        all_subclasses.extend(recursive_subclasses(s))
+
+    return all_subclasses
 
 
 def merge_config(*dicts):
@@ -67,8 +80,10 @@ mmt_config = {
         "diameter": 6502.4 * u.mm,  # primary diameter
         "n_act": 104,  # number of actuator nodes
         "n_node": 3222,  # number of finite element nodes that sample mirror surface
-        "surf2act": os.path.join(wfsroot, "data", "Surf2ActTEL_32.bin"),  # influence matrix to map actuator forces to surface displacement
-        "nodecoor": os.path.join(wfsroot, "data", "bcv_node_coordinates.dat")  # coordinates of finite element nodes used in surf2act
+        # influence matrix to map actuator forces to surface displacement
+        "surf2act": pkg_resources.resource_filename(__name__, os.path.join("data", "Surf2ActTEL_32.bin")),
+        # coordinates of finite element nodes used in surf2act
+        "nodecoor": pkg_resources.resource_filename(__name__, os.path.join("data", "bcv_node_coordinates.dat"))
     },
     "secondary": {
         "f5": {
