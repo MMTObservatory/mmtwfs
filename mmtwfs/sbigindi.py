@@ -2,13 +2,14 @@
 Classes and utility functions for communicating with SBIG cameras via the INDI protocol, http://www.indilib.org.
 """
 
-import indiclient
 import time
 import io
 
 from astropy.io import fits
 
-class CCDCam(indiclient.indiclient):
+from .indiclient import indiclient
+
+class CCDCam(indiclient):
     """
     Wrap indiclient.indiclient with some camera-specific utility functions to simplify things like taking,
     exposures, configuring camera binning, etc.
@@ -100,9 +101,9 @@ class CCDCam(indiclient.indiclient):
         return fitsdata
 
 
-class SBIGCam(CCDCam):
+class MATCam(CCDCam):
     """
-    Wrap CCDCam and set the driver to the SBIG driver.
+    Wrap CCDCam, set the driver to the SBIG driver, and point to the server for the MAT camera.
     """
     def __init__(self, host="192.168.1.105", port=7624):
         super(SBIGCam, self).__init__(host, port, driver="SBIG CCD")
