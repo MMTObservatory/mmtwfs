@@ -94,7 +94,7 @@ mmt_config = {
             "rotation": 234.0 * u.deg,  # rotation of aperture locations w.r.t. the primary mirror
             "pix_size": 0.135 * u.arcsec,  # arcsec per WFS detector pixel
             "pup_size": 450,  # pixels
-            "reference_zern": {
+            "default_zern": {
                 "megacam": {
                     "Z04": -468. * u.nm,  # defocus
                     "Z11": -80. * u.nm  # primary spherical
@@ -118,7 +118,7 @@ mmt_config = {
             "rotation": -225. * u.deg,
             "pix_size": 0.119 * u.arcsec,  # old KX260e detector with 20 um pixels
             "pup_size": 420,  # pixels
-            "reference_zern": {
+            "default_zern": {
                 "blue": {
                     "Z04": 7982. * u.nm
                 },
@@ -135,7 +135,7 @@ mmt_config = {
             "rotation": 180. * u.deg,  # this is referenced to camera2. camera1 is camera2+180, but is flipped by image acq
             "pix_size": 0.156 * u.arcsec,
             "pup_size": 360,  # pixels
-            "reference_zern": {
+            "default_zern": {
                 "mmirs1": {
                     "Z04": -2918. * u.nm
                 },
