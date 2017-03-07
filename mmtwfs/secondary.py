@@ -1,4 +1,5 @@
 # Licensed under GPL3
+# coding=utf-8
 
 """
 Classes and utilities for optical modeling and controlling the position of the secondary mirrors of the MMTO.

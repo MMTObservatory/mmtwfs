@@ -1,3 +1,6 @@
+# Licensed under GPL3 (see LICENSE)
+# coding=utf-8
+
 """
 Classes and utility functions for communicating with SBIG cameras via the INDI protocol, http://www.indilib.org.
 """

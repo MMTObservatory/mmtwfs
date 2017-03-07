@@ -1,4 +1,5 @@
 # Licensed under GPL3 (see LICENSE)
+# coding=utf-8
 
 """
 zernike.py -- A collection of functions and classes for performing wavefront analysis using Zernike polynomials.
@@ -729,7 +730,7 @@ class ZernikeVector(MutableMapping):
         """
         Define valid format for coefficient keys.
         """
-        if re.match('Z\d', key):
+        if re.match("Z\d\d", key):
             return True
         else:
             return False

@@ -1,4 +1,5 @@
 # Licensed under GPL3
+# coding=utf-8
 
 
 class MMTWFSException(Exception):

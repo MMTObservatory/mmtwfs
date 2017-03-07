@@ -1,3 +1,4 @@
+# coding=utf-8
 # Copyright (C) 2001-2003 Dirk Huenniger dhun (at) astro (dot) uni-bonn (dot) de
 #	This program is free software; you can redistribute it and/or
 #	modify it under the terms of the GNU General Public License as

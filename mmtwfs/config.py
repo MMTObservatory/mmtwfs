@@ -1,4 +1,5 @@
 # Licensed under GPL3 (see LICENSE)
+# coding=utf-8
 
 """
 config.py - Configuration data and utility functions
