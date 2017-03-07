@@ -66,7 +66,7 @@ def merge_config(*dicts):
         # find values that are dicts so we can recurse through them
         maps = [value for value in values if isinstance(value, dict)]
         if maps:
-            updated[key] = merge_data(*maps)
+            updated[key] = merge_config(*maps)
         else:
             # if not a dict, then return the last value we have since later arguments
             # take precendence
@@ -79,12 +79,12 @@ Optics numbers are taken from http://www.mmto.org/sites/default/files/mmt_conv7_
 mmt_config = {
     "telescope": {
         "diameter": 6502.4 * u.mm,  # primary diameter
-        "n_act": 104,  # number of actuator nodes
-        "n_node": 3222,  # number of finite element nodes that sample mirror surface
         # influence matrix to map actuator forces to surface displacement
-        "surf2act": pkg_resources.resource_filename(__name__, os.path.join("data", "Surf2ActTEL_32.bin")),
+        "surf2act_file": pkg_resources.resource_filename(__name__, os.path.join("data", "Surf2ActTEL_32.bin")),
         # coordinates of finite element nodes used in surf2act
-        "nodecoor": pkg_resources.resource_filename(__name__, os.path.join("data", "bcv_node_coordinates.dat"))
+        "nodecoor_file": pkg_resources.resource_filename(__name__, os.path.join("data", "bcv_node_coordinates.dat")),
+        # coordinates of the force actuators
+        "actuator_file": pkg_resources.resource_filename(__name__, os.path.join("data", "actuator_coordinates.dat"))
     },
     "secondary": {
         "f5": {
