@@ -28,14 +28,23 @@ def SecondaryFactory(secondary="f5", config={}, **kwargs):
 
 
 class Secondary(object):
+    """
+    Defines configuration pattern and methods common to all secondary mirror systems
+    """
     def __init__(self, config={}):
         key = self.__class__.__name__.lower()
         self.__dict__.update(merge_config(mmt_config['secondary'][key], config))
 
 
 class F5(Secondary):
+    """
+    Defines configuration and methods specific to the F/5 secondary system
+    """
     pass
 
 
 class F9(Secondary):
+    """
+    Defines configuration and methods specific to the F/9 secondary system
+    """
     pass
