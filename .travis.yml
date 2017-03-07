@@ -27,7 +27,7 @@ env:
         # The following versions are the 'default' for tests, unless
         # overridden underneath. They are defined here in order to save having
         # to repeat them for all configurations.
-        - PYTHON_VERSION=3.6
+        - PYTHON_VERSION=3.5
         - NUMPY_VERSION=stable
         - ASTROPY_VERSION=stable
         - MAIN_CMD='python setup.py'
@@ -96,9 +96,13 @@ matrix:
 
         - os: linux
           env: PYTHON_VERSION=2.7 NUMPY_VERSION=1.7
-          env: PYTHON_VERSION=3.5 NUMPY_VERSION=1.10
+
         - os: linux
-          env: NUMPY_VERSION=1.11
+          env: PYTHON_VERSION=3.5 NUMPY_VERSION=1.10
+
+        # try 3.6 with stable astropy and numpy
+        - os: linux
+          env: PYTHON_VERSION=3.6
 
         # Try numpy pre-release
         - os: linux
