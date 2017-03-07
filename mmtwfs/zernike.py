@@ -677,7 +677,8 @@ class ZernikeVector(MutableMapping):
                 outunits = self.units
             except:
                 raise Exception("Invalid data-type, %s, for ZernikeVector * operation: zv = %s" % (type(zv), zv))
-        return ZernikeVector(**d, units=outunits)
+        d['units'] = outunits
+        return ZernikeVector(**d)
 
     def __rmul__(self, zv):
         """
@@ -704,7 +705,8 @@ class ZernikeVector(MutableMapping):
                 outunits = self.units
             except:
                 raise Exception("Invalid data-type, %s, for ZernikeVector / operation: zv = %s" % (type(zv), zv))
-        return ZernikeVector(**d, units=outunits)
+        d['units'] = outunits
+        return ZernikeVector(**d)
 
     def __rtruediv__(self, zv):
         """
@@ -724,13 +726,14 @@ class ZernikeVector(MutableMapping):
                 outunits = 1.0 / self.units
             except:
                 raise Exception("Invalid data-type, %s, for ZernikeVector / operation: zv = %s" % (type(zv), zv))
-        return ZernikeVector(**d, units=outunits)
+        d['units'] = outunits
+        return ZernikeVector(**d)
 
     def _valid_key(self, key):
         """
         Define valid format for coefficient keys.
         """
-        if re.match("Z\d\d", key):
+        if re.match(r"Z\d\d", key):
             return True
         else:
             return False
