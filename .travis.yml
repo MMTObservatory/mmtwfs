@@ -66,6 +66,7 @@ matrix:
         # Try MacOS X
         - os: osx
           env: SETUP_CMD='test'
+               CONDA_DEPENDENCIES='Cython matplotlib scipy photutils scikit-image pandas jupyter python.app'
 
         # Do a coverage test.
         - os: linux
