@@ -1,6 +1,7 @@
 [run]
 source = {packagename}
 omit =
+   {packagename}/indiclient*
    {packagename}/_astropy_init*
    {packagename}/conftest*
    {packagename}/cython_version*
