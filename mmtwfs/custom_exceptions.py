@@ -27,3 +27,12 @@ class WFSConfigException(MMTWFSException):
     def __init__(self, value="Config Error", results=None):
         super(WFSConfigException, self).__init__(value, results=results)
         self.name = "Config Error"
+
+
+class ZernikeException(MMTWFSException):
+    """
+    Raise when an error occurs in handling or configuring of ZernikeVectors
+    """
+    def __init__(self, value="Zernike Handling Error", results=None):
+        super(ZernikeException, self).__init__(value, results=results)
+        self.name = "Zernike Error"
