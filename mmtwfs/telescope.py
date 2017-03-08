@@ -1,6 +1,7 @@
 # Licensed under GPL3
 # coding=utf-8
 
+import warnings
 import numpy as np
 
 import astropy.units as u
@@ -9,6 +10,12 @@ from astropy.io import ascii
 from .config import merge_config, mmt_config
 from .custom_exceptions import WFSConfigException
 from .secondary import SecondaryFactory
+from .zernike import ZernikeVector
+
+# we need to wrap the poppy import in a context manager to trap its whinging about missing pysynphot stuff that we don't use.
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    import poppy
 
 
 class MMT(object):
@@ -39,6 +46,65 @@ class MMT(object):
         # load actuator influence matrix that provides the surface displacement caused by 1 lb of force by
         # each actuator at each of self.node finite element node positions.
         self.surf2act = self.load_influence_matrix()
+
+        # create model of MMTO pupil including secondary and secondary support obstructions
+        self.pupil = self._pupil_model()
+
+    def _pupil_model(self):
+        """
+        Use poppy to create a model of the pupil given the configured primary and secondary mirrors.
+        """
+        osys = poppy.OpticalSystem()
+        primary = poppy.CircularAperture(radius=self.radius)
+        secondary = poppy.SecondaryObscuration(
+            secondary_radius=self.secondary.diameter.to(u.m).value / 2,
+            n_supports=self.n_supports,
+            support_width=self.support_width.to(u.m).value,
+            support_angle_offset=self.support_offset.to(u.deg).value
+        )
+        pup_model = poppy.CompoundAnalyticOptic(opticslist=[primary, secondary], name="MMTO")
+        return pup_model
+
+    def pupil_mask(self, size=400):
+        """
+        Use the pupil model to make a pupil mask that can be used as a kernel for finding pupil-like things in images
+        """
+        if size >= 500:
+            msg = "WFS pupil sizes are currently restricted to 500 pixels in diameter or less."
+            raise WFSConfigException(value=msg)
+
+        # not sure how to get the image data out directly, but the to_fits() method gives me a path...
+        pup_im = self.pupil.to_fits(npix=size)[0].data
+        return pup_im
+
+    def psf(self, zv=ZernikeVector(), wavelength=550.*u.nm, pixscale=0.01, fov=1.0):
+        """
+        Take a ZernikeVector and calculate resulting MMTO PSF at given wavelength.
+        """
+        # poppy wants the wavelength in meters
+        try:
+            w = wavelength.to(u.m)
+        except AttributeError:
+            w = wavelength  # if no unit provided, assumed meters
+
+        # poppy wants the piston term so whack it in there if modestart isn't already 1
+        if zv.modestart != 1:
+            zv.modestart = 1
+            zv['Z01'] = 0.0
+
+        # poppy wants coeffs in meters
+        zv.units = u.m
+
+        # poppy wants Noll normalized coefficients
+        coeffs = zv.norm_array
+
+        osys = poppy.OpticalSystem()
+        osys.add_pupil(self.pupil)
+        wfe = poppy.ZernikeWFE(radius=self.radius.to(u.m).value, coefficients=coeffs)
+        osys.add_pupil(wfe)
+        osys.add_detector(pixelscale=pixscale, fov_arcsec=fov)
+        psf = osys.calc_psf(w)
+        return psf
 
     def load_influence_matrix(self):
         """
