@@ -79,6 +79,9 @@ Optics numbers are taken from http://www.mmto.org/sites/default/files/mmt_conv7_
 mmt_config = {
     "telescope": {
         "diameter": 6502.4 * u.mm,  # primary diameter
+        "n_supports": 4,  # number of secondary support struts
+        "support_width": 0.04 * u.m,  # width of support struts in meters
+        "support_offset": 45. * u.deg,  # offset of support struts in degrees
         # influence matrix to map actuator forces to surface displacement
         "surf2act_file": pkg_resources.resource_filename(__name__, os.path.join("data", "Surf2ActTEL_32.bin")),
         # coordinates of finite element nodes used in surf2act
