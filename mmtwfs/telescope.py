@@ -54,8 +54,7 @@ class MMT(object):
         """
         Use poppy to create a model of the pupil given the configured primary and secondary mirrors.
         """
-        osys = poppy.OpticalSystem()
-        primary = poppy.CircularAperture(radius=self.radius)
+        primary = poppy.CircularAperture(radius=self.radius.to(u.m).value)
         secondary = poppy.SecondaryObscuration(
             secondary_radius=self.secondary.diameter.to(u.m).value / 2,
             n_supports=self.n_supports,
