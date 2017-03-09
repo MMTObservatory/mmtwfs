@@ -73,6 +73,7 @@ def merge_config(*dicts):
             updated[key] = values[-1]
     return updated
 
+
 """
 Optics numbers are taken from http://www.mmto.org/sites/default/files/mmt_conv7_2.pdf
 """
