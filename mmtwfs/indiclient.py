@@ -1,10 +1,11 @@
 # coding=utf-8
 # Copyright (C) 2001-2003 Dirk Huenniger dhun (at) astro (dot) uni-bonn (dot) de
-#	This program is free software; you can redistribute it and/or
-#	modify it under the terms of the GNU General Public License as
-#	published by the Free Software Foundation, version 2.
 #
-#   Updated to support python 3.x by T. E. Pickering te (dot) pickering (at) gmail (dot) com
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License as
+# published by the Free Software Foundation, version 2.
+#
+# Updated to support python 3.x by T. E. Pickering te (dot) pickering (at) gmail (dot) com
 
 """
 An INDI Client Library
@@ -24,17 +25,11 @@ An INDI Client Library
 @contact: dhun (at) astro (dot) uni-bonn (dot) de
 @version: 0.13
 """
-# Copyright (C) 2001-2003 Dirk Huenniger dhun (at) astro (dot) uni-bonn (dot) de
-#	This program is free software; you can redistribute it and/or
-#	modify it under the terms of the GNU General Public License as
-#	published by the Free Software Foundation, version 2.
 
 import socket
 import xml.parsers.expat
-import string
 import base64
 import sys
-import array
 import os
 import threading
 import queue
@@ -42,7 +37,8 @@ import copy
 import math
 import zlib
 import time
-import math
+
+import numpy as np
 
 
 def _normalize_whitespace(text):
@@ -393,7 +389,7 @@ class _indiobjectfactory(_indinameconventions):
         i = inditag.get_index()
         if inditag.is_element():
             vec = self.elementclasses[i](attrs, inditag)
-            return self.elementclasses[i](attrs, inditag)
+            return vec
 
         if inditag.is_vector():
             return self.vectorclasses[i](attrs, inditag)
@@ -680,13 +676,13 @@ class indinumber(indielement):
         @rtype: IntType
         """
         if self.is_range():
-            return int(floor(self.get_range() / self.get_step()))
+            return int(np.floor(self.get_range() / self.get_step()))
         else:
             return 0
 
     def _set_value(self, value):
         try:
-            a = float(value)
+            float(value)
         except:
             return
         indielement._set_value(self, value)
@@ -999,8 +995,8 @@ class indiblob(indielement):
 
     def get_size(self):
         """
-        @return: size of the xml representation of the data. This is usually not equal to the size of the string object returned by L{get_data}. Because blobs are
-        base64 encoded and can be compressed.
+        @return: size of the xml representation of the data. This is usually not equal to the size of the
+        string object returned by L{get_data}. Because blobs are base64 encoded and can be compressed.
         @rtype: StringType
         """
         return len(self._value)
@@ -1343,14 +1339,15 @@ class indilightvector(indivector):
     """A vector of lights """
 
     def __init__(self, attrs, tag):
+        self.tag = tag
         newattrs = attrs.copy()
         newattrs.update({"perm": 'ro'})
-        indivector.__init__(self, newattrs, tag)
+        indivector.__init__(self, newattrs, self.tag)
 
     def update(self, attrs):
         newattrs = attrs.copy()
         newattrs.update({"perm": "ro"})
-        indivector.update(self, newattrs, tag)
+        indivector.update(self, newattrs, self.tag)
 
 
 class indimessage(indiobject):
@@ -1428,10 +1425,12 @@ class _indilist(list):
 class _blocking_indi_object_handler:
     """
     This very abstract class makes sure that something can be blocked while the handler for the
-    indi object L{on_indiobject_changed} is executed. Its does not define what shall be blocked or what blocking actually means.
-    So for itself it just does nothing with nothing.  Classes inheriting from this class use it to detect "GUI changed" signals that
-    are caused by indiclient derived classes changing the gui, (and could cause client server loopbacks, or data losses if not treated properly).
-    @ivar _blocked: A counter incremented each time the L{_block} method is called and decremented by L{_unblock}, >0 means blocked, ==0 mean unblocked
+    indi object L{on_indiobject_changed} is executed. Its does not define what shall be blocked or
+    what blocking actually means. So for itself it just does nothing with nothing.  Classes inheriting
+    from this class use it to detect "GUI changed" signals that are caused by indiclient derived classes
+    changing the gui, (and could cause client server loopbacks, or data losses if not treated properly).
+    @ivar _blocked: A counter incremented each time the L{_block} method is called and decremented by
+                    L{_unblock}, >0 means blocked, ==0 mean unblocked
     @type _blocked: IntType
     """
 
@@ -1448,7 +1447,8 @@ class _blocking_indi_object_handler:
 
     def _unblock(self):
         """
-        releases the block. You have to call it as many times as you called L{_block} in order to release it, otherwise it will stay blocked.
+        releases the block. You have to call it as many times as you called L{_block} in order to release it,
+        otherwise it will stay blocked.
         @return: B{None}
         @rtype:  NoneType
         """
@@ -1488,8 +1488,9 @@ class _blocking_indi_object_handler:
 
     def configure(self, *args):
         """
-        This method will be called at least once by L{indiclient}. It will be called before L{on_indiobject_changed} has been called for the first time.
-        It will be called with the same parameters as L{on_indiobject_changed}. It can be implemented to do some lengthy configuration of some object.
+        This method will be called at least once by L{indiclient}. It will be called before L{on_indiobject_changed}
+        has been called for the first time. It will be called with the same parameters as L{on_indiobject_changed}.
+        It can be implemented to do some lengthy configuration of some object.
         @param args: The L{indiobject} (or indiobjects) that shall be used to configure the GUI object
         @type args: list
         @return: B{None}
@@ -1514,9 +1515,10 @@ class gui_indi_object_handler(_blocking_indi_object_handler):
 
     def _blocking_on_gui_changed(self, *args):
         """
-        Called by the GUI whenever the widget associated with this handler has changed. If the method on_indiobject_changed is currently active,
-        the method L{on_blocked} is called otherwise (which is the far more usual case) the method L{on_gui_changed} is called.
-        B{Important:} link your GUI callback signal to this function but implement it in L{on_gui_changed} (see L{on_blocked} if you want to know why)
+        Called by the GUI whenever the widget associated with this handler has changed. If the
+        method on_indiobject_changed is currently active, the method L{on_blocked} is called otherwise
+        (which is the far more usual case) the method L{on_gui_changed} is called. B{Important:} link your
+        GUI callback signal to this function but implement it in L{on_gui_changed} (see L{on_blocked} if you want to know why)
         @param args: The arguments describing the change of the GUI object(s)
         @type args: list
         @return: B{None}
@@ -1530,20 +1532,23 @@ class gui_indi_object_handler(_blocking_indi_object_handler):
     def on_blocked(self, *args):
         """
         The method L{_blocking_on_gui_changed} is called by the GUI, in order to inform us, that a widget has changed.
-        If the blocked property is C{True}, when L{_blocking_on_gui_changed} is called by the GUI. This method (L{on_blocked}) is called and nothing else done.
-        The blocked property is C{True} while the  L{on_indiobject_changed} function is running, so and indiobject has been received from the server
-        and L{on_indiobject_changed} is currently changing the widget associated with it. So there is a question: Was L{_blocking_on_gui_changed} called by the GUI?
-        because  L{on_indiobject_changed} changed the widget or was it called because the user changed something?
+        If the blocked property is C{True}, when L{_blocking_on_gui_changed} is called by the GUI. This method (L{on_blocked})
+        is called and nothing else done. The blocked property is C{True} while the  L{on_indiobject_changed} function is running,
+        so and indiobject has been received from the server and L{on_indiobject_changed} is currently changing the widget
+        associated with it. So there is a question: Was L{_blocking_on_gui_changed} called by the GUI? because
+        L{on_indiobject_changed} changed the widget or was it called because the user changed something?
         Well, we don't know! And this is bad.
-        Because if L{on_indiobject_changed} did it and we send the new state to the server, the server will reply, which will in turn trigger
-        L{on_indiobject_changed} which will cause the GUI to emit another L{_blocking_on_gui_changed} signal and finally call L{on_blocked}.
-        This way we have generated a nasty loopback. But if we don't send the new state to the server and the change was caused by the user, the user
-        will see the widget in the new state, but the server will not know about it, so the user has got another idea of the status of the system than the server
-        and this is also quite dangerous. For the moment we print a warning and send the signal to the server, so we use the solution that might cause a loopback,
-        but we make sure that the GUI and the server have got the same information about the status of the devices. One possible solution to this problem that
-        causes neither of the problems is implemented in the L{gtkindiclient._comboboxentryhandler} class. We do no send the new state to the server. But we load the latest state
-        we received from the server and set the gui to this state. So the user might have clicked at a GUI element, and it might not have changed in the proper
-        way. We tested this for the combobox and the togglebutton and it worked.
+        Because if L{on_indiobject_changed} did it and we send the new state to the server, the server will reply, which
+        will in turn trigger L{on_indiobject_changed} which will cause the GUI to emit another L{_blocking_on_gui_changed}
+        signal and finally call L{on_blocked}. This way we have generated a nasty loopback. But if we don't send the new state
+        to the server and the change was caused by the user, the user will see the widget in the new state, but the server
+        will not know about it, so the user has got another idea of the status of the system than the server and this is also
+        quite dangerous. For the moment we print a warning and send the signal to the server, so we use the solution that
+        might cause a loopback, but we make sure that the GUI and the server have got the same information about the status
+        of the devices. One possible solution to this problem that causes neither of the problems is implemented in the
+        L{gtkindiclient._comboboxentryhandler} class. We do no send the new state to the server. But we load the latest state
+        we received from the server and set the gui to this state. So the user might have clicked at a GUI element, and it
+        might not have changed in the proper way. We tested this for the combobox and the togglebutton and it worked.
         @param args: The arguments describing the change of the GUI object(s)
         @type args: list
         @return: B{None}
@@ -1566,10 +1571,10 @@ class gui_indi_object_handler(_blocking_indi_object_handler):
 
     def set_bidirectional(self):
         """
-        installs callbacks of the GUI that will call the function L{_blocking_on_gui_changed} if the user changes the the GUI object associated
-        with this L{gui_indi_object_handler} .
-        The function L{_blocking_on_gui_changed} will usually call the function L{on_gui_changed}. The function L{on_gui_changed} has to update and send the
-        INDI object associated with this L{gui_indi_object_handler}.
+        installs callbacks of the GUI that will call the function L{_blocking_on_gui_changed} if the user changes the the
+        GUI object associated with this L{gui_indi_object_handler}.
+        The function L{_blocking_on_gui_changed} will usually call the function L{on_gui_changed}. The function
+        L{on_gui_changed} has to update and send the INDI object associated with this L{gui_indi_object_handler}.
         @return: B{None}
         @rtype: NoneType
         """
@@ -1625,14 +1630,12 @@ class indi_element_identifier(indi_vector_identifier):
         indi_vector_identifier.__init__(self, devicename, vectorname)
         self.elementname = elementname
 
-    # def get_element(self):
-    #	return self.get_vector().get_element(self.elementname)
-
 
 class indi_custom_element_handler(gui_indi_object_handler, indi_element_identifier):
     """
     A base class for a custom handler that will be called each time a specified INDI element is received.
-    You have to write a class, inheriting from this one and to overload the L{on_indiobject_changed} method in order to add a custom handler. \n
+    You have to write a class, inheriting from this one and to overload the L{on_indiobject_changed} method in order to
+    add a custom handler. \n
     @ivar indi : The indiclient instance calling this handler (will be set by indiclient automatically)
     @type indi : L{indiclient}
     @ivar devicename : The name of the device this handler is associated with
@@ -1660,8 +1663,8 @@ class indi_custom_element_handler(gui_indi_object_handler, indi_element_identifi
 
     def configure(self, vector, element):
         """
-        This hander method will be called only once. It will be called before the L{on_indiobject_changed} method is called for the
-        first time. It will be called as soon as B{vector} has been received for the first time.
+        This hander method will be called only once. It will be called before the L{on_indiobject_changed} method is
+        called for the first time. It will be called as soon as B{vector} has been received for the first time.
         It can be used to do some lengthy calculations in order to set up related data structures that need to be done
         only once and require information from the associated L{indivector} and L{indielement} objects.
         @param vector:  A copy of the L{indivector} that has been received.
@@ -1909,9 +1912,9 @@ class bigindiclient:
         self.first = True
 
     # def set_verbose(self):
-    #	FIXME
-    #	Does not work in the treaded version
-    #	solution: add queue from indiclient to thread
+    # FIXME
+    # Does not work in the treaded version
+    # solution: add queue from indiclient to thread
 
     def _element_received(self, vector, element):
         """ Called during the L{process_events} method each time an INDI element has been received
@@ -2036,7 +2039,7 @@ class bigindiclient:
         self.running = True
         while self.running:
             self._receive()
-            while self.running_queue.empty() == False:
+            while self.running_queue.empty() is False:
                 self.running = self.running_queue.get()
 
     def send_vector(self, vector):
@@ -2070,7 +2073,7 @@ class bigindiclient:
         Process the entries form the receive_vector_queue created
         by the parsing thread and update the self.indivector.list
         """
-        while self.receive_vector_queue.empty() == False:
+        while self.receive_vector_queue.empty() is False:
             newVector = self.receive_vector_queue.get()
             devicename = newVector.getDevice()
             vectorname = newVector.getName()
@@ -2222,7 +2225,7 @@ class bigindiclient:
         @rtype: NoneType
         """
         print("Timeout", devicename, vectorname)
-        #raise Exception
+        # raise Exception
         # self._receive()
 
     def set_timeout_handler(self, handler):
@@ -2293,8 +2296,8 @@ class bigindiclient:
 
     def process_events(self):
         """
-        Has to be called frequently by any program using this client. All custom handler methods will called by this (and only by this)
-        method. furthermore the C{def*handler} and C{massage_handler} methods will be called here.
+        Has to be called frequently by any program using this client. All custom handler methods will called by this
+        (and only by this) method. furthermore the C{def*handler} and C{massage_handler} methods will be called here.
         See also L{add_custom_element_handler},  L{set_def_handlers}, L{set_message_handler} . If you just don't want to use any
         custom handlers and you do not use gtkindiclient functions, you do not need to call this method at all.
         @return: B{None}
@@ -2399,7 +2402,7 @@ class bigindiclient:
             if self.currentVector.tag.get_initial_tag() == name:
                 # if self.currentVector.is_valid():
                 # if self.currentVector.tag.get_transfertype()==inditransfertypes.idef:
-                #	self.indivectors.append(self.currentVector)
+                # self.indivectors.append(self.currentVector)
                 self.receive_event_queue.put(copy.deepcopy(self.currentVector))
                 self.receive_vector_queue.put(copy.deepcopy(self.currentVector))
                 self.currentVector = None
@@ -2443,14 +2446,15 @@ class bigindiclient:
                 if obj.tag.is_element():
                     self.currentData = []
         # except:
-        #	a,b,c =sys.exc_info()
-        #	sys.excepthook(  a,b,c )
-        #	raise Exception, "indiclient: Error during start element handler"
+        # a,b,c =sys.exc_info()
+        # sys.excepthook(  a,b,c )
+        # raise Exception, "indiclient: Error during start element handler"
 
     def enable_blob(self):
         """
-        Sends a signal to the server that tells it, that this client wants to receive L{indiblob} objects. If this method is not called, the server will not
-        send any L{indiblob}. The DCD clients calls it each time an L{indiblob} is defined.
+        Sends a signal to the server that tells it, that this client wants to receive L{indiblob} objects.
+        If this method is not called, the server will not send any L{indiblob}. The DCD clients calls it each time
+        an L{indiblob} is defined.
         @return: B{None}
         @rtype: NoneType
         """
