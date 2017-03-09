@@ -49,7 +49,10 @@ env:
 
         # If there are matplotlib or other GUI tests, uncomment the following
         # line to use the X virtual framebuffer.
-        # - SETUP_XVFB=True
+        - SETUP_XVFB=True
+
+        # set default matplotlib backend to noninteractive
+        - MPLBACKEND='agg'
 
     matrix:
         # Make sure that egg_info works without dependencies
@@ -67,7 +70,6 @@ matrix:
         - os: osx
           env: SETUP_CMD='test'
                NUMPY_VERSION=1.11
-               MPLBACKEND='agg'
 
         # Do a coverage test.
         - os: linux
