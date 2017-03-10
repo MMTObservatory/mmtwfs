@@ -1,6 +1,10 @@
 # Licensed under GPL3 (see LICENSE)
 # coding=utf-8
 
+import os
+import pkg_resources
+import filecmp
+
 import astropy.units as u
 
 from ..config import mmt_config
@@ -40,3 +44,13 @@ def test_psf():
         p = t.psf(zv=zv)
         p_im = p[0].data
         assert(p_im.max() < 1.0)
+
+def test_force_file():
+    t = MMT()
+    # define a zernike vector with AST45 of -1000 nm and check if the correction equals the forces required to bend
+    # +1000 nm of AST45 into the mirror.
+    zv = ZernikeVector(Z05=-1000)
+    f_table = t.bending_forces(zv=zv, gain=1.0)
+    t.to_rcell(f_table, filename="forcefile")
+    test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "AST45_p1000.frc"))
+    assert(filecmp.cmp("forcefile", test_file))
