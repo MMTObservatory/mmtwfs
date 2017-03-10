@@ -80,6 +80,7 @@ Optics numbers are taken from http://www.mmto.org/sites/default/files/mmt_conv7_
 mmt_config = {
     "telescope": {
         "diameter": 6502.4 * u.mm,  # primary diameter
+        "bcv_radius": 3228.5 * u.mm,  # radius to use when normalizing BCV finite element coordinates
         "n_supports": 4,  # number of secondary support struts
         "support_width": 0.04 * u.m,  # width of support struts in meters
         "support_offset": 45. * u.deg,  # offset of support struts in degrees
