@@ -610,7 +610,7 @@ class ZernikeVector(MutableMapping):
         """
         d = {}
         if isinstance(zv, ZernikeVector):
-            keys = set(self.coeffs.keys() | zv.coeffs.keys())
+            keys = set(self.coeffs.keys()) | set(zv.coeffs.keys())
             for k in keys:
                 d[k] = self.__getitem__(k) + zv[k]
         else:
@@ -633,7 +633,7 @@ class ZernikeVector(MutableMapping):
         """
         d = {}
         if isinstance(zv, ZernikeVector):
-            keys = set(self.coeffs.keys() | zv.coeffs.keys())
+            keys = set(self.coeffs.keys()) | set(zv.coeffs.keys())
             for k in keys:
                 d[k] = self.__getitem__(k) - zv[k]
         else:
@@ -650,7 +650,7 @@ class ZernikeVector(MutableMapping):
         """
         d = {}
         if isinstance(zv, ZernikeVector):
-            keys = set(self.coeffs.keys() | zv.coeffs.keys())
+            keys = set(self.coeffs.keys()) | set(zv.coeffs.keys())
             for k in keys:
                 d[k] = zv[k] - self.__getitem__(k)
         else:
@@ -668,7 +668,7 @@ class ZernikeVector(MutableMapping):
         d = {}
         if isinstance(zv, ZernikeVector):
             # keys that are in one, but not the other are valid and will result in 0's in the result.
-            keys = set(self.coeffs.keys() | zv.coeffs.keys())
+            keys = set(self.coeffs.keys()) | set(zv.coeffs.keys())
             for k in keys:
                 d[k] = self.__getitem__(k) * zv[k].to(self.units)
             outunits = self.units * self.units
@@ -702,7 +702,7 @@ class ZernikeVector(MutableMapping):
         d = {}
         if isinstance(zv, ZernikeVector):
             # only meaningful to divide keys that exist in both cases. division by 0 otherwise ok and results in np.inf.
-            keys = set(self.coeffs.keys() & zv.coeffs.keys())
+            keys = set(self.coeffs.keys()) & set(zv.coeffs.keys())
             for k in keys:
                 d[k] = self.__getitem__(k) / zv[k].to(self.units)
             outunits = u.dimensionless_unscaled
@@ -716,7 +716,7 @@ class ZernikeVector(MutableMapping):
         d['units'] = outunits
         return ZernikeVector(**d)
 
-    def __rdiv__(self, xv):
+    def __rdiv__(self, zv):
         """
         Still required for python 2.x compatibility
         """
@@ -729,7 +729,7 @@ class ZernikeVector(MutableMapping):
         d = {}
         if isinstance(zv, ZernikeVector):
             # only meaningful to divide keys that exist in both cases. division by 0 otherwise ok and results in np.inf.
-            keys = set(self.coeffs.keys() & zv.coeffs.keys())
+            keys = set(self.coeffs.keys()) & set(zv.coeffs.keys())
             for k in keys:
                 d[k] = zv[k].to(self.units) / self.__getitem__(k)
             outunits = u.dimensionless_unscaled
