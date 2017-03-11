@@ -688,6 +688,12 @@ class ZernikeVector(MutableMapping):
         """
         return self.__mul__(zv)
 
+    def __div__(self, zv):
+        """
+        Still required for python 2.x...
+        """
+        return self.__truediv__(zv)
+
     def __truediv__(self, zv):
         """
         Create / operator to divide ZernikeVector by a constant value or other ZernikeVector. Only terms in both ZernikeVectors
@@ -709,6 +715,12 @@ class ZernikeVector(MutableMapping):
                 raise ZernikeException("Invalid data-type, %s, for ZernikeVector / operation: zv = %s" % (type(zv), zv))
         d['units'] = outunits
         return ZernikeVector(**d)
+
+    def __rdiv__(self, xv):
+        """
+        Still required for python 2.x compatibility
+        """
+        return self.__rtruediv__(zv)
 
     def __rtruediv__(self, zv):
         """
