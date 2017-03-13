@@ -69,7 +69,6 @@ matrix:
         # Try MacOS X
         - os: osx
           env: SETUP_CMD='test'
-               NUMPY_VERSION=1.11
 
         # Do a coverage test.
         - os: linux
