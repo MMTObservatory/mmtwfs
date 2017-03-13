@@ -82,7 +82,7 @@ mmt_config = {
         "diameter": 6502.4 * u.mm,  # primary diameter
         "bcv_radius": 3228.5 * u.mm,  # radius to use when normalizing BCV finite element coordinates
         "n_supports": 4,  # number of secondary support struts
-        "support_width": 0.04 * u.m,  # width of support struts in meters
+        "support_width": 0.12 * u.m,  # width of support struts in meters
         "support_offset": 45. * u.deg,  # offset of support struts in degrees
         # influence matrix to map actuator forces to surface displacement
         "surf2act_file": pkg_resources.resource_filename(__name__, os.path.join("data", "Surf2ActTEL_32.bin")),
@@ -108,29 +108,40 @@ mmt_config = {
         }
     },
     "wfs": {
-        "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
-        "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
         "f5": {
             "secondary": "f5",  # secondary used with WFS system
             "rotation": 234.0 * u.deg,  # rotation of aperture locations w.r.t. the primary mirror
             "pix_size": 0.135 * u.arcsec,  # arcsec per WFS detector pixel
             "pup_size": 450,  # pixels
-            "default_zern": {
+            "pup_offset": [0.0, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
+            "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
+            "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
+            "nzern": 20,  # number of zernike modes to fit
+            "reference_file": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "f5_hecto_ref.fits")),
+            "modes": {
                 "megacam": {
-                    "Z04": -468. * u.nm,  # defocus
-                    "Z11": -80. * u.nm  # primary spherical
+                    "ref_zern": {
+                        "Z04": -468. * u.nm,  # defocus
+                        "Z11": -80. * u.nm  # primary spherical
+                    },
                 },
                 "hecto": {
-                    "Z04": -2810. * u.nm,
-                    "Z11": -150. * u.nm
+                    "ref_zern": {
+                        "Z04": -2810. * u.nm,
+                        "Z11": -150. * u.nm
+                    },
                 },
                 "maestro": {
-                    "Z04": -2820. * u.nm,
-                    "Z11": -150. * u.nm
+                    "ref_zern": {
+                        "Z04": -2820. * u.nm,
+                        "Z11": -150. * u.nm
+                    },
                 },
                 "swirc": {
-                    "Z04": -2017. * u.nm,
-                    "Z11": -1079. * u.nm
+                    "ref_zern": {
+                        "Z04": -2017. * u.nm,
+                        "Z11": -1079. * u.nm
+                    }
                 }
             }
         },
@@ -138,16 +149,27 @@ mmt_config = {
             "secondary": "f9",
             "rotation": -225. * u.deg,
             "pix_size": 0.119 * u.arcsec,  # old KX260e detector with 20 um pixels
-            "pup_size": 420,  # pixels
-            "default_zern": {
+            "pup_size": 400,  # pixels
+            "pup_offset": [-0.75, -0.25],  # [x, y] pupil offset from center of reference aperture pattern
+            "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
+            "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
+            "nzern": 20,  # number of zernike modes to fit
+            "reference_file": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "f9_ref.fits")),
+            "modes": {
                 "blue": {
-                    "Z04": 7982. * u.nm
+                    "ref_zern": {
+                        "Z04": 7982. * u.nm
+                    },
                 },
                 "red": {
-                    "Z04": 7982. * u.nm
+                    "ref_zern": {
+                        "Z04": 7982. * u.nm
+                    },
                 },
                 "spol": {
-                    "Z04": -308. * u.nm
+                    "ref_zern": {
+                        "Z04": -308. * u.nm
+                    },
                 }
             }
         },
@@ -156,12 +178,28 @@ mmt_config = {
             "rotation": 180. * u.deg,  # this is referenced to camera2. camera1 is camera2+180, but is flipped by image acq
             "pix_size": 0.156 * u.arcsec,
             "pup_size": 360,  # pixels
-            "default_zern": {
+            "pup_offset": [0.0, -0.5],  # [x, y] pupil offset from center of reference aperture pattern
+            "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
+            "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
+            "nzern": 20,  # number of zernike modes to fit
+            "modes": {
                 "mmirs1": {
-                    "Z04": -2918. * u.nm
+                    "ref_zern": {
+                        "Z04": -2918. * u.nm
+                    },
+                    "reference_file": pkg_resources.resource_filename(
+                        __name__,
+                        os.path.join("data", "ref_images", "mmirs_camera1_ref.fits")
+                    ),
                 },
                 "mmirs2": {
-                    "Z04": 1912. * u.nm
+                    "ref_zern": {
+                        "Z04": 1912. * u.nm
+                    },
+                    "reference_file": pkg_resources.resource_filename(
+                        __name__,
+                        os.path.join("data", "ref_images", "mmirs_camera2_ref.fits")
+                    ),
                 }
             }
         }
