@@ -149,8 +149,9 @@ mmt_config = {
             "secondary": "f9",
             "rotation": -225. * u.deg,
             "pix_size": 0.119 * u.arcsec,  # old KX260e detector with 20 um pixels
-            "pup_size": 400,  # pixels
-            "pup_offset": [-0.75, -0.25],  # [x, y] pupil offset from center of reference aperture pattern
+            "pup_size": 440,  # pupil outer diameter in pixels
+            "pup_inner": 45,  # inner obscuration in pixels
+            "pup_offset": [0.85, 1.5],  # [x, y] pupil offset from center of reference aperture pattern
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 20,  # number of zernike modes to fit
@@ -178,6 +179,7 @@ mmt_config = {
             "rotation": 180. * u.deg,  # this is referenced to camera2. camera1 is camera2+180, but is flipped by image acq
             "pix_size": 0.156 * u.arcsec,
             "pup_size": 360,  # pixels
+            "pup_inner": 50,
             "pup_offset": [0.0, -0.5],  # [x, y] pupil offset from center of reference aperture pattern
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
