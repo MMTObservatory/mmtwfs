@@ -233,6 +233,110 @@ def center_pupil(data, pup_mask, threshold=0.95, plot=False):
     return cen
 
 
+def get_apertures(data, ref, xcen, ycen, xspacing, yspacing):
+    """
+    Use the X/Y center positions and grid spacings to place the reference apertures onto the WFS
+    frame.  Perform center-of-mass centroiding within each aperture.
+
+    Arguments
+    ---------
+    data: str or 2D ndarray
+        WFS image to analyze, either FITS file or ndarray image data
+    ref: astropy.Table
+        Table of reference aperture positions
+    xcen, ycen: float, float
+        X and Y positions of the pupil center
+    xspacing, yspacing: float, float
+        Aperture grid spacing along X and Y axes
+
+    Returns
+    -------
+    apers: photutils.CircularAperture
+        WFS apertures scaled and placed onto image
+    masks: list of photutils.ApertureMask objects
+        Masks used for aperture centroiding
+    offsets: list of tuples
+        X/Y offsets of spot centroids from aperture centers
+    """
+    data = check_wfsdata(data)
+
+    # we use circular apertures here because they generate square masks of the appropriate size.
+    # rectangular apertures produced masks that were sqrt(2) too large.
+    # see https://github.com/astropy/photutils/issues/499 for details.
+    apers = photutils.CircularAperture(
+        ((xspacing/ref['xspacing'])*ref['apertures']['xcentroid']+xcen,
+        (yspacing/ref['yspacing'])*ref['apertures']['ycentroid']+ycen),
+        r=(xspacing + yspacing)/4.
+    )
+    masks = apers.to_mask(method='subpixel')
+    offsets = []
+    for m in masks:
+        subim = m.cutout(data)
+        # center-of-mass centroiding is the fastest, most reliable method, especially for faint or elongated spots
+        spotx, spoty = photutils.centroid_com(subim)
+        offsets.append((spotx-m.shape[1]/2, spoty-m.shape[0]/2))
+    offsets = np.array(offsets)
+    return apers, masks, offsets
+
+
+def get_slopes(data, ref, plot=False):
+    """
+    Analyze a WFS image and produce pixel offsets between reference and observed spot positions.
+
+    Arguments
+    ---------
+    data: str or 2D np.ndarray
+        FITS file or np.ndarray containing WFS observation
+    ref: astropy.Table
+        Table of reference apertures
+    plot: bool
+        Toggle plotting of image with aperture overlays
+
+    Returns
+    -------
+    slopes: list of tuples
+        X/Y pixel offsets between measured and reference aperture positions.
+    final_aps: astropy.Table
+        Centroided observed apertures
+    xspacing, yspacing: float, float
+        Observed X and Y grid spacing
+    xcen, ycen: float, float
+        Center of pupil image
+    """
+    data = check_wfsdata(data)
+    mean, median, std = stats.sigma_clipped_stats(data, sigma=3.0, iters=5)
+    data -= median
+    xcen, ycen = center_pupil(data, plot=False)
+    xspacing, yspacing = get_spacing(data)
+    # get initial apertures, find mean offset, and fine tune the centration
+    apers, masks, pos = get_apertures(data, ref, xcen, ycen, xspacing, yspacing)
+    xcen += pos[0].mean()
+    ycen += pos[1].mean()
+    apers, masks, pos = get_apertures(data, ref, xcen, ycen, xspacing, yspacing)
+    meas_pos = apers.positions + pos
+    final_aps = photutils.CircularAperture(
+            meas_pos,
+            r=4.
+    )
+    ref_aps = photutils.CircularAperture(
+        (ref['apertures']['xcentroid']+xcen, ref['apertures']['ycentroid']+ycen),
+        r=(xspacing + yspacing) / 4.
+    )
+    spacing = (xspacing + yspacing) / 2.
+    ref_spacing = (ref['xspacing'] + ref['yspacing']) / 2.
+    pup_size = ref['pup_outer']
+    slopes = final_aps.positions - ref_aps.positions
+    pup_coords = (ref_aps.positions - [xcen, ycen]) / [pup_size, pup_size]
+
+    if plot:
+        norm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.SqrtStretch())
+        plt.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
+        apers.plot(color='red')
+        plt.scatter(xcen, ycen)
+        final_aps.plot(color='yellow')
+    return slopes.transpose(), pup_coords.transpose(), final_aps, (xspacing, yspacing), (xcen, ycen)
+
+
 def WFSFactory(wfs="f5", config={}, **kwargs):
     """
     Build and return proper WFS sub-class instance based on the value of 'wfs'.
