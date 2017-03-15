@@ -8,11 +8,14 @@ Classes and utilities for operating the wavefront sensors of the MMTO and analyz
 import numpy as np
 import photutils
 
+import matplotlib.pyplot as plt
+
 from skimage import feature
 from skimage.morphology import reconstruction
 from scipy import stats, ndimage
 from scipy.misc import imrotate
 
+import astropy.units as u
 from astropy.io import fits
 from astropy import stats, visualization
 
@@ -176,7 +179,7 @@ def grid_spacing(data):
     return xspacing, yspacing
 
 
-def background(data, h=0.4):
+def background(data, h=0.7):
     """
     Use skimage.morphology.reconstruction to filter low spatial order background from WFS images.
     See http://scikit-image.org/docs/dev/auto_examples/color_exposure/plot_regional_maxima.html for details on process.
@@ -185,8 +188,8 @@ def background(data, h=0.4):
     ---------
     data: str or 2D ndarray
         WFS data to analyze
-    h: float (default: 0.4)
-        Scale factor used to create seed image. It is used to scale the mean of the image.
+    h: float (default: 0.7)
+        Scale factor used to create seed image. It is used to scale the max of the image.
 
     Returns
     -------
@@ -194,12 +197,12 @@ def background(data, h=0.4):
         Reconstructed background of the WFS image
     """
     data = check_wfsdata(data)
-    seed = data - h * data.mean()
+    seed = data - h * data.max()
     dilated = reconstruction(seed, data, method='dilation')
     return dilated
 
 
-def center_pupil(data, pup_mask, threshold=0.95, plot=False):
+def center_pupil(data, pup_mask, threshold=0.5, sigma=20., plot=False):
     """
     Find the center of the pupil in a WFS image using skimage.feature.match_template(). This generates
     a correlation image and we centroid the peak of the correlation to determine the center.
@@ -210,8 +213,10 @@ def center_pupil(data, pup_mask, threshold=0.95, plot=False):
         WFS image to analyze, either FITS file or ndarray image data
     pup_mask: str or 2D ndarray
         Pupil model to use in the template matching
-    threshold: float (default: 0.95)
+    threshold: float (default: 0.0)
         Sets image to 0 where it's below threshold * image.max()
+    sigma: float (default: 20.)
+        Sigma of gaussian smoothing kernel
     plot: bool
         Toggle plotting of the correlation image
 
@@ -222,10 +227,13 @@ def center_pupil(data, pup_mask, threshold=0.95, plot=False):
     """
     data = check_wfsdata(data)
     pup_mask = check_wfsdata(pup_mask)
+
+    # we smooth the image heavily to reduce the aliasing from the SH spots.
+    smo = ndimage.gaussian_filter(data, sigma)
+
     # use skimage.feature.match_template() to do a fast cross-correlation between the WFS image and the pupil model.
     # the location of the peak of the correlation will be the center of the WFS pattern.
-    subt = data - background(data)
-    match = feature.match_template(subt, pup_mask, pad_input=True)
+    match = feature.match_template(smo, pup_mask, pad_input=True)
     match[match < threshold * match.max()] = 0
     cen = photutils.centroids.centroid_com(match)
     if plot:
@@ -389,6 +397,11 @@ class WFS(object):
                 )
             else:
                 self.modes[mode]['reference'] = reference
+
+    def pupil_mask(self, rotator=0.0):
+        rotator = u.Quantity(rotator, u.deg)
+        pup = self.telescope.pupil_mask(rotation=self.rotation+rotator)
+        return pup
 
 
 class F9(WFS):
