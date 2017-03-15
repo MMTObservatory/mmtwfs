@@ -112,9 +112,9 @@ mmt_config = {
             "secondary": "f5",  # secondary used with WFS system
             "rotation": 234.0 * u.deg,  # rotation of aperture locations w.r.t. the primary mirror
             "pix_size": 0.135 * u.arcsec,  # arcsec per WFS detector pixel
-            "pup_size": 450,  # pixels
-            "pup_inner": 55,  # inner obscuration radius in pixels
-            "pup_offset": [0.0, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
+            "pup_size": 460,  # pixels
+            "pup_inner": 65,  # inner obscuration radius in pixels
+            "pup_offset": [-0.5, 0.25],  # [x, y] pupil offset from center of reference aperture pattern
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 20,  # number of zernike modes to fit
@@ -150,9 +150,9 @@ mmt_config = {
             "secondary": "f9",
             "rotation": -225. * u.deg,
             "pix_size": 0.119 * u.arcsec,  # old KX260e detector with 20 um pixels
-            "pup_size": 440,  # pupil outer diameter in pixels
-            "pup_inner": 45,  # inner obscuration radius in pixels
-            "pup_offset": [0.85, 0.25],  # [x, y] pupil offset from center of reference aperture pattern
+            "pup_size": 460,  # pupil outer diameter in pixels
+            "pup_inner": 50,  # inner obscuration radius in pixels
+            "pup_offset": [0.3, 0.45],  # [x, y] pupil offset from center of reference aperture pattern
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 20,  # number of zernike modes to fit
@@ -181,7 +181,7 @@ mmt_config = {
             "pix_size": 0.156 * u.arcsec,
             "pup_size": 360,  # pixels
             "pup_inner": 50,
-            "pup_offset": [0.0, -0.5],  # [x, y] pupil offset from center of reference aperture pattern
+            "pup_offset": [0.0, -0.55],  # [x, y] pupil offset from center of reference aperture pattern
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 20,  # number of zernike modes to fit
