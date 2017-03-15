@@ -152,7 +152,7 @@ mmt_config = {
             "pix_size": 0.119 * u.arcsec,  # old KX260e detector with 20 um pixels
             "pup_size": 440,  # pupil outer diameter in pixels
             "pup_inner": 45,  # inner obscuration radius in pixels
-            "pup_offset": [0.85, 1.5],  # [x, y] pupil offset from center of reference aperture pattern
+            "pup_offset": [0.85, 0.25],  # [x, y] pupil offset from center of reference aperture pattern
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 20,  # number of zernike modes to fit
