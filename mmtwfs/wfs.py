@@ -54,6 +54,28 @@ def check_wfsdata(data):
     return data
 
 
+def cart2pol(arr):
+    """
+    convert array of [x, y] vectors to [rho, theta]
+    """
+    x = arr[0]
+    y = arr[1]
+    rho = np.sqrt(x**2 + y**2)
+    theta = np.arctan2(y, x)
+    return np.array([rho, theta])
+
+
+def pol2cart(arr):
+    """
+    convert array of [rho, theta] vectors to [x, y]
+    """
+    rho = arr[0]
+    theta = arr[1]
+    x = rho * np.cos(theta)
+    y = rho * np.sin(theta)
+    return np.array([x, y])
+
+
 def wfsfind(data, fwhm=5.0, threshold=7.0, plot=False, ap_radius=5.0):
     """
     Use photutils.DAOStarFinder() to find and centroid spots in a Shack-Hartmann WFS image.
@@ -271,10 +293,11 @@ def get_apertures(data, ref, xcen, ycen, xspacing, yspacing):
     # we use circular apertures here because they generate square masks of the appropriate size.
     # rectangular apertures produced masks that were sqrt(2) too large.
     # see https://github.com/astropy/photutils/issues/499 for details.
+    spacing = max(xspacing, yspacing)  # workaround to support hexagonal grid for f/9
     apers = photutils.CircularAperture(
         ((xspacing/ref['xspacing'])*ref['apertures']['xcentroid']+xcen,
         (yspacing/ref['yspacing'])*ref['apertures']['ycentroid']+ycen),
-        r=(xspacing + yspacing)/4.
+        r=spacing/2.
     )
     masks = apers.to_mask(method='subpixel')
     offsets = []
@@ -287,7 +310,7 @@ def get_apertures(data, ref, xcen, ycen, xspacing, yspacing):
     return apers, masks, offsets
 
 
-def get_slopes(data, ref, plot=False):
+def get_slopes(data, ref, pup_mask, plot=False):
     """
     Analyze a WFS image and produce pixel offsets between reference and observed spot positions.
 
@@ -312,10 +335,17 @@ def get_slopes(data, ref, plot=False):
         Center of pupil image
     """
     data = check_wfsdata(data)
-    mean, median, std = stats.sigma_clipped_stats(data, sigma=3.0, iters=5)
-    data -= median
-    xcen, ycen = center_pupil(data, plot=False)
-    xspacing, yspacing = get_spacing(data)
+    pup_mask = check_wfsdata(pup_mask)
+
+    # input data should be background subtracted for best results
+    xcen, ycen = center_pupil(data, pup_mask, plot=False)
+    xspacing, yspacing = grid_spacing(data)
+
+    # use the max spacing to support f/9 hexagonal geometry. in that case xspacing will be ~2x yspacing and more closely
+    # sets the size of the SH aperture.
+    ap_size = max(xspacing, yspacing)
+    ref_spacing = max(ref['xspacing'], ref['yspacing'])
+
     # get initial apertures, find mean offset, and fine tune the centration
     apers, masks, pos = get_apertures(data, ref, xcen, ycen, xspacing, yspacing)
     xcen += pos[0].mean()
@@ -326,12 +356,12 @@ def get_slopes(data, ref, plot=False):
             meas_pos,
             r=4.
     )
+
     ref_aps = photutils.CircularAperture(
         (ref['apertures']['xcentroid']+xcen, ref['apertures']['ycentroid']+ycen),
-        r=(xspacing + yspacing) / 4.
+        r=ref_spacing/2.
     )
-    spacing = (xspacing + yspacing) / 2.
-    ref_spacing = (ref['xspacing'] + ref['yspacing']) / 2.
+
     pup_size = ref['pup_outer']
     slopes = final_aps.positions - ref_aps.positions
     pup_coords = (ref_aps.positions - [xcen, ycen]) / [pup_size, pup_size]
@@ -372,6 +402,7 @@ class WFS(object):
         self.__dict__.update(merge_config(mmt_config['wfs'][key], config))
         self.telescope = MMT(secondary=self.secondary)
         self.secondary = self.telescope.secondary
+        self.tiltfactor = self.telescope.nmperasec * (self.pix_size.to(u.arcsec))
 
         # if this is the same for all modes, load it once here
         if hasattr(self, "reference_file"):
@@ -402,6 +433,64 @@ class WFS(object):
         rotator = u.Quantity(rotator, u.deg)
         pup = self.telescope.pupil_mask(rotation=self.rotation+rotator)
         return pup
+
+    def measure_slopes(self, fitsfile, mode, plot=False):
+        if mode not in self.modes:
+            msg = "Invalid mode, %s, for WFS system, %s." % (mode, self.__class__.__name__)
+            raise WFSConfigException(value=msg)
+
+        # we're a fits file (hopefully)
+        try:
+            fitsdata = fits.open(fitsfile)[0]
+            data = fitsdata.data
+            hdr = fitsdata.header
+        except Exception as e:
+            msg = "Error reading FITS file, %s (%s)" % (data, repr(e))
+            raise WFSConfigException(value=msg)
+
+        # if available, get the rotator angle out of the header
+        if 'ROT' in hdr:
+            rotator = hdr['ROT'] * u.deg
+        else:
+            rotator = 0.0 * u.deg
+
+        # make rotated pupil mask
+        pup_mask = self.pupil_mask(rotator=rotator)
+
+        # calculate the background and subtract it
+        back = background(data)
+        subt = data - back
+
+        slopes, coords, aps, spacing, cen = get_slopes(subt, self.modes[mode]['reference'], pup_mask, plot=False)
+
+        if plot:
+            x = aps.positions.transpose()[0]
+            y = aps.positions.transpose()[1]
+            uu = slopes[0]
+            vv = slopes[1]
+            norm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.SqrtStretch())
+            plt.imshow(subt, cmap='Greys', origin='lower', norm=norm, interpolation='None')
+            plt.quiver(x, y, uu, vv, scale_units='xy', scale=0.2, pivot='tip', color='red')
+            xl = [50.0]
+            yl = [480.0]
+            ul = [1.0/self.pix_size.value]
+            vl = [0.0]
+            plt.quiver(xl, yl, ul, vl, scale_units='xy', scale=0.2, pivot='tip', color='red')
+            plt.scatter([cen[0]], [cen[1]])
+            plt.text(60, 480, "1\"", verticalalignment='center')
+
+        results = {}
+        results['slopes'] = slopes
+        results['pup_coords'] = coords
+        results['apertures'] = aps
+        results['xspacing'] = spacing[0]
+        results['yspacing'] = spacing[1]
+        results['xcen'] = cen[0]
+        results['ycen'] = cen[1]
+        results['pup_mask'] = pup_mask
+        results['background'] = back
+        results['data'] = subt
+        return results
 
 
 class F9(WFS):
