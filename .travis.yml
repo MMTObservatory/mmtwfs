@@ -86,10 +86,12 @@ matrix:
         - os: linux
           env: ASTROPY_VERSION=development
                EVENT_TYPE='pull_request push cron'
-        - os: linux
-          env: PYTHON_VERSION=2.7 ASTROPY_VERSION=lts
-        - os: linux
-          env: ASTROPY_VERSION=lts
+
+        # Astropy LTS can no longer be supported because we need the astropy implementation of Lomb-Scargle.
+        # - os: linux
+        #   env: PYTHON_VERSION=2.7 ASTROPY_VERSION=lts
+        # - os: linux
+        #   env: ASTROPY_VERSION=lts
 
 
         # try 2.7, 3.5, and 3.6 with stable astropy and numpy
