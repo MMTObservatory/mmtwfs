@@ -5,6 +5,7 @@ import os
 import warnings
 
 import numpy as np
+from scipy.misc import imrotate
 
 import astropy.units as u
 from astropy.io import ascii
@@ -67,7 +68,7 @@ class MMT(object):
         pup_model = poppy.CompoundAnalyticOptic(opticslist=[primary, secondary], name="MMTO")
         return pup_model
 
-    def pupil_mask(self, size=400):
+    def pupil_mask(self, rotation=0.0, size=400):
         """
         Use the pupil model to make a pupil mask that can be used as a kernel for finding pupil-like things in images
         """
@@ -75,8 +76,10 @@ class MMT(object):
             msg = "WFS pupil sizes are currently restricted to 500 pixels in diameter or less."
             raise WFSConfigException(value=msg)
 
+        rotation = u.Quantity(rotation, u.deg)
+
         # not sure how to get the image data out directly, but the to_fits() method gives me a path...
-        pup_im = self.pupil.to_fits(npix=size)[0].data
+        pup_im = imrotate(self.pupil.to_fits(npix=size)[0].data, rotation.value)
         return pup_im
 
     def psf(self, zv=ZernikeVector(), wavelength=550.*u.nm, pixscale=0.01, fov=1.0):
