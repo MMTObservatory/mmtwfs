@@ -169,7 +169,7 @@ def grid_spacing(data):
     ysum = np.sum(data, axis=1)
     x = np.arange(len(xsum))
     y = np.arange(len(ysum))
-    k = np.linspace(5.0, 50., 1000.)  # look for spacings from 5 to 50 pixels (plenty of range)
+    k = np.linspace(5.0, 50., 1000)  # look for spacings from 5 to 50 pixels (plenty of range)
     f = 1.0 / k  # convert spacing to frequency
     xp = stats.LombScargle(x, xsum).power(f)
     yp = stats.LombScargle(y, ysum).power(f)
