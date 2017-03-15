@@ -79,7 +79,8 @@ class MMT(object):
         rotation = u.Quantity(rotation, u.deg)
 
         # not sure how to get the image data out directly, but the to_fits() method gives me a path...
-        pup_im = imrotate(self.pupil.to_fits(npix=size)[0].data, rotation.value)
+        pup_im = imrotate(self.pupil.to_fits(npix=size)[0].data.astype(float), rotation.value)
+        pup_im = pup_im / pup_im.max()
         return pup_im
 
     def psf(self, zv=ZernikeVector(), wavelength=550.*u.nm, pixscale=0.01, fov=1.0):
