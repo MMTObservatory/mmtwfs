@@ -201,7 +201,7 @@ def grid_spacing(data):
     return xspacing, yspacing
 
 
-def background(data, h=0.7):
+def background(data, h=0.9):
     """
     Use skimage.morphology.reconstruction to filter low spatial order background from WFS images.
     See http://scikit-image.org/docs/dev/auto_examples/color_exposure/plot_regional_maxima.html for details on process.
@@ -346,11 +346,8 @@ def get_slopes(data, ref, pup_mask, plot=False):
     ap_size = max(xspacing, yspacing)
     ref_spacing = max(ref['xspacing'], ref['yspacing'])
 
-    # get initial apertures, find mean offset, and fine tune the centration
     apers, masks, pos = get_apertures(data, ref, xcen, ycen, xspacing, yspacing)
-    xcen += pos[0].mean()
-    ycen += pos[1].mean()
-    apers, masks, pos = get_apertures(data, ref, xcen, ycen, xspacing, yspacing)
+
     meas_pos = apers.positions + pos
     final_aps = photutils.CircularAperture(
             meas_pos,
