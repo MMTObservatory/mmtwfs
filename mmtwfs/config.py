@@ -114,7 +114,7 @@ mmt_config = {
             "pix_size": 0.135 * u.arcsec,  # arcsec per WFS detector pixel
             "pup_size": 460,  # pixels
             "pup_inner": 65,  # inner obscuration radius in pixels
-            "pup_offset": [-0.5, 0.25],  # [x, y] pupil offset from center of reference aperture pattern
+            "pup_offset": [-0.42, 0.47],  # [x, y] pupil offset from center of reference aperture pattern
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 20,  # number of zernike modes to fit
