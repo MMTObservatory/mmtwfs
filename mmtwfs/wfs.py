@@ -442,7 +442,7 @@ class WFS(object):
             data = fitsdata.data
             hdr = fitsdata.header
         except Exception as e:
-            msg = "Error reading FITS file, %s (%s)" % (data, repr(e))
+            msg = "Error reading FITS file, %s (%s)" % (fitsfile, repr(e))
             raise WFSConfigException(value=msg)
 
         # if available, get the rotator angle out of the header
