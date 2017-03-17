@@ -1,6 +1,7 @@
 # Licensed under GPL3 (see LICENSE)
 # coding=utf-8
 
+import astropy.units as u
 from ..zernike import ZernikeVector
 from ..custom_exceptions import ZernikeException
 
@@ -221,3 +222,13 @@ def test_ignore():
     zv.restore('Z05')
     assert(len(zv) == 4)
     assert(zv['Z05'].value == 500.0)
+
+def test_rotate():
+    zv = ZernikeVector(Z05=500)
+    a = zv['Z05'].value
+    zv.rotate(angle=180*u.deg)
+    b = zv['Z05'].value
+    assert(a == b)
+    zv.rotate(angle=90*u.deg)
+    c = zv['Z05'].value
+    assert(a == -c)
