@@ -506,6 +506,7 @@ class WFS(object):
         results['background'] = back
         results['data'] = data
         results['header'] = hdr
+        results['rotator'] = rotator
         results['mode'] = mode
         return results
 
@@ -518,6 +519,9 @@ class WFS(object):
         slope_vec = -self.tiltfactor * slope_results['slopes'].ravel() / 206265.  # convert arcsec to radians
         zfit = np.dot(slope_vec, infmat)
         zv = ZernikeVector(coeffs=zfit)
+        total_rotation = slope_results['rotator'] + self.rotation
+        # derotate the zernike solution to match the primary mirror coordinate system
+        zv.rotate(angle=-total_rotation)
         return zv
 
 
