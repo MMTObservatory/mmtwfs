@@ -22,6 +22,28 @@ from scipy.misc import factorial as fac
 from .custom_exceptions import ZernikeException
 
 
+def cart2pol(arr):
+    """
+    convert array of [x, y] vectors to [rho, theta]
+    """
+    x = arr[0]
+    y = arr[1]
+    rho = np.sqrt(x**2 + y**2)
+    theta = np.arctan2(y, x)
+    return np.array([rho, theta])
+
+
+def pol2cart(arr):
+    """
+    convert array of [rho, theta] vectors to [x, y]
+    """
+    rho = arr[0]
+    theta = arr[1]
+    x = rho * np.cos(theta)
+    y = rho * np.sin(theta)
+    return np.array([x, y])
+
+
 def make_radial_matrix(r0, r1=None, norm=True, center=None, dtype=np.float, getxy=False):
     """
     Make a matrix of size **(r0, r1)** where the value of each element is the Euclidean
@@ -346,7 +368,7 @@ def calc_slope(im, slopes_inv=None):
 
 
 def calc_influence_matrix(subaps, basis_func=make_zernike_basis, nbasis=20, cntr=None,
-                          rad=-1.0, singval=1.0, subapsize=22.0, pixsize=0.1):
+                          rad=-1.0, singval=0.5, subapsize=22.0, pixsize=0.1, modestart=2):
     """
     Given a sub-aperture array pattern, calculate a matrix that converts
     image shift vectors in pixels to basis polynomial amplitudes (default: Zernike)
@@ -407,7 +429,8 @@ def calc_influence_matrix(subaps, basis_func=make_zernike_basis, nbasis=20, cntr
     sfac = np.pi * subapsize * pixsize / 206265.
 
     # Geometry: offset between subap pattern and Zernike modes
-    sasize = np.median(subaps[:, 1::2] - subaps[:, ::2], axis=0)
+    sasize = np.median(subaps[:, 1::2] - subaps[:, ::2], axis=0).astype(int)
+
     if cntr is None:
         cntr = np.mean(subaps[:, ::2], axis=0).astype(int)
 
@@ -417,10 +440,10 @@ def calc_influence_matrix(subaps, basis_func=make_zernike_basis, nbasis=20, cntr
         rad = int((pattrad * -rad) + 0.5)
     else:
         rad = int(rad + 0.5)
-    saoffs = -cntr + np.r_[[rad, rad]]
+    saoffs = np.around(-cntr + np.r_[[rad, rad]]).astype(int)
 
     extent = cntr[1]-rad, cntr[1]+rad, cntr[0]-rad, cntr[0]+rad
-    basis = basis_func(nbasis, rad, modestart=2)
+    basis = basis_func(nbasis, rad, modestart=modestart)
 
     slopes = (np.indices(sasize, dtype=float)/(np.r_[sasize].reshape(-1, 1, 1))).reshape(2, -1)
     slopes = np.vstack([slopes, np.ones(slopes.shape[1])])
@@ -594,6 +617,10 @@ class ZernikeVector(MutableMapping):
         Overload __repr__ to print out coefficients in a nice way including units and descriptive labels.
         """
         s = ""
+        if self.normalized:
+            print("Normalized (Noll) Coefficients")
+        else:
+            print("Phase Amplitude Coefficients")
         for k in sorted(self.coeffs.keys()):
             if k in self.__zernikelabels:
                 label = self.__zernikelabels[k]
@@ -602,6 +629,12 @@ class ZernikeVector(MutableMapping):
                 s += "%4s: %12s" % (k, "{0:0.03g}".format(self.coeffs[k]))
             s += "\n"
         return s
+
+    def __str__(self):
+        """
+        Do the same as __repr__
+        """
+        return self.__repr__()
 
     def __add__(self, zv):
         """
@@ -916,7 +949,6 @@ class ZernikeVector(MutableMapping):
         fig.axes.set_aspect(1.0)
         cbar = plt.colorbar()
         cbar.set_label(self.units.name, rotation=0)
-        plt.show()
 
     def plot_surface(self):
         """
@@ -933,4 +965,3 @@ class ZernikeVector(MutableMapping):
         ax.yaxis.set_ticks([-1, 0, 1])
         cbar = fig.colorbar(cset, shrink=1, aspect=30)
         cbar.set_label(self.units.name, rotation=0)
-        plt.show()
