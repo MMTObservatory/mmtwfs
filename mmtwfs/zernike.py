@@ -894,7 +894,8 @@ class ZernikeVector(MutableMapping):
                 modestart = self.modestart
             for i, c in enumerate(coeffs):
                 key = self._l_to_key(i + modestart)
-                self.__setitem__(key, c)
+                if c != 0.0:
+                    self.__setitem__(key, c)
 
     def ignore(self, key):
         """
@@ -911,6 +912,38 @@ class ZernikeVector(MutableMapping):
         if self._valid_key(key) and key in self.ignored:
             self.coeffs[key] = self.ignored[key]
             del self.ignored[key]
+
+    def rotate(self, angle=0.0 * u.deg):
+        """
+        Rotate the ZernikeVector by an angle. Rotation matrix algorithm taken from https://arxiv.org/pdf/1302.7106.pdf.
+        """
+        # this is a hack to extend the vector to the largest supported term to make sure we include everything affected
+        # by the rotation
+        self.coeffs['Z99'] = 0.0
+        a = self.array
+        ang = u.Quantity(angle, u.rad)  # convert angle to radians
+
+        # there must be a more concise way to do this, but this makes it clear what's going on
+        rotm = np.zeros((len(a), len(a)))
+        for r in np.arange(len(a)):
+            n_i, m_i = noll_to_zernike(r + self.modestart)
+            for c in np.arange(len(a)):
+                n_j, m_j = noll_to_zernike(c + self.modestart)
+                if n_i != n_j:
+                    rotm[r, c] = 0.0
+                elif m_i == m_j:
+                    rotm[r, c] = np.cos(m_j * ang)
+                elif m_i == -m_j and m_i != 0.0:
+                    rotm[r, c] = np.sin(m_j * ang)
+                elif np.abs(m_i) != np.abs(m_j):
+                    rotm[r, c] = 0.0
+                else:
+                    rotm[r, c] = 1.0
+
+        rot_arr = np.dot(rotm, a)
+        # this will take back out the zero terms
+        del self.coeffs['Z99']
+        self.from_array(rot_arr)
 
     def total_phase(self, rho, phi):
         """
