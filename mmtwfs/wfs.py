@@ -21,6 +21,7 @@ from astropy import stats, visualization
 
 from .config import recursive_subclasses, merge_config, mmt_config
 from .telescope import MMT
+from .zernike import calc_influence_matrix, ZernikeVector, cart2pol, pol2cart
 from .custom_exceptions import WFSConfigException
 
 
@@ -52,28 +53,6 @@ def check_wfsdata(data):
         msg = "WFS image data has improper shape, %s. Must be 2D image." % data.shape
         raise WFSConfigException(value=msg)
     return data
-
-
-def cart2pol(arr):
-    """
-    convert array of [x, y] vectors to [rho, theta]
-    """
-    x = arr[0]
-    y = arr[1]
-    rho = np.sqrt(x**2 + y**2)
-    theta = np.arctan2(y, x)
-    return np.array([rho, theta])
-
-
-def pol2cart(arr):
-    """
-    convert array of [rho, theta] vectors to [x, y]
-    """
-    rho = arr[0]
-    theta = arr[1]
-    x = rho * np.cos(theta)
-    y = rho * np.sin(theta)
-    return np.array([x, y])
 
 
 def wfsfind(data, fwhm=5.0, threshold=7.0, plot=False, ap_radius=5.0):
@@ -161,7 +140,7 @@ def mk_reference(data, xoffset=0, yoffset=0, pup_inner=45., pup_outer=175., fwhm
     ref = {}
     ref['xspacing'] = spacing[0]
     ref['yspacing'] = spacing[1]
-    spacing = (spacing[0] + spacing[1])/2.
+    spacing = max(spacing[0], spacing[1])
     # we set the limit to half an aperture spacing in from the outer edge to make sure all of the points
     # lie within the zernike radius
     ref['apertures'] = spots[(spots['dist'] > pup_inner) & (spots['dist'] < pup_outer-0.5*spacing)]
@@ -263,7 +242,7 @@ def center_pupil(data, pup_mask, threshold=0.5, sigma=20., plot=False):
     return cen
 
 
-def get_apertures(data, ref, xcen, ycen, xspacing, yspacing):
+def get_apertures(data, ref, xcen, ycen, xspacing, yspacing, offset=[0.0, 0.0]):
     """
     Use the X/Y center positions and grid spacings to place the reference apertures onto the WFS
     frame.  Perform center-of-mass centroiding within each aperture.
@@ -293,10 +272,10 @@ def get_apertures(data, ref, xcen, ycen, xspacing, yspacing):
     # we use circular apertures here because they generate square masks of the appropriate size.
     # rectangular apertures produced masks that were sqrt(2) too large.
     # see https://github.com/astropy/photutils/issues/499 for details.
-    spacing = max(xspacing, yspacing)  # workaround to support hexagonal grid for f/9
+    spacing = np.mean([xspacing, yspacing])  # workaround to support hexagonal grid for f/9
     apers = photutils.CircularAperture(
-        ((xspacing/ref['xspacing'])*ref['apertures']['xcentroid']+xcen,
-        (yspacing/ref['yspacing'])*ref['apertures']['ycentroid']+ycen),
+        ((xspacing/ref['xspacing'])*ref['apertures']['xcentroid']+xcen+offset[0],
+        (yspacing/ref['yspacing'])*ref['apertures']['ycentroid']+ycen+offset[1]),
         r=spacing/2.
     )
     masks = apers.to_mask(method='subpixel')
@@ -310,7 +289,7 @@ def get_apertures(data, ref, xcen, ycen, xspacing, yspacing):
     return apers, masks, offsets
 
 
-def get_slopes(data, ref, pup_mask, plot=False):
+def get_slopes(data, back, ref, pup_mask, plot=False):
     """
     Analyze a WFS image and produce pixel offsets between reference and observed spot positions.
 
@@ -335,23 +314,28 @@ def get_slopes(data, ref, pup_mask, plot=False):
         Center of pupil image
     """
     data = check_wfsdata(data)
+    back = check_wfsdata(back)
     pup_mask = check_wfsdata(pup_mask)
 
+    subt = data - back
+
     # input data should be background subtracted for best results
-    xcen, ycen = center_pupil(data, pup_mask, plot=False)
+    xcen, ycen = center_pupil(subt, pup_mask, plot=False)
     xspacing, yspacing = grid_spacing(data)
+    print(xspacing, yspacing)
+    # use the min spacing to support f/9 hexagonal geometry.
+    ap_size = np.mean([xspacing, yspacing])
+    ref_spacing = np.mean([ref['xspacing'], ref['yspacing']])
 
-    # use the max spacing to support f/9 hexagonal geometry. in that case xspacing will be ~2x yspacing and more closely
-    # sets the size of the SH aperture.
-    ap_size = max(xspacing, yspacing)
-    ref_spacing = max(ref['xspacing'], ref['yspacing'])
+    apers, masks, ipos = get_apertures(subt, ref, xcen, ycen, xspacing, yspacing)
 
-    apers, masks, pos = get_apertures(data, ref, xcen, ycen, xspacing, yspacing)
+    # feed initial offsets back in for a 2nd iteration to account for biasing from spots near edges of apertures
+    apers, masks, pos = get_apertures(subt, ref, xcen, ycen, xspacing, yspacing, offset=ipos.transpose())
 
     meas_pos = apers.positions + pos
     final_aps = photutils.CircularAperture(
             meas_pos,
-            r=4.
+            r=ap_size/2.
     )
 
     ref_aps = photutils.CircularAperture(
@@ -366,9 +350,9 @@ def get_slopes(data, ref, pup_mask, plot=False):
     if plot:
         norm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.SqrtStretch())
         plt.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
-        apers.plot(color='red')
+        #apers.plot(color='red')
         plt.scatter(xcen, ycen)
-        final_aps.plot(color='yellow')
+        final_aps.plot(color='blue')
     return slopes.transpose(), pup_coords.transpose(), final_aps, (xspacing, yspacing), (xcen, ycen)
 
 
@@ -399,7 +383,9 @@ class WFS(object):
         self.__dict__.update(merge_config(mmt_config['wfs'][key], config))
         self.telescope = MMT(secondary=self.secondary)
         self.secondary = self.telescope.secondary
-        self.tiltfactor = self.telescope.nmperasec * (self.pix_size.to(u.arcsec))
+
+        # this factor calibrates spot motion in pixels to nm of wavefront change
+        self.tiltfactor = self.telescope.nmperasec * (self.pix_size.to(u.arcsec).value)
 
         # if this is the same for all modes, load it once here
         if hasattr(self, "reference_file"):
@@ -426,12 +412,44 @@ class WFS(object):
             else:
                 self.modes[mode]['reference'] = reference
 
+            # use the reference apertures and pupul configuration to build a zernike influence matrix
+            ap = self.modes[mode]['reference']['apertures']
+            r = int(self.pup_size / 2.)
+            xspacing = self.modes[mode]['reference']['xspacing']
+            yspacing = self.modes[mode]['reference']['yspacing']
+            ap_r = int(min(xspacing, yspacing) / 2.)
+
+            # define the bounds in pixels for each aperture. need to round and cast to int since these
+            # will be used to index sub-images.
+            bounds = np.array([
+                np.around(ap['xcentroid'].data + r - ap_r).astype(int),
+                np.around(ap['xcentroid'].data + r + ap_r).astype(int),
+                np.around(ap['ycentroid'].data + r - ap_r).astype(int),
+                np.around(ap['ycentroid'].data + r + ap_r).astype(int)
+            ])
+
+            self.modes[mode]['zernike_matrix'] = calc_influence_matrix(
+                bounds.transpose(),
+                nbasis=self.nzern,
+                cntr=np.array([r-0.5, r-0.5]),  # pixels are indexed at edges so offset to the middle
+                rad=r,
+                pixsize=self.pix_size.to(u.arcsec).value,
+                modestart=2  # ignore the piston term
+            )
+
     def pupil_mask(self, rotator=0.0):
+        """
+        Wrap the Telescope.pupil_mask() method to include both WFS and instrument rotator rotation angles
+        """
         rotator = u.Quantity(rotator, u.deg)
         pup = self.telescope.pupil_mask(rotation=self.rotation+rotator)
         return pup
 
     def measure_slopes(self, fitsfile, mode, plot=False):
+        """
+        Take a WFS image in FITS format, perform background subtration, pupil centration, and then use get_slopes()
+        to perform the aperture placement and spot centroiding.
+        """
         if mode not in self.modes:
             msg = "Invalid mode, %s, for WFS system, %s." % (mode, self.__class__.__name__)
             raise WFSConfigException(value=msg)
@@ -455,10 +473,10 @@ class WFS(object):
         pup_mask = self.pupil_mask(rotator=rotator)
 
         # calculate the background and subtract it
-        back = background(data)
+        back = background(data, h=self.back_h)
         subt = data - back
 
-        slopes, coords, aps, spacing, cen = get_slopes(subt, self.modes[mode]['reference'], pup_mask, plot=False)
+        slopes, coords, aps, spacing, cen = get_slopes(data, back, self.modes[mode]['reference'], pup_mask, plot=plot)
 
         if plot:
             x = aps.positions.transpose()[0]
@@ -486,8 +504,21 @@ class WFS(object):
         results['ycen'] = cen[1]
         results['pup_mask'] = pup_mask
         results['background'] = back
-        results['data'] = subt
+        results['data'] = data
+        results['header'] = hdr
+        results['mode'] = mode
         return results
+
+    def fit_wavefront(self, slope_results):
+        """
+        Use results from self.measure_slopes() to fit a set of zernike polynomials to the wavefront shape.
+        """
+        mode = slope_results['mode']
+        infmat = self.modes[mode]['zernike_matrix'][0]
+        slope_vec = -self.tiltfactor * slope_results['slopes'].ravel() / 206265.  # convert arcsec to radians
+        zfit = np.dot(slope_vec, infmat)
+        zv = ZernikeVector(coeffs=zfit)
+        return zv
 
 
 class F9(WFS):
