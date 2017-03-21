@@ -5,6 +5,9 @@
 zernike.py -- A collection of functions and classes for performing wavefront analysis using Zernike polynomials.
 Several of these routines were adapted from https://github.com/tvwerkhoven/libtim-py. They have been updated to make them
 more applicable for MMTO usage and comments added to clarify what they do and how.
+
+Expressions for cartesian derivatives of the Zernike polynomials were adapted from:
+        http://adsabs.harvard.edu/abs/2014OptLE..52....7N
 """
 
 import re
@@ -104,16 +107,16 @@ def make_radial_matrix(r0, r1=None, norm=True, center=None, dtype=np.float, getx
         return np.sqrt(r0v**2 + r1v**2)
 
 
-def radial_zernike(m, n, rho):
+def R_mn(m, n, rho):
     """
     Make radial Zernike polynomial on coordinate grid **rho**.
 
     Parameters
     ----------
     m: int
-        m-th radial Zernike index
+        m-th azimuthal Zernike index
     n: int
-        n-th azimuthal Zernike index
+        n-th radial Zernike index
     rho: 2D ndarray
         Radial coordinate grid
 
@@ -129,11 +132,85 @@ def radial_zernike(m, n, rho):
     if np.mod(n-m, 2) == 1:
         return 0.0
 
+    m = np.abs(m)
     wf = 0.0
     for k in range(int((n - m)/2) + 1):
         wf += rho**(n - 2.0*k) * (-1.0)**k * fac(n-k) / (fac(k) * fac((n + m)/2.0 - k) * fac((n - m)/2.0 - k))
 
     return wf
+
+
+def dR_drho(m, n, rho):
+    """
+    First derivative of Zernike radial polynomial, R(m, n, rho) calculated on coordinate grid **rho**.
+
+    Parameters
+    ----------
+    m: int
+        m-th azimuthal Zernike index
+    n: int
+        n-th radial Zernike index
+    rho: 2D ndarray
+        Radial coordinate grid
+
+    Returns
+    -------
+    dwf: 2D ndarray
+        Radial polynomial with identical shape as **rho**
+
+    Notes
+    -----
+    See http://adsabs.harvard.edu/abs/2014OptLE..52....7N for details.
+    """
+    dR_mn = R_mn(m, n, rho) * (rho**2 * (n + 2.) + m) / (rho * (1. - rho**2)) - \
+            R_mn(m+1, n+1, rho) * (n + m + 2.) / (1. - rho**2)
+
+def theta_m(m, phi):
+    """
+    Calculate angular Zernike mode on coordinate grid **phi**
+
+    Parameters
+    ----------
+    m: int
+        m-th azimuthal Zernike index
+    phi: 2D ndarray
+        Azimuthal coordinate grid
+
+    Returns
+    -------
+    theta: 2D ndarray
+        Angular Zernike mode with identical shape as **phi**
+    """
+    am = np.abs(m)
+    if m >= 0.0:
+        theta = np.cos(am * phi)
+    else:
+        theta = np.sin(am * phi)
+    return theta
+
+
+def dtheta_dphi(m, phi):
+    """
+    Calculate the first derivative of the m-th Zernike angular mode on coordinate grid **phi**
+
+    Parameters
+    ----------
+    m: int
+        m-th azimuthal Zernike index
+    phi: 2D ndarray
+        Azimuthal coordinate grid
+
+    Returns
+    -------
+    dtheta: 2D ndarray
+        Angular slopes of mode, m, with identical shape as **phi**
+    """
+    am = np.abs(m)
+    if m >= 0.0:
+        dtheta = -m * np.sin(am * phi)
+    else:
+        dtheta = m * np.cos(am * phi)
+    return dtheta
 
 
 def zernike(m, n, rho, phi, norm=False):
@@ -144,9 +221,9 @@ def zernike(m, n, rho, phi, norm=False):
     Parameters
     ----------
     m: int
-        m-th radial Zernike index
+        m-th azimuthal Zernike index
     n: int
-        n-th azimuthal Zernike index
+        n-th radial Zernike index
     rho: 2D ndarray
         Radial coordinate grid
     phi: 2D ndarray
@@ -161,19 +238,91 @@ def zernike(m, n, rho, phi, norm=False):
 
     Notes
     -----
-    See https://en.wikipedia.org/wiki/Zernike_polynomials for details.
+    See https://en.wikipedia.org/wiki/Zernike_polynomials and http://adsabs.harvard.edu/abs/2014OptLE..52....7N for details.
     """
     nc = 1.0
     if norm:
-        nc = np.sqrt(2 * (n + 1)/(1 + (m == 0)))
+        nc = norm_coefficient(m, n)
 
-    if m > 0:
-        return nc * radial_zernike(m, n, rho) * np.cos(m * phi)
-    if m < 0:
-        return nc * radial_zernike(-m, n, rho) * np.sin(-m * phi)
+    wf = nc * R_mn(m, n, rho) * theta_m(m, phi)
 
-    wf = nc * radial_zernike(0, n, rho)
     return wf
+
+
+def dZ_dx(m, n, rho, phi, norm=False):
+    """
+    Calculate the X slopes of Zernike mode (m, n) on grid **rho** and **phi**.
+
+    Parameters
+    ----------
+    m: int
+        m-th azimuthal Zernike index
+    n: int
+        n-th radial Zernike index
+    rho: 2D ndarray
+        Radial coordinate grid
+    phi: 2D ndarray
+        Azimuthal coordinate grid
+    norm: bool (default: False)
+        Normalize modes to unit variance (i.e. Noll coefficients)
+
+    Returns
+    -------
+    dwf: 2D ndarray
+        Wavefront slope in X described by Zernike mode (m, n). Same shape as rho and phi.
+
+    Notes
+    -----
+    See http://adsabs.harvard.edu/abs/2014OptLE..52....7N for details.
+    """
+    nc = 1.0
+    if norm:
+        nc = norm_coefficient(m, n)
+
+    dwf = dR_drho(m, n, rho) * theta_m(m, phi) * np.cos(phi) - \
+          R_mn(m, n, rho) * dtheta_dphi(m, phi) * np.sin(phi) / rho
+
+    dwf *= nc
+
+    return dwf
+
+
+def dZ_dy(m, n, rho, phi, norm=False):
+    """
+    Calculate the Y slopes of Zernike mode (m, n) on grid **rho** and **phi**.
+
+    Parameters
+    ----------
+    m: int
+        m-th azimuthal Zernike index
+    n: int
+        n-th radial Zernike index
+    rho: 2D ndarray
+        Radial coordinate grid
+    phi: 2D ndarray
+        Azimuthal coordinate grid
+    norm: bool (default: False)
+        Normalize modes to unit variance (i.e. Noll coefficients)
+
+    Returns
+    -------
+    dwf: 2D ndarray
+        Wavefront slope in Y described by Zernike mode (m, n). Same shape as rho and phi.
+
+    Notes
+    -----
+    See http://adsabs.harvard.edu/abs/2014OptLE..52....7N for details.
+    """
+    nc = 1.0
+    if norm:
+        nc = norm_coefficient(m, n)
+
+    dwf = dR_drho(m, n, rho) * theta_m(m, phi) * np.sin(phi) + \
+          R_mn(m, n, rho) * dtheta_dphi(m, phi) * np.cos(phi) / rho
+
+    dwf *= nc
+
+    return dwf
 
 
 def noll_to_zernike(j):
@@ -249,8 +398,23 @@ def noll_normalization_vector(nmodes=30):
     1D ndarray of length nmodes
     """
     nolls = (noll_to_zernike(j+1) for j in range(nmodes))
-    norms = [np.sqrt(2 * (n + 1)/(1 + (m == 0))) for n, m in nolls]
+    norms = [norm_coefficient(m, n) for n, m in nolls]
     return np.asanyarray(norms)
+
+
+def norm_coefficient(m, n):
+    """
+    Calculate the normalization coefficient for the (m, n) Zernike mode.
+
+    Parameters
+    ----------
+    m: int
+        m-th azimuthal Zernike index
+    n: int
+        n-th radial Zernike index
+    """
+    norm_coeff = np.sqrt(2 * (n + 1)/(1 + (m == 0)))
+    return norm_coeff
 
 
 def noll_coefficient(l):
@@ -271,7 +435,7 @@ def noll_coefficient(l):
         raise ZernikeException("Noll modes start at l=1. l=%d is not valid." % l)
 
     n, m = noll_to_zernike(l)
-    norm_coeff = np.sqrt(2 * (n + 1)/(1 + (m == 0)))
+    norm_coeff = norm_coefficient(m, n)
     return norm_coeff
 
 
@@ -368,7 +532,7 @@ def calc_slope(im, slopes_inv=None):
 
 
 def calc_influence_matrix(subaps, basis_func=make_zernike_basis, nbasis=20, cntr=None,
-                          rad=-1.0, singval=0.5, subapsize=22.0, pixsize=0.1, modestart=2):
+                          rad=-1.0, singval=0.75, subapsize=22.0, pixsize=0.1, modestart=2):
     """
     Given a sub-aperture array pattern, calculate a matrix that converts
     image shift vectors in pixels to basis polynomial amplitudes (default: Zernike)
@@ -410,7 +574,7 @@ def calc_influence_matrix(subaps, basis_func=make_zernike_basis, nbasis=20, cntr
     rad: float (default: -1.0)
         Radius of the aperture to use. If negative, used as fraction **-rad**, otherwise used as radius in pixels.
     singval: float (default: 1.0)
-        Percentage of singular values to take into account when inverting the matrix
+        Percentage of singular values to take into account when inverting the matrix. By default don't truncate...
     subapsize: float (default: 22.0)
         Size of single Shack-Hartmann sub-aperture in detector pixels
     pixsize: float (default: 0.1)
@@ -459,13 +623,18 @@ def calc_influence_matrix(subaps, basis_func=make_zernike_basis, nbasis=20, cntr
         ]
     ].reshape(nbasis, -1)
 
-    # np.linalg.pinv() takes the cutoff wrt the *maximum*, we want a cut-off
-    # based on the cumulative sum, i.e. the total included power, which is
-    # why we want to use svd() and not pinv().
+    # np.linalg.pinv() takes the cutoff wrt the *maximum*, but we want more
+    # flexibility in defining a cut-off. this is why we want to use svd() and not pinv().
     U, s, Vh = np.linalg.svd(basisslopes * sfac, full_matrices=False)
-    cums = s.cumsum() / s.sum()
-    nvec = np.argwhere(cums >= singval)[0][0]
-    singval = cums[nvec]
+
+    # set the rank based on the entropy (http://resources.mpi-inf.mpg.de/d5/teaching/ss13/dmm/slides/03-svd-handout.pdf)
+    s_sq = s**2
+    fk = s_sq/s_sq.sum()
+    entropy = -(1./np.log(len(s))) * np.sum(fk * np.log(fk))
+    #np.savez("svd.npz", s)
+    #nvec = np.argwhere(cums >= singval)[0][0]
+    nvec = np.argwhere(fk.cumsum() >= entropy)[0][0]
+
     s[nvec+1:] = np.inf
     basis_inv_mat = np.dot(Vh.T, np.dot(np.diag(1.0/s), U.T))
 
