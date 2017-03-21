@@ -134,8 +134,10 @@ def mk_reference(data, xoffset=0, yoffset=0, pup_inner=45., pup_outer=175., fwhm
     yoff = spots['ycentroid'][closest] - ycen
     xcen += xoff
     ycen += yoff
-    spots['xcentroid'] -= xcen + xoffset*spacing[0]
-    spots['ycentroid'] -= ycen + yoffset*spacing[1]
+    xcen += xoffset*spacing[0]
+    ycen += yoffset*spacing[1]
+    spots['xcentroid'] -= xcen
+    spots['ycentroid'] -= ycen
     spots['dist'] = np.sqrt(spots['xcentroid']**2 + spots['ycentroid']**2)
     ref = {}
     ref['xspacing'] = spacing[0]
@@ -147,6 +149,8 @@ def mk_reference(data, xoffset=0, yoffset=0, pup_inner=45., pup_outer=175., fwhm
     ref['pup_coords'] = (ref['apertures']['xcentroid']/pup_outer, ref['apertures']['ycentroid']/pup_outer)
     ref['pup_inner'] = pup_inner
     ref['pup_outer'] = pup_outer
+    ref['xcen'] = xcen
+    ref['ycen'] = ycen
     return ref
 
 
@@ -417,7 +421,7 @@ class WFS(object):
             r = int(self.pup_size / 2.)
             xspacing = self.modes[mode]['reference']['xspacing']
             yspacing = self.modes[mode]['reference']['yspacing']
-            ap_r = int(min(xspacing, yspacing) / 2.)
+            ap_r = int(max(xspacing, yspacing) / 2.)
 
             # define the bounds in pixels for each aperture. need to round and cast to int since these
             # will be used to index sub-images.
@@ -510,19 +514,43 @@ class WFS(object):
         results['mode'] = mode
         return results
 
-    def fit_wavefront(self, slope_results):
+    def fit_wavefront(self, slope_results, plot=False):
         """
         Use results from self.measure_slopes() to fit a set of zernike polynomials to the wavefront shape.
         """
         mode = slope_results['mode']
         infmat = self.modes[mode]['zernike_matrix'][0]
-        slope_vec = -self.tiltfactor * slope_results['slopes'].ravel() / 206265.  # convert arcsec to radians
+        inverse_infmat = self.modes[mode]['zernike_matrix'][1]
+        slopes = slope_results['slopes']
+        slope_vec = -self.tiltfactor * slopes.ravel() / 206265.  # convert arcsec to radians
         zfit = np.dot(slope_vec, infmat)
         zv = ZernikeVector(coeffs=zfit)
+        zv_raw = ZernikeVector(coeffs=zfit)
         total_rotation = slope_results['rotator'] + self.rotation
         # derotate the zernike solution to match the primary mirror coordinate system
         zv.rotate(angle=-total_rotation)
-        return zv
+
+        pred = np.dot(zfit, inverse_infmat)
+        pred_slopes = -(206265./self.tiltfactor) * pred.reshape(slopes.shape[1], 2).transpose()
+        diff = slopes - pred_slopes
+        rms = self.pix_size * np.sqrt((diff[0]**2 + diff[1]**2).mean())
+        print(rms, rms * self.telescope.nmperasec)
+        print(pred_slopes/slopes)
+        if plot:
+            gnorm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.SqrtStretch())
+            im = slope_results['data'] - slope_results['background']
+            plt.imshow(im, cmap='Greys', origin='lower', norm=gnorm, interpolation='None')
+            x = slope_results['apertures'].positions.transpose()[0]
+            y = slope_results['apertures'].positions.transpose()[1]
+            plt.quiver(x, y, diff[0], diff[1], scale_units='xy', scale=0.05, pivot='tip', color='red')
+            xl = [50.0]
+            yl = [480.0]
+            ul = [1/self.pix_size.value]
+            vl = [0.0]
+            plt.quiver(xl, yl, ul, vl, scale_units='xy', scale=0.05, pivot='tip', color='red')
+            plt.text(60, 480, "0.2\"", verticalalignment='center')
+
+        return zv, zv_raw
 
 
 class F9(WFS):
