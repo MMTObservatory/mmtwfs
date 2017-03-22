@@ -21,7 +21,7 @@ from astropy import stats, visualization
 
 from .config import recursive_subclasses, merge_config, mmt_config
 from .telescope import MMT
-from .zernike import calc_influence_matrix, ZernikeVector, cart2pol, pol2cart
+from .zernike import zernike_influence_matrix, ZernikeVector, cart2pol, pol2cart
 from .custom_exceptions import WFSConfigException
 
 
@@ -145,7 +145,7 @@ def mk_reference(data, xoffset=0, yoffset=0, pup_inner=45., pup_outer=175., fwhm
     spacing = max(spacing[0], spacing[1])
     # we set the limit to half an aperture spacing in from the outer edge to make sure all of the points
     # lie within the zernike radius
-    ref['apertures'] = spots[(spots['dist'] > pup_inner) & (spots['dist'] < pup_outer-0.5*spacing)]
+    ref['apertures'] = spots[(spots['dist'] > pup_inner) & (spots['dist'] < pup_outer)]
     ref['pup_coords'] = (ref['apertures']['xcentroid']/pup_outer, ref['apertures']['ycentroid']/pup_outer)
     ref['pup_inner'] = pup_inner
     ref['pup_outer'] = pup_outer
@@ -416,28 +416,9 @@ class WFS(object):
             else:
                 self.modes[mode]['reference'] = reference
 
-            # use the reference apertures and pupul configuration to build a zernike influence matrix
-            ap = self.modes[mode]['reference']['apertures']
-            r = int(self.pup_size / 2.)
-            xspacing = self.modes[mode]['reference']['xspacing']
-            yspacing = self.modes[mode]['reference']['yspacing']
-            ap_r = int(max(xspacing, yspacing) / 2.)
-
-            # define the bounds in pixels for each aperture. need to round and cast to int since these
-            # will be used to index sub-images.
-            bounds = np.array([
-                np.around(ap['xcentroid'].data + r - ap_r).astype(int),
-                np.around(ap['xcentroid'].data + r + ap_r).astype(int),
-                np.around(ap['ycentroid'].data + r - ap_r).astype(int),
-                np.around(ap['ycentroid'].data + r + ap_r).astype(int)
-            ])
-
-            self.modes[mode]['zernike_matrix'] = calc_influence_matrix(
-                bounds.transpose(),
-                nbasis=self.nzern,
-                cntr=np.array([r-0.5, r-0.5]),  # pixels are indexed at edges so offset to the middle
-                rad=r,
-                pixsize=self.pix_size.to(u.arcsec).value,
+            self.modes[mode]['zernike_matrix'] = zernike_influence_matrix(
+                pup_coords=self.modes[mode]['reference']['pup_coords'],
+                nmodes=self.nzern,
                 modestart=2  # ignore the piston term
             )
 
@@ -522,7 +503,7 @@ class WFS(object):
         infmat = self.modes[mode]['zernike_matrix'][0]
         inverse_infmat = self.modes[mode]['zernike_matrix'][1]
         slopes = slope_results['slopes']
-        slope_vec = -self.tiltfactor * slopes.ravel() / 206265.  # convert arcsec to radians
+        slope_vec = -self.tiltfactor * slopes.ravel()  # convert arcsec to radians
         zfit = np.dot(slope_vec, infmat)
         zv = ZernikeVector(coeffs=zfit)
         zv_raw = ZernikeVector(coeffs=zfit)
@@ -531,11 +512,10 @@ class WFS(object):
         zv.rotate(angle=-total_rotation)
 
         pred = np.dot(zfit, inverse_infmat)
-        pred_slopes = -(206265./self.tiltfactor) * pred.reshape(slopes.shape[1], 2).transpose()
+        pred_slopes = -(1. / self.tiltfactor) * pred.reshape(2, slopes.shape[1])
         diff = slopes - pred_slopes
         rms = self.pix_size * np.sqrt((diff[0]**2 + diff[1]**2).mean())
         print(rms, rms * self.telescope.nmperasec)
-        print(pred_slopes/slopes)
         if plot:
             gnorm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.SqrtStretch())
             im = slope_results['data'] - slope_results['background']
@@ -545,7 +525,7 @@ class WFS(object):
             plt.quiver(x, y, diff[0], diff[1], scale_units='xy', scale=0.05, pivot='tip', color='red')
             xl = [50.0]
             yl = [480.0]
-            ul = [1/self.pix_size.value]
+            ul = [0.2/self.pix_size.value]
             vl = [0.0]
             plt.quiver(xl, yl, ul, vl, scale_units='xy', scale=0.05, pivot='tip', color='red')
             plt.text(60, 480, "0.2\"", verticalalignment='center')
