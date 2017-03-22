@@ -151,7 +151,7 @@ mmt_config = {
             "secondary": "f9",
             "rotation": -225. * u.deg,
             "pix_size": 0.119 * u.arcsec,  # old KX260e detector with 20 um pixels
-            "pup_size": 450,  # pupil outer diameter in pixels
+            "pup_size": 440,  # pupil outer diameter in pixels
             "pup_inner": 55,  # inner obscuration radius in pixels
             "pup_offset": [0.4, 0.75],  # [x, y] pupil offset from center of reference aperture pattern
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
@@ -181,7 +181,7 @@ mmt_config = {
             "secondary": "f5",
             "rotation": 180. * u.deg,  # this is referenced to camera2. camera1 is camera2+180, but is flipped by image acq
             "pix_size": 0.156 * u.arcsec,
-            "pup_size": 360,  # pixels
+            "pup_size": 340,  # pixels
             "pup_inner": 50,
             "pup_offset": [0.0, -0.55],  # [x, y] pupil offset from center of reference aperture pattern
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
