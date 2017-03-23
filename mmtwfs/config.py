@@ -89,7 +89,28 @@ mmt_config = {
         # coordinates of finite element nodes used in surf2act
         "nodecoor_file": pkg_resources.resource_filename(__name__, os.path.join("data", "bcv_node_coordinates.dat")),
         # coordinates of the force actuators
-        "actuator_file": pkg_resources.resource_filename(__name__, os.path.join("data", "actuator_coordinates.dat"))
+        "actuator_file": pkg_resources.resource_filename(__name__, os.path.join("data", "actuator_coordinates.dat")),
+        "zern_map": {  # map the old zernike mode indexing scheme to the Noll scheme used in ZernikeVector
+            "Z02": 0,
+            "Z03": 1,
+            "Z04": 2,
+            "Z05": 3,
+            "Z06": 4,
+            "Z07": 5,
+            "Z08": 6,
+            "Z09": 8,
+            "Z10": 9,
+            "Z11": 7,
+            "Z12": 11,
+            "Z13": 10,
+            "Z14": 13,
+            "Z15": 12,
+            "Z16": 16,
+            "Z17": 17,
+            "Z18": 14,
+            "Z19": 15,
+            "Z22": 18
+        }
     },
     "secondary": {
         "f5": {
