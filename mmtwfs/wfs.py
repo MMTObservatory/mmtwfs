@@ -17,6 +17,7 @@ from scipy.misc import imrotate
 
 import astropy.units as u
 from astropy.io import fits
+from astropy.io import ascii
 from astropy import stats, visualization
 
 from .config import recursive_subclasses, merge_config, mmt_config
@@ -388,7 +389,7 @@ class WFS(object):
         self.telescope = MMT(secondary=self.secondary)
         self.secondary = self.telescope.secondary
 
-        # this factor calibrates spot motion in pixels to nm of wavefront change
+        # this factor calibrates spot motion in pixels to nm of wavefront error
         self.tiltfactor = self.telescope.nmperasec * (self.pix_size.to(u.arcsec).value)
 
         # if this is the same for all modes, load it once here
@@ -429,6 +430,13 @@ class WFS(object):
         rotator = u.Quantity(rotator, u.deg)
         pup = self.telescope.pupil_mask(rotation=self.rotation+rotator)
         return pup
+
+    def reference_aberrations(self, mode, **kwargs):
+        """
+        Create reference ZernikeVector for 'mode'.
+        """
+        z = ZernikeVector(**self.modes[mode]['ref_zern'])
+        return z
 
     def measure_slopes(self, fitsfile, mode, plot=False):
         """
@@ -499,23 +507,35 @@ class WFS(object):
         """
         Use results from self.measure_slopes() to fit a set of zernike polynomials to the wavefront shape.
         """
+        results = {}
         mode = slope_results['mode']
         infmat = self.modes[mode]['zernike_matrix'][0]
         inverse_infmat = self.modes[mode]['zernike_matrix'][1]
         slopes = slope_results['slopes']
         slope_vec = -self.tiltfactor * slopes.ravel()  # convert arcsec to radians
         zfit = np.dot(slope_vec, infmat)
-        zv = ZernikeVector(coeffs=zfit)
-        zv_raw = ZernikeVector(coeffs=zfit)
-        total_rotation = slope_results['rotator'] + self.rotation
+
+        results['raw_zernike'] = ZernikeVector(coeffs=zfit)
+
         # derotate the zernike solution to match the primary mirror coordinate system
-        zv.rotate(angle=-total_rotation)
+        total_rotation = slope_results['rotator'] + self.rotation
+        zv_rot = ZernikeVector(coeffs=zfit)
+        zv_rot.rotate(angle=-total_rotation)
+        results['rot_zernike'] = zv_rot
+
+        # subtract the reference aberrations
+        zref = self.reference_aberrations(mode, hdr=slope_results['header'])
+        zsub = zv_rot - zref
+        results['zernike'] = zsub
 
         pred = np.dot(zfit, inverse_infmat)
         pred_slopes = -(1. / self.tiltfactor) * pred.reshape(2, slopes.shape[1])
         diff = slopes - pred_slopes
         rms = self.pix_size * np.sqrt((diff[0]**2 + diff[1]**2).mean())
-        print(rms, rms * self.telescope.nmperasec)
+        results['residual_rms'] = rms
+        results['zernike_rms'] = zsub.rms
+        results['zernike_p2v'] = zsub.rms
+
         if plot:
             gnorm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.SqrtStretch())
             im = slope_results['data'] - slope_results['background']
@@ -530,7 +550,7 @@ class WFS(object):
             plt.quiver(xl, yl, ul, vl, scale_units='xy', scale=0.05, pivot='tip', color='red')
             plt.text(60, 480, "0.2\"", verticalalignment='center')
 
-        return zv, zv_raw
+        return results
 
 
 class F9(WFS):
@@ -551,4 +571,65 @@ class MMIRS(WFS):
     """
     Defines configuration and methods specific to the MMIRS WFS system
     """
-    pass
+    def __init__(self, config={}):
+        super(MMIRS, self).__init__(config=config)
+
+        # load lookup table for off-axis aberrations
+        self.aberr_table = ascii.read(self.aberr_table_file)
+
+    def reference_aberrations(self, mode, hdr=None):
+        """
+        Create reference ZernikeVector for 'mode'.  For MMIRS, also need to get the WFS probe positions from 'hdr' to
+        get the known off-axis aberrations at that position.
+        """
+        if hdr is None:
+            msg = "MMIRS requires valid FITS header to determine off-axis aberrations."
+            raise WFSConfigException(value=msg)
+
+        for k in ['ROT', 'GUIDERX', 'GUIDERY']:
+            if k not in hdr:
+                msg = "Missing value, %s, that is required to transform MMIRS guider coordinates."
+                raise WFSConfigException(value=msg)
+
+        # for MMIRS, this gets the reference focus
+        z_default = ZernikeVector(**self.modes[mode]['ref_zern'])
+
+        # now get the off-axis aberrations
+        z_offaxis = ZernikeVector()
+        field_x, field_y = self.guider_to_focal_plane(hdr['GUIDERX'], hdr['GUIDERY'], hdr['ROT'])
+        field_r, field_phi = cart2pol([field_x, field_y])
+
+        for row in self.aberr_table:
+            coeff = 0 * u.um  # table coefficients are given in microns
+            for n in range(5):
+                coeff += row['r%d' % n] * field_r**n * u.um
+            if row['order'] != 0:
+                coeff *= row['cos'] * np.cos(field_phi * row['order']) + row['sin'] * np.sin(field_phi * row['order'])
+            z_offaxis[row['newz']] = coeff  # the conversion to nm is done internally in the ZernikeVector
+
+        z = z_default + z_offaxis
+
+        return z
+
+    def guider_to_focal_plane(self, guide_x, guide_y, rot):
+        """
+        Transform from the MMIRS guider coordinate system to MMTO focal plane coordinates.
+        """
+        guide_r = np.sqrt(guide_x**2 + guide_y**2)
+        rot = u.Quantity(rot, u.deg)  # make sure rotation is cast to degrees
+
+        # the MMTO focal plane coordinate convention has phi=0 aligned with +Y instead of +X
+        if guide_y != 0.0:
+            guide_phi = np.arctan2(guide_x, guide_y) * u.rad
+        else:
+            guide_phi = 90. * u.deg
+
+        # transform radius in guider coords to degrees in focal plane
+        focal_r = (0.0016922 * guide_r - 4.60789e-9 * guide_r**3 - 8.111307e-14 * guide_r**5) * u.deg
+        focal_phi = guide_phi + rot
+
+        # again, phi=0 aligned with Y axis. let astropy.units handle the angles and convert to arcmin.
+        focal_x = (focal_r * np.sin(focal_phi)).to(u.arcmin).value
+        focal_y = (focal_r * np.cos(focal_phi)).to(u.arcmin).value
+
+        return focal_x, focal_y
