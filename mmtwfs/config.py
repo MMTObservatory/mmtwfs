@@ -118,7 +118,7 @@ mmt_config = {
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 20,  # number of zernike modes to fit
-            "back_h": 0.9,
+            "back_h": 0.99,
             "reference_file": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "f5_hecto_ref.fits")),
             "modes": {
                 "megacam": {
@@ -188,6 +188,7 @@ mmt_config = {
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 20,  # number of zernike modes to fit
             "back_h": 0.9,
+            "aberr_table_file": pkg_resources.resource_filename(__name__, os.path.join("data", "mmirs.offaxis.coeffs.dat")),
             "modes": {
                 "mmirs1": {
                     "ref_zern": {
