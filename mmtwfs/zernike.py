@@ -441,7 +441,7 @@ def zernike_influence_matrix(pup_coords, nmodes=20, modestart=2):
     U, s, Vh = np.linalg.svd(zern_slopes_mat, full_matrices=False)
 
     # don't need to trim singular values for reasonable numbers of modes so fit all requested modes.
-    zern_inv_mat = np.dot(Vh.T, np.dot(np.diag(1.0/s), U.T))
+    zern_inv_mat = np.dot(Vh.T, np.dot(np.diag(1./s), U.T))
 
     return zern_inv_mat, zern_slopes_mat
 
@@ -491,7 +491,7 @@ class ZernikeVector(MutableMapping):
         "Z37": "Tertiary Spherical (8, 0)"
     }
 
-    def __init__(self, coeffs=[], modestart=2, normalized=False, units=u.nm, **kwargs):
+    def __init__(self, coeffs=[], modestart=2, normalized=False, zmap=None, units=u.nm, **kwargs):
         """
         Parameters
         ----------
@@ -528,7 +528,7 @@ class ZernikeVector(MutableMapping):
         self.units = units
 
         # first load from input array/list-like
-        self.from_array(coeffs)
+        self.from_array(coeffs, zmap=zmap)
 
         # now load any keyword inputs
         input_dict = dict(**kwargs)
@@ -858,7 +858,7 @@ class ZernikeVector(MutableMapping):
                 noll = noll_coefficient(l)
                 self.coeffs[k] *= noll
 
-    def from_array(self, coeffs, modestart=None):
+    def from_array(self, coeffs, zmap=None, modestart=None):
         """
         Load coefficients from a provided list/array starting from modestart. Array is assumed to start
         from self.modestart if modestart is not provided.
@@ -866,10 +866,17 @@ class ZernikeVector(MutableMapping):
         if len(coeffs) > 0:
             if modestart is None:
                 modestart = self.modestart
-            for i, c in enumerate(coeffs):
-                key = self._l_to_key(i + modestart)
-                if c != 0.0:
-                    self.__setitem__(key, c)
+
+            if zmap:
+                for k in zmap:
+                    l = self._key_to_l(k)
+                    if l >= modestart:
+                        self.__setitem__(k, coeffs[zmap[k]])
+            else:
+                for i, c in enumerate(coeffs):
+                    key = self._l_to_key(i + modestart)
+                    if c != 0.0:
+                        self.__setitem__(key, c)
 
     def ignore(self, key):
         """
