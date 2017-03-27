@@ -564,7 +564,11 @@ class F5(WFS):
     """
     Defines configuration and methods specific to the F/5 WFS system
     """
-    pass
+    def __init__(self, config={}):
+        super(F5, self).__init__(config=config)
+
+        # load lookup table for off-axis aberrations
+        self.aberr_table = ascii.read(self.aberr_table_file)
 
 
 class MMIRS(WFS):
@@ -596,16 +600,15 @@ class MMIRS(WFS):
 
         # now get the off-axis aberrations
         z_offaxis = ZernikeVector()
-        field_x, field_y = self.guider_to_focal_plane(hdr['GUIDERX'], hdr['GUIDERY'], hdr['ROT'])
-        field_r, field_phi = cart2pol([field_x, field_y])
+        field_r, field_phi = self.guider_to_focal_plane(hdr['GUIDERX'], hdr['GUIDERY'], hdr['ROT'])
 
-        for row in self.aberr_table:
-            coeff = 0 * u.um  # table coefficients are given in microns
-            for n in range(5):
-                coeff += row['r%d' % n] * field_r**n * u.um
-            if row['order'] != 0:
-                coeff *= row['cos'] * np.cos(field_phi * row['order']) + row['sin'] * np.sin(field_phi * row['order'])
-            z_offaxis[row['newz']] = coeff  # the conversion to nm is done internally in the ZernikeVector
+        # ignore piston and x/y tilts
+        for i in range(4, 12):
+            k = "Z%02d" % i
+            z_offaxis[k] = np.interp(field_r.to(u.deg).value, self.aberr_table['field_r'], self.aberr_table[k]) * u.um
+
+        # now rotate the off-axis aberrations
+        z_offaxis.rotate(angle=field_phi)
 
         z = z_default + z_offaxis
 
@@ -628,8 +631,4 @@ class MMIRS(WFS):
         focal_r = (0.0016922 * guide_r - 4.60789e-9 * guide_r**3 - 8.111307e-14 * guide_r**5) * u.deg
         focal_phi = guide_phi + rot
 
-        # again, phi=0 aligned with Y axis. let astropy.units handle the angles and convert to arcmin.
-        focal_x = (focal_r * np.sin(focal_phi)).to(u.arcmin).value
-        focal_y = (focal_r * np.cos(focal_phi)).to(u.arcmin).value
-
-        return focal_x, focal_y
+        return focal_r, focal_phi
