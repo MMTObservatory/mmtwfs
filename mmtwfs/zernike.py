@@ -500,8 +500,8 @@ class ZernikeVector(MutableMapping):
         modestart: int (default: 2)
             Noll mode number of the first included mode.
         normalized: bool (default: False)
-            If True, coefficients are normalized to unit variance.  If False, coefficients
-            reflect the phase amplitude of the mode.
+            If True, coefficients are normalized to unit variance (Noll coefficients).  If False, coefficients
+            reflect the phase amplitude of the mode (fringe coefficients).
         units: astropy.units.core.IrreducibleUnit or astropy.units.core.PrefixUnit (default: u.nm - nanometers)
             Units of the coefficients.
         **kwargs: kwargs
@@ -594,7 +594,7 @@ class ZernikeVector(MutableMapping):
         if self.normalized:
             print("Normalized (Noll) Coefficients")
         else:
-            print("Phase Amplitude Coefficients")
+            print("Fringe Coefficients")
         for k in sorted(self.coeffs.keys()):
             if k in self.__zernikelabels:
                 label = self.__zernikelabels[k]
@@ -849,7 +849,7 @@ class ZernikeVector(MutableMapping):
 
     def denormalize(self):
         """
-        Restore normalized coefficients to phase amplitude.
+        Restore normalized coefficients to fringe coefficients.
         """
         if self.normalized:
             self.normalized = False
