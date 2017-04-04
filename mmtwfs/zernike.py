@@ -11,6 +11,7 @@ Expressions for cartesian derivatives of the Zernike polynomials were adapted fr
 """
 
 import re
+import json
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -527,8 +528,17 @@ class ZernikeVector(MutableMapping):
         # now set the units
         self.units = units
 
-        # first load from input array/list-like
-        self.from_array(coeffs, zmap=zmap)
+        # python 2.x compatibility hack
+        try:
+            basestring
+        except NameError:
+            basestring = str
+
+        # coeffs can be either a list-like or a string which is a JSON filename
+        if isinstance(coeffs, basestring):
+            self.load(filename=coeffs)
+        else:
+            self.from_array(coeffs, zmap=zmap)
 
         # now load any keyword inputs
         input_dict = dict(**kwargs)
@@ -836,6 +846,65 @@ class ZernikeVector(MutableMapping):
         x, y, r, p, ph = self.phase_map()
         return u.Quantity(np.sqrt(np.mean(np.square(ph))), self.units)
 
+    def save(self, filename="zernike.json"):
+        """
+        Save Zernike vector to JSON format to retain units and normalization info.
+        """
+        outdict = {}
+        outdict['units'] = self.units.to_string()
+        outdict['normalized'] = self.normalized
+        outdict['modestart'] = self.modestart
+        outdict['coeffs'] = {}
+        for k, c in self.coeffs.items():
+            outdict['coeffs'][k] = c.value
+        with open(filename, 'w') as f:
+            json.dump(outdict, f, indent=4, separators=(',', ': '), sort_keys=True)
+
+    def load(self, filename="zernike.json"):
+        """
+        Load ZernikeVector data from JSON format.
+        """
+        try:
+            with open(filename, 'r') as f:
+                json_data = json.load(f)
+        except IOError as e:
+            msg = "Missing JSON file: %s" % filename
+            raise ZernikeException(value=msg)
+
+        if 'units' in json_data:
+            self.units = u.Unit(json_data['units'])
+
+        if 'normalized' in json_data:
+            self.normalized = json_data['units']
+
+        if 'modestart' in json_data:
+            self.modestart = json_data['modestart']
+
+        self.coeffs = {}
+        if 'coeffs' in json_data:
+            for k, v in json_data['coeffs'].items():
+                self.__setitem__(k, v)
+
+    def from_array(self, coeffs, zmap=None, modestart=None):
+        """
+        Load coefficients from a provided list/array starting from modestart. Array is assumed to start
+        from self.modestart if modestart is not provided.
+        """
+        if len(coeffs) > 0:
+            if modestart is None:
+                modestart = self.modestart
+
+            if zmap:
+                for k in zmap:
+                    l = self._key_to_l(k)
+                    if l >= modestart:
+                        self.__setitem__(k, coeffs[zmap[k]])
+            else:
+                for i, c in enumerate(coeffs):
+                    key = self._l_to_key(i + modestart)
+                    if c != 0.0:
+                        self.__setitem__(key, c)
+
     def normalize(self):
         """
         Normalize coefficients to unit variance for each mode.
@@ -857,26 +926,6 @@ class ZernikeVector(MutableMapping):
                 l = self._key_to_l(k)
                 noll = noll_coefficient(l)
                 self.coeffs[k] *= noll
-
-    def from_array(self, coeffs, zmap=None, modestart=None):
-        """
-        Load coefficients from a provided list/array starting from modestart. Array is assumed to start
-        from self.modestart if modestart is not provided.
-        """
-        if len(coeffs) > 0:
-            if modestart is None:
-                modestart = self.modestart
-
-            if zmap:
-                for k in zmap:
-                    l = self._key_to_l(k)
-                    if l >= modestart:
-                        self.__setitem__(k, coeffs[zmap[k]])
-            else:
-                for i, c in enumerate(coeffs):
-                    key = self._l_to_key(i + modestart)
-                    if c != 0.0:
-                        self.__setitem__(key, c)
 
     def ignore(self, key):
         """
