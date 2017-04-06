@@ -20,6 +20,8 @@ from astropy.io import fits
 from astropy.io import ascii
 from astropy import stats, visualization
 
+from astroscrappy import detect_cosmics
+
 from .config import recursive_subclasses, merge_config, mmt_config
 from .telescope import MMT
 from .zernike import zernike_influence_matrix, ZernikeVector, cart2pol, pol2cart
@@ -80,7 +82,7 @@ def wfsfind(data, fwhm=5.0, threshold=7.0, plot=False, ap_radius=5.0):
     if plot:
         positions = (sources['xcentroid'], sources['ycentroid'])
         apertures = photutils.CircularAperture(positions, r=ap_radius)
-        norm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.SqrtStretch())
+        norm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.AsinhStretch())
         plt.imshow(data, cmap='gray', origin='lower', norm=norm, interpolation='None')
         apertures.plot(color='red', lw=1.5, alpha=0.5)
     return sources
@@ -274,6 +276,17 @@ def get_apertures(data, ref, xcen, ycen, xspacing, yspacing, offset=[0.0, 0.0]):
     """
     data = check_wfsdata(data)
 
+    # mask out the inner part of the image centered on the WFS spots and find the per-pixel standard deviation
+    # from the outer parts.
+    outer = data.copy()
+    n = outer.shape[0]
+    r = 0.5 * n  # this is conservative to get well away from pupil light
+    y, x = np.ogrid[-ycen:n-ycen, -xcen:n-xcen]
+    mask = x**2 + y**2 < r**2
+    outer[mask] = np.nan
+    stddev = np.nanstd(outer)
+    sky = np.nanmean(outer)
+
     # we use circular apertures here because they generate square masks of the appropriate size.
     # rectangular apertures produced masks that were sqrt(2) too large.
     # see https://github.com/astropy/photutils/issues/499 for details.
@@ -285,13 +298,19 @@ def get_apertures(data, ref, xcen, ycen, xspacing, yspacing, offset=[0.0, 0.0]):
     )
     masks = apers.to_mask(method='subpixel')
     offsets = []
+    snr = []
     for m in masks:
         subim = m.cutout(data)
         # center-of-mass centroiding is the fastest, most reliable method, especially for faint or elongated spots
         spotx, spoty = photutils.centroid_com(subim)
+        msky = sky * subim.shape[0] * subim.shape[1]
+        signal = subim.sum() - msky
+        noise = np.sqrt(signal + msky + stddev**2 / (subim.shape[0] * subim.shape[1]))
+        snr.append(signal / noise)
         offsets.append((spotx-m.shape[1]/2, spoty-m.shape[0]/2))
     offsets = np.array(offsets)
-    return apers, masks, offsets
+    snr = np.array(snr)
+    return apers, masks, offsets, snr
 
 
 def get_slopes(data, back, ref, pup_mask, plot=False):
@@ -332,10 +351,13 @@ def get_slopes(data, back, ref, pup_mask, plot=False):
     ap_size = np.mean([xspacing, yspacing])
     ref_spacing = np.mean([ref['xspacing'], ref['yspacing']])
 
-    apers, masks, ipos = get_apertures(subt, ref, xcen, ycen, xspacing, yspacing)
+    apers, masks, ipos, snr = get_apertures(subt, ref, xcen, ycen, xspacing, yspacing)
 
     # feed initial offsets back in for a 2nd iteration to account for biasing from spots near edges of apertures
-    apers, masks, pos = get_apertures(subt, ref, xcen, ycen, xspacing, yspacing, offset=ipos.transpose())
+    apers, masks, pos, snr = get_apertures(subt, ref, xcen, ycen, xspacing, yspacing, offset=ipos.transpose())
+
+    # should make this a config var, but need to play with it more...
+    snr_mask = np.where(snr < 100.)
 
     meas_pos = apers.positions + pos
     final_aps = photutils.CircularAperture(
@@ -343,8 +365,10 @@ def get_slopes(data, back, ref, pup_mask, plot=False):
             r=ap_size/2.
     )
 
+    ref_x = ref['apertures']['xcentroid']
+    ref_y = ref['apertures']['ycentroid']
     ref_aps = photutils.CircularAperture(
-        (ref['apertures']['xcentroid']+xcen, ref['apertures']['ycentroid']+ycen),
+        (ref_x+xcen, ref_y+ycen),
         r=ref_spacing/2.
     )
 
@@ -353,12 +377,16 @@ def get_slopes(data, back, ref, pup_mask, plot=False):
     pup_coords = (ref_aps.positions - [xcen, ycen]) / [pup_size, pup_size]
 
     if plot:
-        norm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.SqrtStretch())
+        norm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.AsinhStretch())
         plt.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
         #apers.plot(color='red')
         plt.scatter(xcen, ycen)
         final_aps.plot(color='blue')
-    return slopes.transpose(), pup_coords.transpose(), final_aps, (xspacing, yspacing), (xcen, ycen)
+
+    slopes = slopes.transpose()
+    slopes[0][snr_mask] = np.nan
+    slopes[1][snr_mask] = np.nan
+    return np.ma.masked_invalid(slopes), pup_coords.transpose(), final_aps, (xspacing, yspacing), (xcen, ycen)
 
 
 def WFSFactory(wfs="f5", config={}, **kwargs):
@@ -450,11 +478,14 @@ class WFS(object):
         # we're a fits file (hopefully)
         try:
             fitsdata = fits.open(fitsfile)[0]
-            data = fitsdata.data
+            rawdata = fitsdata.data
             hdr = fitsdata.header
         except Exception as e:
             msg = "Error reading FITS file, %s (%s)" % (fitsfile, repr(e))
             raise WFSConfigException(value=msg)
+
+        # MMIRS gets a lot of hot pixels/CRs so make a quick pass to nuke them
+        cr_mask, data = detect_cosmics(rawdata)
 
         # if available, get the rotator angle out of the header
         if 'ROT' in hdr:
@@ -476,7 +507,7 @@ class WFS(object):
             y = aps.positions.transpose()[1]
             uu = slopes[0]
             vv = slopes[1]
-            norm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.SqrtStretch())
+            norm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.AsinhStretch())
             plt.imshow(subt, cmap='Greys', origin='lower', norm=norm, interpolation='None')
             plt.quiver(x, y, uu, vv, scale_units='xy', scale=0.2, pivot='tip', color='red')
             xl = [50.0]
@@ -537,7 +568,7 @@ class WFS(object):
         results['zernike_p2v'] = zsub.rms
 
         if plot:
-            gnorm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.SqrtStretch())
+            gnorm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.AsinhStretch())
             im = slope_results['data'] - slope_results['background']
             plt.imshow(im, cmap='Greys', origin='lower', norm=gnorm, interpolation='None')
             x = slope_results['apertures'].positions.transpose()[0]
