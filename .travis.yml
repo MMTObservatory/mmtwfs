@@ -32,7 +32,7 @@ env:
         - ASTROPY_VERSION=stable
         - MAIN_CMD='python setup.py'
         - SETUP_CMD='test'
-        - PIP_DEPENDENCIES='poppy'
+        - PIP_DEPENDENCIES='poppy astroscrappy'
         - EVENT_TYPE='pull_request push'
 
         # For this package-template, we include examples of Cython modules,
