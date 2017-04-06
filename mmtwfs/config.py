@@ -203,7 +203,7 @@ mmt_config = {
             "secondary": "f5",
             "rotation": 180. * u.deg,  # this is referenced to camera2. camera1 is camera2+180, but is flipped by image acq
             "pix_size": 0.156 * u.arcsec,
-            "pup_size": 340,  # pixels
+            "pup_size": 335,  # pixels
             "pup_inner": 50,
             "pup_offset": [0.0, -0.55],  # [x, y] pupil offset from center of reference aperture pattern
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
@@ -214,7 +214,7 @@ mmt_config = {
             "modes": {
                 "mmirs1": {
                     "ref_zern": {
-                        "Z04": -2918. * u.nm
+                        "Z04": -1325. * u.nm
                     },
                     "reference_file": pkg_resources.resource_filename(
                         __name__,
