@@ -85,7 +85,7 @@ def wfsfind(data, fwhm=5.0, threshold=7.0, plot=False, ap_radius=5.0):
         positions = (sources['xcentroid'], sources['ycentroid'])
         apertures = photutils.CircularAperture(positions, r=ap_radius)
         norm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.AsinhStretch())
-        plt.imshow(data, cmap='gray', origin='lower', norm=norm, interpolation='None')
+        plt.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
         apertures.plot(color='red', lw=1.5, alpha=0.5)
     return sources
 
