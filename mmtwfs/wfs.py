@@ -30,7 +30,7 @@ from astroscrappy import detect_cosmics
 from .config import recursive_subclasses, merge_config, mmt_config
 from .telescope import MMT
 from .zernike import zernike_influence_matrix, ZernikeVector, cart2pol, pol2cart
-from .custom_exceptions import WFSConfigException
+from .custom_exceptions import WFSConfigException, WFSAnalysisFailed
 
 
 def check_wfsdata(data):
@@ -261,7 +261,14 @@ def get_apertures(data, apsize):
     mean, median, stddev = stats.sigma_clipped_stats(data, sigma=3.0, iters=None)
 
     # use wfsfind() and pass it the clipped stddev from here
-    srcs = wfsfind(data, std=stddev)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        srcs = wfsfind(data, std=stddev)
+
+    nsrcs = len(srcs)
+    if nsrcs == 0:
+        msg = "No WFS spots detected."
+        raise WFSAnalysisFailed(value=msg)
 
     # we use circular apertures here because they generate square masks of the appropriate size.
     # rectangular apertures produced masks that were sqrt(2) too large.
@@ -338,6 +345,11 @@ def get_slopes(data, ref, pup_mask, plot=False):
     ref_spacing = np.mean([ref['xspacing'], ref['yspacing']])
 
     srcs, masks, snrs, sigma = get_apertures(data, apsize)
+
+    # if we don't detect spots in at least half of the reference apertures, we can't usually get a good wavefront measurement
+    if len(srcs) < 0.5 * len(ref['apertures']['xcentroid']):
+        msg = "Only %d spots detected out of %d apertures." % (len(srcs), len(ref['apertures']['xcentroid']))
+        raise WFSAnalysisFailed(value=msg)
 
     src_aps = photutils.CircularAperture(
         (srcs['xcentroid'], srcs['ycentroid']),
@@ -528,13 +540,22 @@ class WFS(object):
         # make rotated pupil mask
         pup_mask = self.pupil_mask(rotator=rotator)
 
-        slopes, coords, aps, spacing, cen, ref_mask, sigma = get_slopes(data, self.modes[mode]['reference'], pup_mask, plot=plot)
+        try:
+            slopes, coords, aps, spacing, cen, mask, sigma = get_slopes(data, self.modes[mode]['reference'], pup_mask, plot=plot)
+        except WFSAnalysisFailed as e:
+            print("Wavefront slope measurement failed: %s" % e.args[1])
+            if plot:
+                norm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.AsinhStretch())
+                plt.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
+            return None
+        except Exception as e:
+            raise WFSAnalysisFailed(value=str(e))
 
         if plot:
             x = aps.positions.transpose()[0]
             y = aps.positions.transpose()[1]
-            uu = slopes[0][ref_mask]
-            vv = slopes[1][ref_mask]
+            uu = slopes[0][mask]
+            vv = slopes[1][mask]
             norm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.AsinhStretch())
             plt.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
             plt.quiver(x, y, uu, vv, scale_units='xy', scale=0.2, pivot='tip', color='red')
@@ -559,7 +580,7 @@ class WFS(object):
         results['header'] = hdr
         results['rotator'] = rotator
         results['mode'] = mode
-        results['ref_mask'] = ref_mask
+        results['ref_mask'] = mask
         return results
 
     def fit_wavefront(self, slope_results, plot=False):
