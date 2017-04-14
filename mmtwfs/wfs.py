@@ -87,6 +87,11 @@ def wfsfind(data, fwhm=7.0, threshold=5.0, plot=False, ap_radius=5.0, std=None):
     daofind = photutils.DAOStarFinder(fwhm=fwhm, threshold=threshold*std, sharphi=0.9)
     sources = daofind(data)
 
+    nsrcs = len(sources)
+    if nsrcs == 0:
+        msg = "No WFS spots detected."
+        raise WFSAnalysisFailed(value=msg)
+
     # only keep spots more than 1/4 as bright as the max. need this for f/9 especially.
     sources = sources[sources['flux'] > sources['flux'].max()/4.]
 
@@ -268,11 +273,6 @@ def get_apertures(data, apsize):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         srcs = wfsfind(data, std=stddev)
-
-    nsrcs = len(srcs)
-    if nsrcs == 0:
-        msg = "No WFS spots detected."
-        raise WFSAnalysisFailed(value=msg)
 
     # we use circular apertures here because they generate square masks of the appropriate size.
     # rectangular apertures produced masks that were sqrt(2) too large.
