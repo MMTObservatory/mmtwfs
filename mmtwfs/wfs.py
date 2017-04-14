@@ -365,10 +365,10 @@ def get_slopes(data, ref, pup_mask, plot=False):
 
     # the first step to fine-tuning the WFS pattern center is compare the marginal sums for the whole image to the ones
     # for the part centered on the initial guess for the center position.
-    xl = int(xcen - 3*xspacing)
-    xu = int(xcen + 3*xspacing)
-    yl = int(ycen - 3*yspacing)
-    yu = int(ycen + 3*yspacing)
+    xl = int(xcen - 2*xspacing)
+    xu = int(xcen + 2*xspacing)
+    yl = int(ycen - 2*yspacing)
+    yu = int(ycen + 2*yspacing)
     # normalize the sums to their maximums so they can be compared more directly
     xsum = np.sum(data[yl:yu, :], axis=0)
     xsum /= xsum.max()
@@ -380,9 +380,9 @@ def get_slopes(data, ref, pup_mask, plot=False):
     ytot /= ytot.max()
     xdiff = xtot - xsum
     # set high enough to discriminate where the obscuration is, but low enough to get better centroid
-    xdiff[xdiff < 0.3] = 0.0
+    xdiff[xdiff < 0.25] = 0.0
     ydiff = ytot - ysum
-    ydiff[ydiff < 0.3] = 0.0
+    ydiff[ydiff < 0.25] = 0.0
 
     xcen = ndimage.measurements.center_of_mass(xdiff)[0]
     ycen = ndimage.measurements.center_of_mass(ydiff)[0]
@@ -395,6 +395,7 @@ def get_slopes(data, ref, pup_mask, plot=False):
     src_coord = SkyCoord(x=srcs['xcentroid'], y=srcs['ycentroid'], z=0.0, representation='cartesian')
     ref_coord = SkyCoord(x=refx, y=refy, z=0.0, representation='cartesian')
 
+    # perform the matching...
     idx, sep, dist = match_coordinates_3d(src_coord, ref_coord)
 
     # sometimes the initial center will be up to ~half aperture off so some apertures will go one way, while the rest go another.
@@ -405,10 +406,10 @@ def get_slopes(data, ref, pup_mask, plot=False):
     refy += yoff
     xcen += xoff
     ycen += yoff
+
+    # now do the re-matching with better center position...
     ref_coord = SkyCoord(x=refx, y=refy, z=0.0, representation='cartesian')
     idx, sep, dist = match_coordinates_3d(src_coord, ref_coord)
-
-    # now do the re-matching with better offset...
     xoff = np.mean(srcs['xcentroid'] - refx[idx])
     yoff = np.mean(srcs['ycentroid'] - refy[idx])
     xcen += xoff
@@ -438,11 +439,13 @@ def get_slopes(data, ref, pup_mask, plot=False):
     # need full slopes array the size of the complete set of reference apertures and pre-filled with np.nan for masking
     slopes = np.nan * np.ones((2, len(ref['apertures']['xcentroid'])))
 
-    # if we get a spurious match where a spot is mis-IDed to an aperture, mask it out.
-    slope = np.sqrt(slope_x**2 + slope_y**2)
+    # check mis-IDed spots
     spacing = np.max([xspacing, yspacing])
-    slope_x[slope > spacing] = np.nan
-    slope_y[slope > spacing] = np.nan
+    diffx = srcs['xcentroid'] - refx[idx]
+    diffy = srcs['ycentroid'] - refy[idx]
+    dist = np.sqrt(diffx**2 + diffy**2)
+    slope_x[dist > spacing/2.] = np.nan
+    slope_y[dist > spacing/2.] = np.nan
 
     # apply SNR mask
     slope_x[snr_mask] = np.nan
@@ -550,7 +553,7 @@ class WFS(object):
             raise WFSConfigException(value=msg)
 
         # MMIRS gets a lot of hot pixels/CRs so make a quick pass to nuke them
-        cr_mask, data = detect_cosmics(rawdata, sigclip=4., niter=6, cleantype='medmask')
+        cr_mask, data = detect_cosmics(rawdata, sigclip=4., niter=10, cleantype='medmask', gain=2.0, readnoise=12.0, psffwhm=5.)
 
         # calculate the background and subtract it
         bkg_estimator = photutils.MedianBackground()
