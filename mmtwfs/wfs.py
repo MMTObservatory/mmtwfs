@@ -63,7 +63,7 @@ def check_wfsdata(data):
     return data
 
 
-def wfsfind(data, fwhm=5.0, threshold=7.0, plot=False, ap_radius=5.0, std=None):
+def wfsfind(data, fwhm=7.0, threshold=7.0, plot=False, ap_radius=5.0, std=None):
     """
     Use photutils.DAOStarFinder() to find and centroid spots in a Shack-Hartmann WFS image.
 
@@ -84,7 +84,7 @@ def wfsfind(data, fwhm=5.0, threshold=7.0, plot=False, ap_radius=5.0, std=None):
     data = check_wfsdata(data)
     if std is None:
         mean, median, std = stats.sigma_clipped_stats(data, sigma=3.0, iters=5)
-    daofind = photutils.DAOStarFinder(fwhm=fwhm, threshold=threshold*std)
+    daofind = photutils.DAOStarFinder(fwhm=fwhm, threshold=threshold*std, sharphi=0.9)
     sources = daofind(data)
     if plot:
         positions = (sources['xcentroid'], sources['ycentroid'])
@@ -295,12 +295,15 @@ def get_apertures(data, apsize):
 
     snrs = np.array(snrs)
     # set up 2D gaussian model plus constant background to fit to the coadded spot
-    model = Gaussian2D(amplitude=spot.max(), x_mean=spot.shape[1]/2, y_mean=spot.shape[0]/2) + Polynomial2D(degree=0)
-    fitter = LevMarLSQFitter()
-    y, x = np.mgrid[:spot.shape[0], :spot.shape[1]]
-    fit = fitter(model, x, y, spot)
+    with warnings.catch_warnings():
+        # ignore astropy warnings about issues with the fit...
+        warnings.simplefilter("ignore")
+        model = Gaussian2D(amplitude=spot.max(), x_mean=spot.shape[1]/2, y_mean=spot.shape[0]/2) + Polynomial2D(degree=0)
+        fitter = LevMarLSQFitter()
+        y, x = np.mgrid[:spot.shape[0], :spot.shape[1]]
+        fit = fitter(model, x, y, spot)
 
-    sigma = 0.5 * (fit.x_stddev_0.value + fit.y_stddev_0.value)
+        sigma = 0.5 * (fit.x_stddev_0.value + fit.y_stddev_0.value)
 
     return srcs, masks, snrs, sigma
 
@@ -336,7 +339,8 @@ def get_slopes(data, ref, pup_mask, plot=False):
     data = check_wfsdata(data)
     pup_mask = check_wfsdata(pup_mask)
 
-    # input data should be background subtracted for best results
+    # input data should be background subtracted for best results. this initial guess of the center positions
+    # will be good enough to get the central obscuration, but will need to be fine-tuned.
     xcen, ycen = center_pupil(data, pup_mask, plot=False)
     xspacing, yspacing = grid_spacing(data)
 
@@ -359,7 +363,31 @@ def get_slopes(data, ref, pup_mask, plot=False):
     # should make this a config var, but need to play with it more...
     snr_mask = np.where(snrs < 0.1*snrs.max())
 
-    # use the ratio of spacings to magnify the grid and the initial pupil center guess to offset it
+    # the first step to fine-tuning the WFS pattern center is compare the marginal sums for the whole image to the ones
+    # for the part centered on the initial guess for the center position.
+    xl = int(xcen - 3*xspacing)
+    xu = int(xcen + 3*xspacing)
+    yl = int(ycen - 3*yspacing)
+    yu = int(ycen + 3*yspacing)
+    # normalize the sums to their maximums so they can be compared more directly
+    xsum = np.sum(data[yl:yu, :], axis=0)
+    xsum /= xsum.max()
+    xtot = np.sum(data, axis=0)
+    xtot /= xtot.max()
+    ysum = np.sum(data[:, xl:xu], axis=1)
+    ysum /= ysum.max()
+    ytot = np.sum(data, axis=1)
+    ytot /= ytot.max()
+    xdiff = xtot - xsum
+    # set high enough to discriminate where the obscuration is, but low enough to get better centroid
+    xdiff[xdiff < 0.3] = 0.0
+    ydiff = ytot - ysum
+    ydiff[ydiff < 0.3] = 0.0
+
+    xcen = ndimage.measurements.center_of_mass(xdiff)[0]
+    ycen = ndimage.measurements.center_of_mass(ydiff)[0]
+
+    # use the ratio of spacings to magnify the grid and the updated pupil center guess to offset it
     refx = (xspacing / ref['xspacing']) * ref['apertures']['xcentroid'] + xcen
     refy = (yspacing / ref['yspacing']) * ref['apertures']['ycentroid'] + ycen
 
@@ -369,12 +397,14 @@ def get_slopes(data, ref, pup_mask, plot=False):
 
     idx, sep, dist = match_coordinates_3d(src_coord, ref_coord)
 
-    # sometimes the initial center will be ~half aperture off so some apertures will go one way, while the rest go another.
+    # sometimes the initial center will be up to ~half aperture off so some apertures will go one way, while the rest go another.
     # fix that by finding the mean offset from the first match, apply it to the reference coords, and then re-match.
     xoff = np.mean(srcs['xcentroid'] - refx[idx])
     yoff = np.mean(srcs['ycentroid'] - refy[idx])
     refx += xoff
     refy += yoff
+    xcen += xoff
+    ycen += yoff
     ref_coord = SkyCoord(x=refx, y=refy, z=0.0, representation='cartesian')
     idx, sep, dist = match_coordinates_3d(src_coord, ref_coord)
 
@@ -383,6 +413,8 @@ def get_slopes(data, ref, pup_mask, plot=False):
     yoff = np.mean(srcs['ycentroid'] - refy[idx])
     xcen += xoff
     ycen += yoff
+
+    # these are unscaled so that the slope includes defocus
     trim_refx = ref['apertures']['xcentroid'][idx] + xcen
     trim_refy = ref['apertures']['ycentroid'][idx] + ycen
     ref_aps = photutils.CircularAperture(
@@ -405,6 +437,17 @@ def get_slopes(data, ref, pup_mask, plot=False):
 
     # need full slopes array the size of the complete set of reference apertures and pre-filled with np.nan for masking
     slopes = np.nan * np.ones((2, len(ref['apertures']['xcentroid'])))
+
+    # if we get a spurious match where a spot is mis-IDed to an aperture, mask it out.
+    slope = np.sqrt(slope_x**2 + slope_y**2)
+    spacing = np.max([xspacing, yspacing])
+    slope_x[slope > spacing] = np.nan
+    slope_y[slope > spacing] = np.nan
+
+    # apply SNR mask
+    slope_x[snr_mask] = np.nan
+    slope_y[snr_mask] = np.nan
+
     slopes[0][idx] = slope_x
     slopes[1][idx] = slope_y
     return np.ma.masked_invalid(slopes), pup_coords.transpose(), src_aps, (xspacing, yspacing), (xcen, ycen), idx, sigma
