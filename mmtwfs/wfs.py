@@ -63,7 +63,7 @@ def check_wfsdata(data):
     return data
 
 
-def wfsfind(data, fwhm=7.0, threshold=7.0, plot=False, ap_radius=5.0, std=None):
+def wfsfind(data, fwhm=7.0, threshold=5.0, plot=False, ap_radius=5.0, std=None):
     """
     Use photutils.DAOStarFinder() to find and centroid spots in a Shack-Hartmann WFS image.
 
@@ -86,6 +86,10 @@ def wfsfind(data, fwhm=7.0, threshold=7.0, plot=False, ap_radius=5.0, std=None):
         mean, median, std = stats.sigma_clipped_stats(data, sigma=3.0, iters=5)
     daofind = photutils.DAOStarFinder(fwhm=fwhm, threshold=threshold*std, sharphi=0.9)
     sources = daofind(data)
+
+    # only keep spots more than 1/4 as bright as the max. need this for f/9 especially.
+    sources = sources[sources['flux'] > sources['flux'].max()/4.]
+
     if plot:
         positions = (sources['xcentroid'], sources['ycentroid'])
         apertures = photutils.CircularAperture(positions, r=ap_radius)
@@ -553,7 +557,7 @@ class WFS(object):
             raise WFSConfigException(value=msg)
 
         # MMIRS gets a lot of hot pixels/CRs so make a quick pass to nuke them
-        cr_mask, data = detect_cosmics(rawdata, sigclip=4., niter=10, cleantype='medmask', gain=2.0, readnoise=12.0, psffwhm=5.)
+        cr_mask, data = detect_cosmics(rawdata, sigclip=4., niter=10, cleantype='medmask', psffwhm=5.)
 
         # calculate the background and subtract it
         bkg_estimator = photutils.MedianBackground()
