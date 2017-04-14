@@ -139,7 +139,6 @@ mmt_config = {
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 20,  # number of zernike modes to fit
-            "back_h": 0.99,
             "reference_file": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "f5_hecto_ref.fits")),
             "aberr_table_file": pkg_resources.resource_filename(__name__, os.path.join("data", "f5zernfield.tab")),
             "modes": {
@@ -179,7 +178,6 @@ mmt_config = {
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 20,  # number of zernike modes to fit
-            "back_h": 0.9,
             "reference_file": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "f9_ref.fits")),
             "modes": {
                 "blue": {
@@ -208,11 +206,10 @@ mmt_config = {
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 20,  # number of zernike modes to fit
-            "back_h": 0.9,
             "aberr_table_file": pkg_resources.resource_filename(__name__, os.path.join("data", "mmirszernfield.tab")),
             "modes": {
                 "mmirs1": {
-                    "pup_offset": [0.5, -0.55],  # [x, y] pupil offset from center of reference aperture pattern
+                    "pup_offset": [0.0, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
                     "ref_zern": {
                         "Z04": -1325. * u.nm
                     },
@@ -222,7 +219,7 @@ mmt_config = {
                     ),
                 },
                 "mmirs2": {
-                    "pup_offset": [0.0, -0.75],  # [x, y] pupil offset from center of reference aperture pattern
+                    "pup_offset": [0.0, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
                     "ref_zern": {
                         "Z04": 1912. * u.nm
                     },
