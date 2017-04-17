@@ -689,7 +689,7 @@ class WFS(object):
             y = slope_results['apertures'].positions.transpose()[1]
             plt.quiver(x, y, diff[0][ref_mask], diff[1][ref_mask], scale_units='xy', scale=0.05, pivot='tip', color='red')
             xl = [50.0]
-            yl = [480.0]
+            yl = [im.shape[0]-30]
             ul = [0.2/self.pix_size.value]
             vl = [0.0]
             plt.quiver(xl, yl, ul, vl, scale_units='xy', scale=0.05, pivot='tip', color='red')
