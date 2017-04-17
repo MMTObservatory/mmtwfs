@@ -33,6 +33,18 @@ from .zernike import zernike_influence_matrix, ZernikeVector, cart2pol, pol2cart
 from .custom_exceptions import WFSConfigException, WFSAnalysisFailed
 
 
+def wfs_norm(data, interval=visualization.ZScaleInterval(), stretch=visualization.LinearStretch()):
+    """
+    Define default image normalization to use for WFS images
+    """
+    norm = visualization.mpl_normalize.ImageNormalize(
+        data,
+        interval=interval,
+        stretch=stretch
+    )
+    return norm
+
+
 def check_wfsdata(data):
     """
     Utility to validate WFS data
@@ -98,7 +110,7 @@ def wfsfind(data, fwhm=7.0, threshold=5.0, plot=False, ap_radius=5.0, std=None):
     if plot:
         positions = (sources['xcentroid'], sources['ycentroid'])
         apertures = photutils.CircularAperture(positions, r=ap_radius)
-        norm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.AsinhStretch())
+        norm = wfs_norm(data)
         plt.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
         apertures.plot(color='red', lw=1.5, alpha=0.5)
     return sources
@@ -373,6 +385,7 @@ def get_slopes(data, ref, pup_mask, plot=False):
     xu = int(xcen + 2*xspacing)
     yl = int(ycen - 2*yspacing)
     yu = int(ycen + 2*yspacing)
+
     # normalize the sums to their maximums so they can be compared more directly
     xsum = np.sum(data[yl:yu, :], axis=0)
     xsum /= xsum.max()
@@ -383,6 +396,7 @@ def get_slopes(data, ref, pup_mask, plot=False):
     ytot = np.sum(data, axis=1)
     ytot /= ytot.max()
     xdiff = xtot - xsum
+
     # set high enough to discriminate where the obscuration is, but low enough to get better centroid
     xdiff[xdiff < 0.25] = 0.0
     ydiff = ytot - ysum
@@ -434,7 +448,7 @@ def get_slopes(data, ref, pup_mask, plot=False):
     pup_coords = (ref_aps.positions - [xcen, ycen]) / [pup_size, pup_size]
 
     if plot:
-        norm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.AsinhStretch())
+        norm = wfs_norm(data)
         plt.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
         #apers.plot(color='red')
         plt.scatter(xcen, ycen)
@@ -595,7 +609,7 @@ class WFS(object):
         except WFSAnalysisFailed as e:
             print("Wavefront slope measurement failed: %s" % e.args[1])
             if plot:
-                norm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.AsinhStretch())
+                norm = wfs_norm(data)
                 plt.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
             return None
         except Exception as e:
@@ -606,11 +620,11 @@ class WFS(object):
             y = aps.positions.transpose()[1]
             uu = slopes[0][mask]
             vv = slopes[1][mask]
-            norm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.AsinhStretch())
+            norm = wfs_norm(data)
             plt.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
             plt.quiver(x, y, uu, vv, scale_units='xy', scale=0.2, pivot='tip', color='red')
             xl = [50.0]
-            yl = [480.0]
+            yl = [data.shape[0]-30]
             ul = [1.0/self.pix_size.value]
             vl = [0.0]
             plt.quiver(xl, yl, ul, vl, scale_units='xy', scale=0.2, pivot='tip', color='red')
@@ -668,8 +682,8 @@ class WFS(object):
 
         if plot:
             ref_mask = slope_results['ref_mask']
-            gnorm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.AsinhStretch())
             im = slope_results['data']
+            gnorm = wfs_norm(im)
             plt.imshow(im, cmap='Greys', origin='lower', norm=gnorm, interpolation='None')
             x = slope_results['apertures'].positions.transpose()[0]
             y = slope_results['apertures'].positions.transpose()[1]
