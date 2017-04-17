@@ -29,6 +29,15 @@ class WFSConfigException(MMTWFSException):
         self.name = "Config Error"
 
 
+class WFSAnalysisFailed(MMTWFSException):
+    """
+    Raise when something is wrong with the WFS data that prevents it from being analyzed
+    """
+    def __init__(self, value="WFS Image Analysis Error", results=None):
+        super(WFSAnalysisFailed, self).__init__(value, results=results)
+        self.name = "Analysis Error"
+
+
 class ZernikeException(MMTWFSException):
     """
     Raise when an error occurs in handling or configuring of ZernikeVectors

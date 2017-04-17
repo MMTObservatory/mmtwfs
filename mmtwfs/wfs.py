@@ -21,13 +21,28 @@ import astropy.units as u
 from astropy.io import fits
 from astropy.io import ascii
 from astropy import stats, visualization
+from astropy.modeling.models import Gaussian2D, Polynomial2D
+from astropy.modeling.fitting import LevMarLSQFitter
+from astropy.coordinates import SkyCoord, match_coordinates_3d
 
 from astroscrappy import detect_cosmics
 
 from .config import recursive_subclasses, merge_config, mmt_config
 from .telescope import MMT
 from .zernike import zernike_influence_matrix, ZernikeVector, cart2pol, pol2cart
-from .custom_exceptions import WFSConfigException
+from .custom_exceptions import WFSConfigException, WFSAnalysisFailed
+
+
+def wfs_norm(data, interval=visualization.ZScaleInterval(contrast=0.05), stretch=visualization.LinearStretch()):
+    """
+    Define default image normalization to use for WFS images
+    """
+    norm = visualization.mpl_normalize.ImageNormalize(
+        data,
+        interval=interval,
+        stretch=stretch
+    )
+    return norm
 
 
 def check_wfsdata(data):
@@ -60,7 +75,7 @@ def check_wfsdata(data):
     return data
 
 
-def wfsfind(data, fwhm=5.0, threshold=7.0, plot=False, ap_radius=5.0):
+def wfsfind(data, fwhm=7.0, threshold=5.0, plot=False, ap_radius=5.0, std=None):
     """
     Use photutils.DAOStarFinder() to find and centroid spots in a Shack-Hartmann WFS image.
 
@@ -77,14 +92,25 @@ def wfsfind(data, fwhm=5.0, threshold=7.0, plot=False, ap_radius=5.0):
     ap_radius: float
         Radius of plotted apertures
     """
+    # data should be background subtracted first...
     data = check_wfsdata(data)
-    mean, median, std = stats.sigma_clipped_stats(data, sigma=3.0, iters=5)
-    daofind = photutils.DAOStarFinder(fwhm=fwhm, threshold=threshold*std)
-    sources = daofind(data - median)
+    if std is None:
+        mean, median, std = stats.sigma_clipped_stats(data, sigma=3.0, iters=5)
+    daofind = photutils.DAOStarFinder(fwhm=fwhm, threshold=threshold*std, sharphi=0.9)
+    sources = daofind(data)
+
+    nsrcs = len(sources)
+    if nsrcs == 0:
+        msg = "No WFS spots detected."
+        raise WFSAnalysisFailed(value=msg)
+
+    # only keep spots more than 1/4 as bright as the max. need this for f/9 especially.
+    sources = sources[sources['flux'] > sources['flux'].max()/4.]
+
     if plot:
         positions = (sources['xcentroid'], sources['ycentroid'])
         apertures = photutils.CircularAperture(positions, r=ap_radius)
-        norm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.AsinhStretch())
+        norm = wfs_norm(data)
         plt.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
         apertures.plot(color='red', lw=1.5, alpha=0.5)
     return sources
@@ -228,82 +254,74 @@ def center_pupil(data, pup_mask, threshold=0.5, sigma=20., plot=False):
     return cen
 
 
-def get_apertures(data, ref, xcen, ycen, xspacing, yspacing, offset=[0.0, 0.0]):
+def get_apertures(data, apsize):
     """
-    Use the X/Y center positions and grid spacings to place the reference apertures onto the WFS
-    frame.  Perform center-of-mass centroiding within each aperture.
+    Use wfsfind to locate and centroid spots.  Measure their S/N ratios and the sigma of a 2D gaussian fit to
+    the co-added spot.
 
     Arguments
     ---------
     data: str or 2D ndarray
         WFS image to analyze, either FITS file or ndarray image data
-    ref: astropy.Table
-        Table of reference aperture positions
-    xcen, ycen: float, float
-        X and Y positions of the pupil center
-    xspacing, yspacing: float, float
-        Aperture grid spacing along X and Y axes
+    apsize: float
+        Diameter/width of the SH apertures
 
     Returns
     -------
-    apers: photutils.CircularAperture
-        WFS apertures scaled and placed onto image
+    srcs: astropy.table.Table
+        Detected WFS spot positions and properties
     masks: list of photutils.ApertureMask objects
         Masks used for aperture centroiding
-    offsets: list of tuples
-        X/Y offsets of spot centroids from aperture centers
+    snrs: 1D np.ndarray
+        S/N for each located spot
+    sigma: float
     """
     data = check_wfsdata(data)
 
-    # mask out the inner part of the image centered on the WFS spots and find the per-pixel standard deviation
-    # from the outer parts.
-    outer = data.copy()
-    n = outer.shape[0]
-    r = 0.5 * n  # this is conservative to get well away from pupil light
-    y, x = np.ogrid[-ycen:n-ycen, -xcen:n-xcen]
-    mask = x**2 + y**2 < r**2
-    outer[mask] = np.nan
-    stddev = np.nanstd(outer)
+    # set iters to None to let this clip all the way to convergence
+    mean, median, stddev = stats.sigma_clipped_stats(data, sigma=3.0, iters=None)
+
+    # use wfsfind() and pass it the clipped stddev from here
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        srcs = wfsfind(data, std=stddev)
 
     # we use circular apertures here because they generate square masks of the appropriate size.
     # rectangular apertures produced masks that were sqrt(2) too large.
     # see https://github.com/astropy/photutils/issues/499 for details.
-    spacing = np.mean([xspacing, yspacing])  # workaround to support hexagonal grid for f/9
     apers = photutils.CircularAperture(
-        ((xspacing/ref['xspacing'])*ref['apertures']['xcentroid']+xcen+offset[0],
-        (yspacing/ref['yspacing'])*ref['apertures']['ycentroid']+ycen+offset[1]),
-        r=spacing/2.
+        (srcs['xcentroid'], srcs['ycentroid']),
+        r=apsize/2.
     )
     masks = apers.to_mask(method='subpixel')
-    offsets = []
     snrs = []
+    spot = np.zeros(masks[0].shape)
     for m in masks:
         subim = m.cutout(data)
+
+        # make co-added spot image for use in calculating the seeing
+        if subim.shape == spot.shape:
+            spot += subim
+
         err = stddev * np.ones_like(subim)
         signal = subim.sum()
         noise = np.sqrt(stddev**2 / (subim.shape[0] * subim.shape[1]))
         snr = signal / noise
-        # a 2D gaussian fit will give the most accurate location of the peak if the spot is bright enough.
-        # use it above a SNR threshold and fall back to center-of-gravity below that or if there is an error
-        # or warning generated by the fit.
-        if snr > 1000.:
-            with warnings.catch_warnings():
-                warnings.filterwarnings('error')
-                try:
-                    spotx, spoty = photutils.centroid_2dg(subim, error=err)
-                except:
-                    spotx, spoty = photutils.centroid_com(subim)
-        else:
-            spotx, spoty = photutils.centroid_com(subim)
-
         snrs.append(snr)
-        offsets.append((spotx-(m.shape[1]-1)/2., spoty-(m.shape[0]-1)/2.))
 
-    offsets = np.array(offsets)
-    bad = np.where(np.abs(offsets) > spacing/2.)
-    offsets[bad] = 0.0
     snrs = np.array(snrs)
-    return apers, masks, offsets, snrs
+    # set up 2D gaussian model plus constant background to fit to the coadded spot
+    with warnings.catch_warnings():
+        # ignore astropy warnings about issues with the fit...
+        warnings.simplefilter("ignore")
+        model = Gaussian2D(amplitude=spot.max(), x_mean=spot.shape[1]/2, y_mean=spot.shape[0]/2) + Polynomial2D(degree=0)
+        fitter = LevMarLSQFitter()
+        y, x = np.mgrid[:spot.shape[0], :spot.shape[1]]
+        fit = fitter(model, x, y, spot)
+
+        sigma = 0.5 * (fit.x_stddev_0.value + fit.y_stddev_0.value)
+
+    return srcs, masks, snrs, sigma
 
 
 def get_slopes(data, ref, pup_mask, plot=False):
@@ -329,54 +347,131 @@ def get_slopes(data, ref, pup_mask, plot=False):
         Observed X and Y grid spacing
     xcen, ycen: float, float
         Center of pupil image
+    idx: list
+        Index of reference apertures that have detected spots
+    sigma: float
+        Sigma of gaussian fit to co-added WFS spot
     """
     data = check_wfsdata(data)
     pup_mask = check_wfsdata(pup_mask)
 
-    # input data should be background subtracted for best results
+    # input data should be background subtracted for best results. this initial guess of the center positions
+    # will be good enough to get the central obscuration, but will need to be fine-tuned.
     xcen, ycen = center_pupil(data, pup_mask, plot=False)
     xspacing, yspacing = grid_spacing(data)
 
-    # use the min spacing to support f/9 hexagonal geometry.
-    ap_size = np.mean([xspacing, yspacing])
+    # using the mean spacing is straightforward for square apertures and a reasonable underestimate for hexagonal ones (e.g. f/9)
+    apsize = np.mean([xspacing, yspacing])
     ref_spacing = np.mean([ref['xspacing'], ref['yspacing']])
 
-    apers, masks, ipos, snr = get_apertures(data, ref, xcen, ycen, xspacing, yspacing)
+    srcs, masks, snrs, sigma = get_apertures(data, apsize)
 
-    # feed initial offsets back in for a 2nd iteration to account for biasing from spots near edges of apertures
-    #napers, masks, pos, snr = get_apertures(subt, ref, xcen, ycen, xspacing, yspacing, offset=ipos.transpose())
+    # if we don't detect spots in at least half of the reference apertures, we can't usually get a good wavefront measurement
+    if len(srcs) < 0.5 * len(ref['apertures']['xcentroid']):
+        msg = "Only %d spots detected out of %d apertures." % (len(srcs), len(ref['apertures']['xcentroid']))
+        raise WFSAnalysisFailed(value=msg)
 
-    # should make this a config var, but need to play with it more...
-    snr_mask = np.where(snr < 0.1*snr.max())
-
-    meas_pos = apers.positions + ipos
-    final_aps = photutils.CircularAperture(
-            meas_pos,
-            r=ap_size/2.
+    src_aps = photutils.CircularAperture(
+        (srcs['xcentroid'], srcs['ycentroid']),
+        r=apsize/2.
     )
 
-    ref_x = ref['apertures']['xcentroid']
-    ref_y = ref['apertures']['ycentroid']
+    # should make this a config var, but need to play with it more...
+    snr_mask = np.where(snrs < 0.1*snrs.max())
+
+    # the first step to fine-tuning the WFS pattern center is compare the marginal sums for the whole image to the ones
+    # for the part centered on the initial guess for the center position.
+    xl = int(xcen - 2*xspacing)
+    xu = int(xcen + 2*xspacing)
+    yl = int(ycen - 2*yspacing)
+    yu = int(ycen + 2*yspacing)
+
+    # normalize the sums to their maximums so they can be compared more directly
+    xsum = np.sum(data[yl:yu, :], axis=0)
+    xsum /= xsum.max()
+    xtot = np.sum(data, axis=0)
+    xtot /= xtot.max()
+    ysum = np.sum(data[:, xl:xu], axis=1)
+    ysum /= ysum.max()
+    ytot = np.sum(data, axis=1)
+    ytot /= ytot.max()
+    xdiff = xtot - xsum
+
+    # set high enough to discriminate where the obscuration is, but low enough to get better centroid
+    xdiff[xdiff < 0.25] = 0.0
+    ydiff = ytot - ysum
+    ydiff[ydiff < 0.25] = 0.0
+
+    xcen = ndimage.measurements.center_of_mass(xdiff)[0]
+    ycen = ndimage.measurements.center_of_mass(ydiff)[0]
+
+    # use the ratio of spacings to magnify the grid and the updated pupil center guess to offset it
+    refx = (xspacing / ref['xspacing']) * ref['apertures']['xcentroid'] + xcen
+    refy = (yspacing / ref['yspacing']) * ref['apertures']['ycentroid'] + ycen
+
+    # set up cartesian coordinates for the measured and reference spot positions
+    src_coord = SkyCoord(x=srcs['xcentroid'], y=srcs['ycentroid'], z=0.0, representation='cartesian')
+    ref_coord = SkyCoord(x=refx, y=refy, z=0.0, representation='cartesian')
+
+    # perform the matching...
+    idx, sep, dist = match_coordinates_3d(src_coord, ref_coord)
+
+    # sometimes the initial center will be up to ~half aperture off so some apertures will go one way, while the rest go another.
+    # fix that by finding the mean offset from the first match, apply it to the reference coords, and then re-match.
+    xoff = np.mean(srcs['xcentroid'] - refx[idx])
+    yoff = np.mean(srcs['ycentroid'] - refy[idx])
+    refx += xoff
+    refy += yoff
+    xcen += xoff
+    ycen += yoff
+
+    # now do the re-matching with better center position...
+    ref_coord = SkyCoord(x=refx, y=refy, z=0.0, representation='cartesian')
+    idx, sep, dist = match_coordinates_3d(src_coord, ref_coord)
+    xoff = np.mean(srcs['xcentroid'] - refx[idx])
+    yoff = np.mean(srcs['ycentroid'] - refy[idx])
+    xcen += xoff
+    ycen += yoff
+
+    # these are unscaled so that the slope includes defocus
+    trim_refx = ref['apertures']['xcentroid'][idx] + xcen
+    trim_refy = ref['apertures']['ycentroid'][idx] + ycen
     ref_aps = photutils.CircularAperture(
-        (ref_x+xcen, ref_y+ycen),
+        (trim_refx, trim_refy),
         r=ref_spacing/2.
     )
 
+    slope_x = srcs['xcentroid'] - trim_refx
+    slope_y = srcs['ycentroid'] - trim_refy
+
     pup_size = ref['pup_outer']
-    slopes = final_aps.positions - ref_aps.positions
     pup_coords = (ref_aps.positions - [xcen, ycen]) / [pup_size, pup_size]
 
     if plot:
-        norm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.AsinhStretch())
+        norm = wfs_norm(data)
         plt.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
         #apers.plot(color='red')
         plt.scatter(xcen, ycen)
-        final_aps.plot(color='blue')
+        src_aps.plot(color='blue')
 
-    slopes = slopes.transpose()
-    slopes[0][snr_mask] = np.nan
-    slopes[1][snr_mask] = np.nan
-    return np.ma.masked_invalid(slopes), pup_coords.transpose(), final_aps, (xspacing, yspacing), (xcen, ycen)
+    # need full slopes array the size of the complete set of reference apertures and pre-filled with np.nan for masking
+    slopes = np.nan * np.ones((2, len(ref['apertures']['xcentroid'])))
+
+    # check mis-IDed spots
+    spacing = np.max([xspacing, yspacing])
+    diffx = srcs['xcentroid'] - refx[idx]
+    diffy = srcs['ycentroid'] - refy[idx]
+    dist = np.sqrt(diffx**2 + diffy**2)
+    slope_x[dist > spacing/2.] = np.nan
+    slope_y[dist > spacing/2.] = np.nan
+
+    # apply SNR mask
+    slope_x[snr_mask] = np.nan
+    slope_y[snr_mask] = np.nan
+
+    slopes[0][idx] = slope_x
+    slopes[1][idx] = slope_y
+    return np.ma.masked_invalid(slopes), pup_coords.transpose(), src_aps, (xspacing, yspacing), (xcen, ycen), idx, sigma
 
 
 def WFSFactory(wfs="f5", config={}, **kwargs):
@@ -476,7 +571,7 @@ class WFS(object):
             raise WFSConfigException(value=msg)
 
         # MMIRS gets a lot of hot pixels/CRs so make a quick pass to nuke them
-        cr_mask, data = detect_cosmics(rawdata)
+        cr_mask, data = detect_cosmics(rawdata, sigclip=4., niter=10, cleantype='medmask', psffwhm=5.)
 
         # calculate the background and subtract it
         bkg_estimator = photutils.MedianBackground()
@@ -509,18 +604,27 @@ class WFS(object):
         # make rotated pupil mask
         pup_mask = self.pupil_mask(rotator=rotator)
 
-        slopes, coords, aps, spacing, cen = get_slopes(data, self.modes[mode]['reference'], pup_mask, plot=plot)
+        try:
+            slopes, coords, aps, spacing, cen, mask, sigma = get_slopes(data, self.modes[mode]['reference'], pup_mask, plot=plot)
+        except WFSAnalysisFailed as e:
+            print("Wavefront slope measurement failed: %s" % e.args[1])
+            if plot:
+                norm = wfs_norm(data)
+                plt.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
+            return None
+        except Exception as e:
+            raise WFSAnalysisFailed(value=str(e))
 
         if plot:
             x = aps.positions.transpose()[0]
             y = aps.positions.transpose()[1]
-            uu = slopes[0]
-            vv = slopes[1]
-            norm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.AsinhStretch())
+            uu = slopes[0][mask]
+            vv = slopes[1][mask]
+            norm = wfs_norm(data)
             plt.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
             plt.quiver(x, y, uu, vv, scale_units='xy', scale=0.2, pivot='tip', color='red')
             xl = [50.0]
-            yl = [480.0]
+            yl = [data.shape[0]-30]
             ul = [1.0/self.pix_size.value]
             vl = [0.0]
             plt.quiver(xl, yl, ul, vl, scale_units='xy', scale=0.2, pivot='tip', color='red')
@@ -540,6 +644,7 @@ class WFS(object):
         results['header'] = hdr
         results['rotator'] = rotator
         results['mode'] = mode
+        results['ref_mask'] = mask
         return results
 
     def fit_wavefront(self, slope_results, plot=False):
@@ -576,14 +681,15 @@ class WFS(object):
         results['zernike_p2v'] = zsub.rms
 
         if plot:
-            gnorm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.AsinhStretch())
+            ref_mask = slope_results['ref_mask']
             im = slope_results['data']
+            gnorm = wfs_norm(im)
             plt.imshow(im, cmap='Greys', origin='lower', norm=gnorm, interpolation='None')
             x = slope_results['apertures'].positions.transpose()[0]
             y = slope_results['apertures'].positions.transpose()[1]
-            plt.quiver(x, y, diff[0], diff[1], scale_units='xy', scale=0.05, pivot='tip', color='red')
+            plt.quiver(x, y, diff[0][ref_mask], diff[1][ref_mask], scale_units='xy', scale=0.05, pivot='tip', color='red')
             xl = [50.0]
-            yl = [480.0]
+            yl = [im.shape[0]-30]
             ul = [0.2/self.pix_size.value]
             vl = [0.0]
             plt.quiver(xl, yl, ul, vl, scale_units='xy', scale=0.05, pivot='tip', color='red')
