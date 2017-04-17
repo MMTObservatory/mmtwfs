@@ -33,7 +33,7 @@ from .zernike import zernike_influence_matrix, ZernikeVector, cart2pol, pol2cart
 from .custom_exceptions import WFSConfigException, WFSAnalysisFailed
 
 
-def wfs_norm(data, interval=visualization.ZScaleInterval(), stretch=visualization.LinearStretch()):
+def wfs_norm(data, interval=visualization.ZScaleInterval(contrast=0.05), stretch=visualization.LinearStretch()):
     """
     Define default image normalization to use for WFS images
     """
