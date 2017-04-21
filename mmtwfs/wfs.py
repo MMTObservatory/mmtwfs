@@ -157,6 +157,23 @@ def mk_reference(data, xoffset=0, yoffset=0, pup_inner=45., pup_outer=175., fwhm
     xcen = spots['xcentroid'].mean()
     ycen = spots['ycentroid'].mean()
     spacing = grid_spacing(data)
+
+    # make masks for each reference spot and fit a 2D gaussian to get its FWHM. the reference FWHM is subtracted in
+    # quadrature from the observed FWHM when calculating the seeing.
+    apsize = np.mean(spacing)
+    apers = photutils.CircularAperture(
+        (spots['xcentroid'], spots['ycentroid']),
+        r=apsize/2.
+    )
+    masks = apers.to_mask(method='subpixel')
+    sigmas = []
+    spot = np.zeros(masks[0].shape)
+    for m in masks:
+        subim = m.cutout(data)
+        # make co-added spot image for use in calculating the seeing
+        if subim.shape == spot.shape:
+            spot += subim
+
     # just using the mean will be offset from the true center due to missing spots at edges.
     # find the spot closest to the mean and make it the center position of the pattern.
     dist = ((spots['xcentroid'] - xcen)**2 + (spots['ycentroid'] - ycen)**2)
@@ -182,6 +199,23 @@ def mk_reference(data, xoffset=0, yoffset=0, pup_inner=45., pup_outer=175., fwhm
     ref['pup_outer'] = pup_outer
     ref['xcen'] = xcen
     ref['ycen'] = ycen
+
+    # set up 2D gaussian model plus constant background to fit to the coadded spot.  tested this compared to fitting each
+    # spot individually and they give the same result with this method being faster.
+    with warnings.catch_warnings():
+        # ignore astropy warnings about issues with the fit...
+        warnings.simplefilter("ignore")
+        model = Gaussian2D(amplitude=spot.max(), x_mean=spot.shape[1]/2, y_mean=spot.shape[0]/2) + Polynomial2D(degree=0)
+        fitter = LevMarLSQFitter()
+        y, x = np.mgrid[:spot.shape[0], :spot.shape[1]]
+        fit = fitter(model, x, y, spot)
+
+    sigma = 0.5 * (fit.x_stddev_0.value + fit.y_stddev_0.value)
+    fwhm = stats.funcs.gaussian_sigma_to_fwhm * sigma
+    ref['fwhm'] = fwhm
+    ref['sigma'] = sigma
+    ref['spot'] = spot
+
     return ref
 
 
@@ -556,6 +590,13 @@ class WFS(object):
         z = ZernikeVector(**self.modes[mode]['ref_zern'])
         return z
 
+    def get_mode(self, hdr):
+        """
+        If mode is not specified, either set it to the default mode or figure out the mode from the header.
+        """
+        mode = self.default_mode
+        return mode
+
     def process_image(self, fitsfile):
         """
         Process the image to make it suitable for accurate wavefront analysis.  Steps include nuking cosmic rays,
@@ -584,16 +625,19 @@ class WFS(object):
 
         return data, hdr
 
-    def measure_slopes(self, fitsfile, mode, plot=False):
+    def measure_slopes(self, fitsfile, mode=None, plot=False):
         """
         Take a WFS image in FITS format, perform background subtration, pupil centration, and then use get_slopes()
         to perform the aperture placement and spot centroiding.
         """
+        data, hdr = self.process_image(fitsfile)
+
+        if mode is None:
+            mode = self.get_mode(hdr)
+
         if mode not in self.modes:
             msg = "Invalid mode, %s, for WFS system, %s." % (mode, self.__class__.__name__)
             raise WFSConfigException(value=msg)
-
-        data, hdr = self.process_image(fitsfile)
 
         # if available, get the rotator angle out of the header
         if 'ROT' in hdr:
@@ -645,6 +689,7 @@ class WFS(object):
         results['rotator'] = rotator
         results['mode'] = mode
         results['ref_mask'] = mask
+        results['fwhm'] = stats.funcs.gaussian_sigma_to_fwhm * sigma
         return results
 
     def fit_wavefront(self, slope_results, plot=False):
@@ -725,6 +770,14 @@ class MMIRS(WFS):
 
         # load lookup table for off-axis aberrations
         self.aberr_table = ascii.read(self.aberr_table_file)
+
+    def get_mode(self, hdr):
+        """
+        For MMIRS we figure out the mode from which camera the image is taken with.
+        """
+        cam = hdr['CAMERA']
+        mode = "mmirs%d" % cam
+        return mode
 
     def reference_aberrations(self, mode, hdr=None):
         """
