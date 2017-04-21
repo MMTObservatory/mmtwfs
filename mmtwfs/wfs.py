@@ -575,6 +575,46 @@ class WFS(object):
                 modestart=2  # ignore the piston term
             )
 
+    def seeing(self, mode, sigma, airmass=None):
+        """
+        Given a sigma derived from a gaussian fit to a WFS spot, deconvolve the systematic width from the reference image
+        and relate the remainder to r_0 and thus a seeing FWHM.
+        """
+        # the effective wavelength of the WFS imagers is about 600-650 nm. we use 650 nm to maintain consistency
+        # with the value used by the old SHWFS system.
+        wave = 650 * u.nm
+        wave = wave.to(u.m).value  # r_0 equation expects meters so convert
+
+        # calculate the physical size of each aperture.
+        ref = self.modes[mode]['reference']
+        apsize_pix = np.max((ref['xspacing'], ref['yspacing']))
+        d = self.telescope.diameter * apsize_pix / self.pup_size
+        d = d.to(u.m).value  # r_0 equation expects meters so convert
+
+        # we need to deconvolve the instrumental spot width from the measured one to get the portion of the width that
+        # is due to spot motion
+        ref_sigma = ref['sigma']
+        if sigma > ref_sigma:
+            corr_sigma = np.sqrt(sigma**2 - ref_sigma**2)
+        else:
+            corr_sigma = 0.0
+        corr_sigma *= self.pix_size.to(u.rad).value  # r_0 equation expects radians so convert
+
+        # this equation relates the motion within a single aperture to the characteristic scale size of the
+        # turbulence, r_0.
+        r_0 = ( 0.179 * (wave**2) * (d**(-1/3))/corr_sigma**2 )**0.6
+
+        # this equation relates the turbulence scale size to an expected image FWHM at the given wavelength.
+        raw_seeing = u.Quantity(u.rad * 0.98 * wave / r_0, u.arcsec)
+
+        # correct seeing to zenith
+        if airmass is not None:
+            seeing = raw_seeing / airmass**0.6
+        else:
+            seeing = raw_seeing
+
+        return seeing, raw_seeing
+
     def pupil_mask(self, rotator=0.0):
         """
         Wrap the Telescope.pupil_mask() method to include both WFS and instrument rotator rotation angles
@@ -659,6 +699,14 @@ class WFS(object):
         except Exception as e:
             raise WFSAnalysisFailed(value=str(e))
 
+        # use the average width of the spots to estimate the seeing
+        if 'AIRMASS' in hdr:
+            airmass = hdr['AIRMASS']
+        else:
+            airmass = None
+
+        seeing, raw_seeing = self.seeing(mode=mode, sigma=sigma, airmass=airmass)
+
         if plot:
             x = aps.positions.transpose()[0]
             y = aps.positions.transpose()[1]
@@ -676,6 +724,8 @@ class WFS(object):
             plt.text(60, 480, "1\"", verticalalignment='center')
 
         results = {}
+        results['seeing'] = seeing
+        results['raw_seeing'] = raw_seeing
         results['slopes'] = slopes
         results['pup_coords'] = coords
         results['apertures'] = aps
