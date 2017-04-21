@@ -721,7 +721,7 @@ class WFS(object):
         pred_slopes = -(1. / self.tiltfactor) * pred.reshape(2, slopes.shape[1])
         diff = slopes - pred_slopes
         rms = self.pix_size * np.sqrt((diff[0]**2 + diff[1]**2).mean())
-        results['residual_rms'] = rms
+        results['residual_rms'] = rms.to(u.arcsec).value * self.tiltfactor * zsub.units
         results['zernike_rms'] = zsub.rms
         results['zernike_p2v'] = zsub.rms
 
