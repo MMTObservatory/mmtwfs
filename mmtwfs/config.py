@@ -131,6 +131,7 @@ mmt_config = {
     "wfs": {
         "f5": {
             "secondary": "f5",  # secondary used with WFS system
+            "default_mode": "hecto",
             "rotation": 234.0 * u.deg,  # rotation of aperture locations w.r.t. the primary mirror
             "pix_size": 0.135 * u.arcsec,  # arcsec per WFS detector pixel
             "pup_size": 460,  # pixels
@@ -170,6 +171,7 @@ mmt_config = {
         },
         "f9": {
             "secondary": "f9",
+            "default_mode": "blue",
             "rotation": -225. * u.deg,
             "pix_size": 0.119 * u.arcsec,  # old KX260e detector with 20 um pixels
             "pup_size": 440,  # pupil outer diameter in pixels
@@ -199,6 +201,7 @@ mmt_config = {
         },
         "mmirs": {
             "secondary": "f5",
+            "default_mode": None,
             "rotation": 180. * u.deg,  # this is referenced to camera2. camera1 is camera2+180, but is flipped by image acq
             "pix_size": 0.156 * u.arcsec,
             "pup_size": 335,  # pixels
