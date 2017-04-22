@@ -650,6 +650,7 @@ class WFS(object):
         except Exception as e:
             msg = "Error reading FITS file, %s (%s)" % (fitsfile, repr(e))
             raise WFSConfigException(value=msg)
+        rawdata = check_wfsdata(rawdata)
 
         # MMIRS gets a lot of hot pixels/CRs so make a quick pass to nuke them
         cr_mask, data = detect_cosmics(rawdata, sigclip=4., niter=10, cleantype='medmask', psffwhm=5.)
