@@ -157,6 +157,23 @@ def mk_reference(data, xoffset=0, yoffset=0, pup_inner=45., pup_outer=175., fwhm
     xcen = spots['xcentroid'].mean()
     ycen = spots['ycentroid'].mean()
     spacing = grid_spacing(data)
+
+    # make masks for each reference spot and fit a 2D gaussian to get its FWHM. the reference FWHM is subtracted in
+    # quadrature from the observed FWHM when calculating the seeing.
+    apsize = np.mean(spacing)
+    apers = photutils.CircularAperture(
+        (spots['xcentroid'], spots['ycentroid']),
+        r=apsize/2.
+    )
+    masks = apers.to_mask(method='subpixel')
+    sigmas = []
+    spot = np.zeros(masks[0].shape)
+    for m in masks:
+        subim = m.cutout(data)
+        # make co-added spot image for use in calculating the seeing
+        if subim.shape == spot.shape:
+            spot += subim
+
     # just using the mean will be offset from the true center due to missing spots at edges.
     # find the spot closest to the mean and make it the center position of the pattern.
     dist = ((spots['xcentroid'] - xcen)**2 + (spots['ycentroid'] - ycen)**2)
@@ -182,6 +199,23 @@ def mk_reference(data, xoffset=0, yoffset=0, pup_inner=45., pup_outer=175., fwhm
     ref['pup_outer'] = pup_outer
     ref['xcen'] = xcen
     ref['ycen'] = ycen
+
+    # set up 2D gaussian model plus constant background to fit to the coadded spot.  tested this compared to fitting each
+    # spot individually and they give the same result with this method being faster.
+    with warnings.catch_warnings():
+        # ignore astropy warnings about issues with the fit...
+        warnings.simplefilter("ignore")
+        model = Gaussian2D(amplitude=spot.max(), x_mean=spot.shape[1]/2, y_mean=spot.shape[0]/2) + Polynomial2D(degree=0)
+        fitter = LevMarLSQFitter()
+        y, x = np.mgrid[:spot.shape[0], :spot.shape[1]]
+        fit = fitter(model, x, y, spot)
+
+    sigma = 0.5 * (fit.x_stddev_0.value + fit.y_stddev_0.value)
+    fwhm = stats.funcs.gaussian_sigma_to_fwhm * sigma
+    ref['fwhm'] = fwhm
+    ref['sigma'] = sigma
+    ref['spot'] = spot
+
     return ref
 
 
@@ -541,6 +575,46 @@ class WFS(object):
                 modestart=2  # ignore the piston term
             )
 
+    def seeing(self, mode, sigma, airmass=None):
+        """
+        Given a sigma derived from a gaussian fit to a WFS spot, deconvolve the systematic width from the reference image
+        and relate the remainder to r_0 and thus a seeing FWHM.
+        """
+        # the effective wavelength of the WFS imagers is about 600-650 nm. we use 650 nm to maintain consistency
+        # with the value used by the old SHWFS system.
+        wave = 650 * u.nm
+        wave = wave.to(u.m).value  # r_0 equation expects meters so convert
+
+        # calculate the physical size of each aperture.
+        ref = self.modes[mode]['reference']
+        apsize_pix = np.max((ref['xspacing'], ref['yspacing']))
+        d = self.telescope.diameter * apsize_pix / self.pup_size
+        d = d.to(u.m).value  # r_0 equation expects meters so convert
+
+        # we need to deconvolve the instrumental spot width from the measured one to get the portion of the width that
+        # is due to spot motion
+        ref_sigma = ref['sigma']
+        if sigma > ref_sigma:
+            corr_sigma = np.sqrt(sigma**2 - ref_sigma**2)
+        else:
+            corr_sigma = 0.0
+        corr_sigma *= self.pix_size.to(u.rad).value  # r_0 equation expects radians so convert
+
+        # this equation relates the motion within a single aperture to the characteristic scale size of the
+        # turbulence, r_0.
+        r_0 = ( 0.179 * (wave**2) * (d**(-1/3))/corr_sigma**2 )**0.6
+
+        # this equation relates the turbulence scale size to an expected image FWHM at the given wavelength.
+        raw_seeing = u.Quantity(u.rad * 0.98 * wave / r_0, u.arcsec)
+
+        # correct seeing to zenith
+        if airmass is not None:
+            seeing = raw_seeing / airmass**0.6
+        else:
+            seeing = raw_seeing
+
+        return seeing, raw_seeing
+
     def pupil_mask(self, rotator=0.0):
         """
         Wrap the Telescope.pupil_mask() method to include both WFS and instrument rotator rotation angles
@@ -556,6 +630,13 @@ class WFS(object):
         z = ZernikeVector(**self.modes[mode]['ref_zern'])
         return z
 
+    def get_mode(self, hdr):
+        """
+        If mode is not specified, either set it to the default mode or figure out the mode from the header.
+        """
+        mode = self.default_mode
+        return mode
+
     def process_image(self, fitsfile):
         """
         Process the image to make it suitable for accurate wavefront analysis.  Steps include nuking cosmic rays,
@@ -569,6 +650,7 @@ class WFS(object):
         except Exception as e:
             msg = "Error reading FITS file, %s (%s)" % (fitsfile, repr(e))
             raise WFSConfigException(value=msg)
+        rawdata = check_wfsdata(rawdata)
 
         # MMIRS gets a lot of hot pixels/CRs so make a quick pass to nuke them
         cr_mask, data = detect_cosmics(rawdata, sigclip=4., niter=10, cleantype='medmask', psffwhm=5.)
@@ -584,16 +666,19 @@ class WFS(object):
 
         return data, hdr
 
-    def measure_slopes(self, fitsfile, mode, plot=False):
+    def measure_slopes(self, fitsfile, mode=None, plot=False):
         """
         Take a WFS image in FITS format, perform background subtration, pupil centration, and then use get_slopes()
         to perform the aperture placement and spot centroiding.
         """
+        data, hdr = self.process_image(fitsfile)
+
+        if mode is None:
+            mode = self.get_mode(hdr)
+
         if mode not in self.modes:
             msg = "Invalid mode, %s, for WFS system, %s." % (mode, self.__class__.__name__)
             raise WFSConfigException(value=msg)
-
-        data, hdr = self.process_image(fitsfile)
 
         # if available, get the rotator angle out of the header
         if 'ROT' in hdr:
@@ -615,6 +700,14 @@ class WFS(object):
         except Exception as e:
             raise WFSAnalysisFailed(value=str(e))
 
+        # use the average width of the spots to estimate the seeing
+        if 'AIRMASS' in hdr:
+            airmass = hdr['AIRMASS']
+        else:
+            airmass = None
+
+        seeing, raw_seeing = self.seeing(mode=mode, sigma=sigma, airmass=airmass)
+
         if plot:
             x = aps.positions.transpose()[0]
             y = aps.positions.transpose()[1]
@@ -632,6 +725,8 @@ class WFS(object):
             plt.text(60, 480, "1\"", verticalalignment='center')
 
         results = {}
+        results['seeing'] = seeing
+        results['raw_seeing'] = raw_seeing
         results['slopes'] = slopes
         results['pup_coords'] = coords
         results['apertures'] = aps
@@ -645,6 +740,7 @@ class WFS(object):
         results['rotator'] = rotator
         results['mode'] = mode
         results['ref_mask'] = mask
+        results['fwhm'] = stats.funcs.gaussian_sigma_to_fwhm * sigma
         return results
 
     def fit_wavefront(self, slope_results, plot=False):
@@ -676,7 +772,7 @@ class WFS(object):
         pred_slopes = -(1. / self.tiltfactor) * pred.reshape(2, slopes.shape[1])
         diff = slopes - pred_slopes
         rms = self.pix_size * np.sqrt((diff[0]**2 + diff[1]**2).mean())
-        results['residual_rms'] = rms
+        results['residual_rms'] = rms.to(u.arcsec).value * self.tiltfactor * zsub.units
         results['zernike_rms'] = zsub.rms
         results['zernike_p2v'] = zsub.rms
 
@@ -725,6 +821,14 @@ class MMIRS(WFS):
 
         # load lookup table for off-axis aberrations
         self.aberr_table = ascii.read(self.aberr_table_file)
+
+    def get_mode(self, hdr):
+        """
+        For MMIRS we figure out the mode from which camera the image is taken with.
+        """
+        cam = hdr['CAMERA']
+        mode = "mmirs%d" % cam
+        return mode
 
     def reference_aberrations(self, mode, hdr=None):
         """
