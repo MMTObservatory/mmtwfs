@@ -843,8 +843,21 @@ class ZernikeVector(MutableMapping):
         """
         Return the RMS phase displacement of the Zernike set.
         """
-        x, y, r, p, ph = self.phase_map()
-        return u.Quantity(np.sqrt(np.mean(np.square(ph))), self.units)
+        # ignore piston and tilts when calculating wavefront RMSW
+        orig_modestart = self.modestart
+        self.modestart = 4
+        norm_coeffs = self.norm_array
+        # once coeffs are normalized, the RMS is simply the sqrt of the sum of the squares of the coefficients
+        rms = np.sqrt(np.sum(norm_coeffs**2))
+        self.modestart = orig_modestart
+        return rms
+
+    def copy(self):
+        """
+        Make a new ZernikeVector with the same configuration and coefficients
+        """
+        new = ZernikeVector(modestart=self.modestart, normalized=self.normalized, units=self.units, **self.coeffs)
+        return new
 
     def save(self, filename="zernike.json"):
         """
