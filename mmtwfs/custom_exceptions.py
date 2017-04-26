@@ -29,6 +29,15 @@ class WFSConfigException(MMTWFSException):
         self.name = "Config Error"
 
 
+class WFSCommandException(MMTWFSException):
+    """
+    Raise when an error occurs due to invalid command sent to a WFS system.
+    """
+    def __init__(self, value="Command Error", results=None):
+        super(WFSCommandException, self).__init__(value, results=results)
+        self.name = "Command Error"
+
+
 class WFSAnalysisFailed(MMTWFSException):
     """
     Raise when something is wrong with the WFS data that prevents it from being analyzed
