@@ -184,6 +184,8 @@ class MMT(object):
             self.to_rcell(t, filename=filename)
             os.system("/mmt/scripts/cell_send_forces %s" % filename)
 
+        return t
+
     def load_influence_matrix(self):
         """
         The influence of each actuator on the mirror surface has been modeled via finite element analysis.
