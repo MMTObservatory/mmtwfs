@@ -114,13 +114,17 @@ mmt_config = {
     },
     "secondary": {
         "f5": {
+            "host": "hexapod",
+            "port": 5341,
             "diameter": 1688.0 * u.mm,  # clear aperture of secondary
             "theta_cc": 79.0 * u.nm / u.arcsec,  # nm of coma per arcsec of center-of-curvature tilt.
-            "cc_trans": 25.0 * u.um / u.arcsec,  # um of hexapod translation per arcsec of center-of-curvature tilt.
-            "zc_trans": 9.45 * u.um / u.arcsec,  # um of hexapod translation per arcsec of zero-coma tilt.
+            "cc_trans": 24.97 * u.um / u.arcsec,  # um of hexapod translation per arcsec of center-of-curvature tilt.
+            "zc_trans": 9.453 * u.um / u.arcsec,  # um of hexapod translation per arcsec of zero-coma tilt.
             "focus_trans": 40.8 * u.nm / u.um  # nm of defocus per um of hexapod Z (focus) translation.
         },
         "f9": {
+            "host": "hexapod",
+            "port": 5341,
             "diameter": 1006.7 * u.mm,
             "theta_cc": 44.4 * u.nm / u.arcsec,
             "cc_trans": 13.6 * u.um / u.arcsec,
