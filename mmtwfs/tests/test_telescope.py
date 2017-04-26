@@ -49,7 +49,7 @@ def test_force_file():
     t = MMT()
     # define a zernike vector with AST45 of -1000 nm and check if the correction equals the forces required to bend
     # +1000 nm of AST45 into the mirror.
-    zv = ZernikeVector(Z05=-1000)
+    zv = ZernikeVector(Z05=1000)
     f_table = t.bending_forces(zv=zv, gain=1.0)
     t.to_rcell(f_table, filename="forcefile")
     test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "AST45_p1000.frc"))
