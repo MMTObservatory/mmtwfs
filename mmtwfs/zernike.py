@@ -898,6 +898,15 @@ class ZernikeVector(MutableMapping):
             for k, v in json_data['coeffs'].items():
                 self.__setitem__(k, v)
 
+    def label(self, key):
+        """
+        If defined, return the descriptive lable for mode, 'key'
+        """
+        if key in self.__zernikelabels:
+            return self.__zernikelabels[key]
+        else:
+            return key
+
     def from_array(self, coeffs, zmap=None, modestart=None):
         """
         Load coefficients from a provided list/array starting from modestart. Array is assumed to start
