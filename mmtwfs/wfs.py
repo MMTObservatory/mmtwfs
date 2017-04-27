@@ -536,6 +536,8 @@ class WFS(object):
         self.telescope = MMT(secondary=self.secondary)
         self.secondary = self.telescope.secondary
 
+        self.connected = False
+
         # this factor calibrates spot motion in pixels to nm of wavefront error
         self.tiltfactor = self.telescope.nmperasec * (self.pix_size.to(u.arcsec).value)
 
@@ -574,6 +576,22 @@ class WFS(object):
                 nmodes=self.nzern,
                 modestart=2  # ignore the piston term
             )
+
+    def connect(self):
+        """
+        Set state to connected so that calculated corrections get passed through to appropriate systems.
+        """
+        self.connected = True
+        self.telescope.connect()
+        self.secondary.connect()
+
+    def disconnect(self):
+        """
+        Set state to disconnected for testing/development
+        """
+        self.connected = False
+        self.telescope.disconnect()
+        self.secondary.disconnect()
 
     def seeing(self, mode, sigma, airmass=None):
         """
@@ -660,7 +678,7 @@ class WFS(object):
         bkg = photutils.Background2D(data, (10, 10), filter_size=(5, 5), bkg_estimator=bkg_estimator)
         data -= bkg.background
 
-        # trim overscan (this is for MMIRS, but ok for rest)
+        # trim overscan (this is needed for MMIRS, but ok for rest)
         data[:5, :] = 0.0
         data[:, :12] = 0.0
 
@@ -792,6 +810,62 @@ class WFS(object):
             plt.text(60, 480, "0.2\"", verticalalignment='center')
 
         return results
+
+    def correct_focus(self, zv):
+        """
+        Convert Zernike defocus to um of secondary offset and apply offsets if connected.
+        """
+        foc_corr = -self.m2_gain * zv['Z04'] / self.secondary.focus_trans
+        print("Correcting focus by moving secondary %s..." % foc_corr)
+        if self.connected:
+            self.secondary.focus(foc_corr)
+        return foc_corr
+
+    def correct_coma(self, zv):
+        """
+        Convert Zernike coma (Z07 and Z08) into arcsec of secondary center-of-curvature tilts.
+        """
+        # Y coma is causes by a rotation around the X axis and X coma by a rotation around the Y axis...
+        cc_x_corr = self.m2_gain * zv['Z07'] / self.secondary.theta_cc
+        cc_y_corr = -self.m2_gain * zv['Z08'] / self.secondary.theta_cc
+
+        print("Correcting %s Y coma with %s of CC tilt in X..." % (zv['07'], cc_x_corr))
+        print("Correcting %s X coma with %s of CC tilt in Y..." % (zv['08'], cc_y_corr))
+        if self.connected:
+            self.secondary.cc('x', cc_x_corr)
+            self.secondary.cc('y', cc_y_corr)
+        return cc_x_corr, cc_y_corr
+
+    def recenter(self, fit_results):
+        """
+        Perform zero-coma hexapod tilts to align the pupil center to the center-of-rotation. The location of the CoR is configured
+        to be at self.cor_coords
+        """
+        xc = fit_results['xcen']
+        yc = fit_results['ycen']
+        xref = self.cor_coords[0]
+        yref = self.cor_coords[1]
+        dx = xc - xref
+        dy = yc - yref
+
+        total_rotation = u.Quantity(slope_results['rotator'] + self.rotation, u.rad).value
+
+        dr, phi = cart2pol([dx, dy])
+
+        derot_phi = phi - total_rotation
+
+        az, el = pol2cart([dr, derot_phi])
+
+        az *= self.pix_size
+        el *= self.pix_size
+
+        print("Offsetting hexapod %s in AZ and %s in EL..." % (az, el))
+
+        if self.connected:
+            self.secondary.zc('x', el)
+            self.secondary.zc('y', az)
+
+        return az, el
 
 
 class F9(WFS):
