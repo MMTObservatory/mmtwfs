@@ -180,18 +180,28 @@ class MMT(object):
 
         # to reduce the amount of force required to remove spherical aberration, we offset the r**2 part of that term by
         # bending focus into the primary and then offsetting that by adjusting the secondary.  this has the effect of
-        # reducing by ~1/3 the total force required to correct a given amount of spherical aberration.
-        zv_masked['Z04'] = -6.0 * zv_masked['Z11']
-        m1focus = zv_masked['Z04'] / self.secondary.focus_trans
+        # reducing by ~1/4 to 1/3 the total force required to correct a given amount of spherical aberration.
+        #
+        # this same scheme can be extended to the higher order spherical terms as well, Z22 and Z37.
+        #
+        # for reference:
+        #   Z04 ~ 2r**2 - 1
+        #   Z11 ~ 6r**4 - 6r**2 + 1
+        #   Z22 ~ 20r**6 - 30r**4 + 12r**2 - 1
+        #   Z37 ~ 70r**8 - 140r**6 + 90r**4 - 20r**2 + 1
+        #
+        zv_masked['Z04'] = 0.5*(6.0 * zv_masked['Z11'] - 12.0 * zv_masked['Z22'] + 20.0 * zv_masked['Z37'])
+
+        m1focus_corr = -zv_masked['Z04'] / self.secondary.focus_trans
 
         t = self.bending_forces(zv=zv_masked, gain=gain)
 
         if self.connected:
-            self.secondary.m1spherical(m1focus)
+            self.secondary.m1spherical(m1focus_corr)
             self.to_rcell(t, filename=filename)
             os.system("/mmt/scripts/cell_send_forces %s" % filename)
 
-        return t
+        return t, m1focus
 
     def clear_forces(self):
         """
