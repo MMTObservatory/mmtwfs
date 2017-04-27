@@ -95,18 +95,6 @@ class Secondary(object):
         cmd = self.inc_offset("m1spherical", "z", foc_um)
         return cmd
 
-    def clear_m1spherical(self):
-        """
-        When clearing forces from the primary mirror, also need to clear any focus offsets applied to secondary to help
-        correct spherical aberration.
-        """
-        print("Resetting hexapod's spherical aberration offset to 0...")
-        cmd = "offset m1spherical z 0.0"
-        if self.connected:
-            self.sock.sendall(cmd)
-            self.sock.sendall("apply_offsets")
-        return cmd
-
     def cc(self, axis, tilt):
         """
         Move hexapod by 'tilt' arcsec about its center of curvature along 'axis'.
@@ -151,6 +139,32 @@ class Secondary(object):
             self.sock.sendall("apply_offsets")
         return cmd
 
+    def clear_m1spherical(self):
+        """
+        When clearing forces from the primary mirror, also need to clear any focus offsets applied to secondary to help
+        correct spherical aberration.
+        """
+        print("Resetting hexapod's spherical aberration offset to 0...")
+        cmd = "offset m1spherical z 0.0"
+        if self.connected:
+            self.sock.sendall(cmd)
+            self.sock.sendall("apply_offsets")
+        return cmd
+
+    def clear_wfs(self):
+        """
+        Clear the 'wfs' offsets that get populated by WFS corrections.
+        """
+        print("Resetting hexapod's WFS offsets to 0...")
+        axes = ['tx', 'ty', 'x', 'y', 'z']
+        cmds = []
+        if self.connected:
+            for ax in axes:
+                cmd = "offset wfs %s 0.0" % ax
+                cmds.append(cmd)
+                self.sock.sendall(cmd)
+            self.sock.sendall("apply_offsets")
+        return cmds
 
 class F5(Secondary):
     """
