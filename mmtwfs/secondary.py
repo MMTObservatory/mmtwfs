@@ -80,8 +80,9 @@ class Secondary(object):
         """
         Move hexapod by 'foc' microns in Z to correct focus
         """
-        print("Moving %s hexapod %.3f microns in Z..." % (self.__class__.__name__.lower(), foc))
-        cmd = self.inc_offset("wfs", "z", foc)
+        foc_um = u.Quantity(foc, u.um).value  # focus command must be in microsn
+        print("Moving %s hexapod %s in Z..." % (self.__class__.__name__.lower(), foc))
+        cmd = self.inc_offset("wfs", "z", foc_um)
         return cmd
 
     def m1spherical(self, foc):
@@ -89,8 +90,9 @@ class Secondary(object):
         Move hexapod by 'foc' microns in Z to correct focus. This is a special case to differentiate focus
         commands that help correct spherical aberration from normal focus commands.
         """
-        print("Moving %s hexapod %.3f microns in Z to correct spherical aberration..." % (self.__class__.__name__.lower(), foc))
-        cmd = self.inc_offset("m1spherical", "z", foc)
+        foc_um = u.Quantity(foc, u.um).value  # focus command must be in microsn
+        print("Moving %s hexapod %s in Z to correct spherical aberration..." % (self.__class__.__name__.lower(), foc))
+        cmd = self.inc_offset("m1spherical", "z", foc_um)
         return cmd
 
     def clear_m1spherical(self):
@@ -98,7 +100,7 @@ class Secondary(object):
         When clearing forces from the primary mirror, also need to clear any focus offsets applied to secondary to help
         correct spherical aberration.
         """
-        print("Moving %s hexapod %.3f microns in Z to correct spherical aberration..." % (self.__class__.__name__.lower(), foc))
+        print("Resetting hexapod's spherical aberration offset to 0...")
         cmd = "offset m1spherical z 0.0"
         if self.connected:
             self.sock.sendall(cmd)
@@ -110,12 +112,13 @@ class Secondary(object):
         Move hexapod by 'tilt' arcsec about its center of curvature along 'axis'.
         This corrects coma with no image movement.
         """
-        tilt = tilt.lower()
-        if tilt not in ['x', 'y']:
+        tilt = u.Quantity(tilt, u.arcsec).value
+        axis = axis.lower()
+        if axis not in ['x', 'y']:
             msg = "Invalid axis %s send to hexapod. Only 'x' and 'y' are valid for center-of-curvature offsets." % axis
             raise WFSCommandException(value=msg)
 
-        print("Moving %s hexapod %.3f arcsec about the center of curvature along the %s..." % (
+        print("Moving %s hexapod %.3f arcsec about the center of curvature along the %s axis..." % (
             self.__class__.__name__.lower(),
             tilt,
             axis)
@@ -131,12 +134,13 @@ class Secondary(object):
         Move hexapod by 'tilt' arcsec about its center of curvature along axis.
         This corrects coma with no image movement.
         """
-        tilt = tilt.lower()
-        if tilt not in ['x', 'y']:
+        tilt = u.Quantity(tilt, u.arcsec).value
+        axis = axis.lower()
+        if axis not in ['x', 'y']:
             msg = "Invalid axis %s send to hexapod. Only 'x' and 'y' are valid for zero-coma offsets." % axis
             raise WFSCommandException(value=msg)
 
-        print("Moving %s hexapod %.3f arcsec about the zero-coma point along the %s..." % (
+        print("Moving %s hexapod %.3f arcsec about the zero-coma point along the %s axis..." % (
             self.__class__.__name__.lower(),
             tilt,
             axis)
