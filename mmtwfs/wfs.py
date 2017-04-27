@@ -718,12 +718,11 @@ class WFS(object):
         except Exception as e:
             raise WFSAnalysisFailed(value=str(e))
 
-        # use the average width of the spots to estimate the seeing
+        # use the average width of the spots to estimate the seeing and use the airmass to extrapolate to zenith seeing
         if 'AIRMASS' in hdr:
             airmass = hdr['AIRMASS']
         else:
             airmass = None
-
         seeing, raw_seeing = self.seeing(mode=mode, sigma=sigma, airmass=airmass)
 
         if plot:
@@ -816,15 +815,19 @@ class WFS(object):
         Apply force corrections to primary mirror. Use 'mask' to determine which terms in 'zv' to use in the force
         calculations.
         """
-        t = self.telescope.correct_primary(zv=zv, mask=mask, filename=forcefile, gain=self.m1_gain)
+        z_denorm = zv.copy()
+        z_denorm.denormalize()  # need to assure we're using fringe coeffs
+        t = self.telescope.correct_primary(zv=z_denorm, mask=mask, filename=forcefile, gain=self.m1_gain)
         return t
 
     def correct_focus(self, zv):
         """
         Convert Zernike defocus to um of secondary offset and apply offsets if connected.
         """
-        foc_corr = -self.m2_gain * zv['Z04'] / self.secondary.focus_trans
-        print("Correcting focus by moving secondary %s..." % foc_corr)
+        z_denorm = zv.copy()
+        z_denorm.denormalize()  # need to assure we're using fringe coeffs
+        foc_corr = -self.m2_gain * z_denorm['Z04'] / self.secondary.focus_trans
+        print("Correcting focus by moving secondary {0:0.03f}...".format(foc_corr))
         if self.connected:
             self.secondary.focus(foc_corr)
         return foc_corr
@@ -833,17 +836,21 @@ class WFS(object):
         """
         Convert Zernike coma (Z07 and Z08) into arcsec of secondary center-of-curvature tilts.
         """
-        # Y coma is causes by a rotation around the X axis and X coma by a rotation around the Y axis.
+        z_denorm = zv.copy()
+        z_denorm.denormalize()  # need to assure we're using fringe coeffs
+
+        #
+        # Y coma is caused by a rotation around the X axis and X coma by a rotation around the Y axis.
         #
         # the zernike convention has Y coma as a positive tilt towards the +Y direction. however,
         # the hexapod control obeys the right-hand rule so a positive tilt around the X axis tilts
         # the wavefront towards -Y. X coma moves in the same sense as Y tilts, though. hence the difference
         # in signs here.
-        cc_x_corr = self.m2_gain * zv['Z07'] / self.secondary.theta_cc
-        cc_y_corr = -self.m2_gain * zv['Z08'] / self.secondary.theta_cc
+        cc_x_corr = self.m2_gain * z_denorm['Z07'] / self.secondary.theta_cc
+        cc_y_corr = -self.m2_gain * z_denorm['Z08'] / self.secondary.theta_cc
 
-        print("Correcting %s Y coma with %s of CC tilt in X..." % (zv['07'], cc_x_corr))
-        print("Correcting %s X coma with %s of CC tilt in Y..." % (zv['08'], cc_y_corr))
+        print("Correcting {0:0.03f} Y coma with {1:0.03f} of CC tilt in X...".format(zv['Z07'], cc_x_corr))
+        print("Correcting {0:0.03f} X coma with {1:0.03f} of CC tilt in Y...".format(zv['Z08'], cc_y_corr))
         if self.connected:
             self.secondary.cc('x', cc_x_corr)
             self.secondary.cc('y', cc_y_corr)
@@ -861,7 +868,7 @@ class WFS(object):
         dx = xc - xref
         dy = yc - yref
 
-        total_rotation = u.Quantity(slope_results['rotator'] + self.rotation, u.rad).value
+        total_rotation = u.Quantity(fit_results['rotator'] + self.rotation, u.rad).value
 
         dr, phi = cart2pol([dx, dy])
 
@@ -872,13 +879,22 @@ class WFS(object):
         az *= self.pix_size
         el *= self.pix_size
 
-        print("Offsetting hexapod %s in AZ and %s in EL..." % (az, el))
+        print("Offsetting hexapod {0:0.03f} in AZ and {1:0.03f} in EL...".format(az, el))
 
         if self.connected:
             self.secondary.zc('x', el)
             self.secondary.zc('y', az)
 
         return az, el
+
+    def clear_corrections(self):
+        """
+        Clear all applied WFS corrections
+        """
+        print("Clearing WFS corrections from primary and secondary...")
+        null_forces = self.telescope.clear_forces()
+        cmds = self.secondary.clear_wfs()
+        return null_forces
 
 
 class F9(WFS):
