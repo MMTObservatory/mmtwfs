@@ -825,7 +825,12 @@ class WFS(object):
         """
         Convert Zernike coma (Z07 and Z08) into arcsec of secondary center-of-curvature tilts.
         """
-        # Y coma is causes by a rotation around the X axis and X coma by a rotation around the Y axis...
+        # Y coma is causes by a rotation around the X axis and X coma by a rotation around the Y axis.
+        #
+        # the zernike convention has Y coma as a positive tilt towards the +Y direction. however,
+        # the hexapod control obeys the right-hand rule so a positive tilt around the X axis tilts
+        # the wavefront towards -Y. X coma moves in the same sense as Y tilts, though. hence the difference
+        # in signs here.
         cc_x_corr = self.m2_gain * zv['Z07'] / self.secondary.theta_cc
         cc_y_corr = -self.m2_gain * zv['Z08'] / self.secondary.theta_cc
 
