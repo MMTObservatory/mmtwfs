@@ -166,23 +166,45 @@ class MMT(object):
         """
         t.write(filename, format="ascii.no_header", delimiter="\t", formats={'force': ".1f"})
 
-    def correct_primary(self, zv, mask=[], filename="zfile", gain=0.5, send=False):
+    def correct_primary(self, zv, mask=[], filename="zfile", gain=0.5):
         """
-        Take ZernikeVector as input, determine corrections to apply to primary, and apply them.
+        Take ZernikeVector as input, determine corrections to apply to primary/secondary, and apply them.
         """
-        # leave out tilts and focus from force calcs to start with
-        def_mask = ['Z02', 'Z03', 'Z04']
+        # leave out tilts, focus, and coma from force calcs to start with
+        def_mask = ['Z02', 'Z03', 'Z04', 'Z07', 'Z08']
         def_mask.extend(mask)
         mask = list(set(def_mask))
-        zv_masked = zv.copy()
+        zv_masked = gain * zv.copy()
         for k in mask:
-            zv.masked.ignore(k)
+            zv_masked.ignore(k)
+
+        # to reduce the amount of force required to remove spherical aberration, we offset the r**2 part of that term by
+        # bending focus into the primary and then offsetting that by adjusting the secondary.  this has the effect of
+        # reducing by ~1/3 the total force required to correct a given amount of spherical aberration.
+        zv_masked['Z04'] = -6.0 * zv_masked['Z11']
+        m1focus = zv_masked['Z04'] / self.secondary.focus_trans
 
         t = self.bending_forces(zv=zv_masked, gain=gain)
 
-        if self.connected and send:
+        if self.connected:
+            self.secondary.m1spherical(m1focus)
             self.to_rcell(t, filename=filename)
             os.system("/mmt/scripts/cell_send_forces %s" % filename)
+
+        return t
+
+    def clear_forces(self):
+        """
+        Clear applied forces from primary mirror and clear any m1spherical offsets from secondary hexapod
+        """
+        print("Clearing forces and spherical aberration focus offsets...")
+        # create a table of null forces to return
+        znull = ZernikeVector()
+        t = self.bending_forces(zv=znull)
+
+        if self.connected:
+            self.secondary.clear_m1spherical()
+            os.system("/mmt/scripts/cell_clear_forces")
 
         return t
 
