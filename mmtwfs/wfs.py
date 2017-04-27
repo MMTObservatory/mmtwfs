@@ -811,6 +811,14 @@ class WFS(object):
 
         return results
 
+    def correct_primary(self, zv, forcefile="zfile.txt", mask=[]):
+        """
+        Apply force corrections to primary mirror. Use 'mask' to determine which terms in 'zv' to use in the force
+        calculations.
+        """
+        t = self.telescope.correct_primary(zv=zv, mask=mask, filename=forcefile, gain=self.m1_gain)
+        return t
+
     def correct_focus(self, zv):
         """
         Convert Zernike defocus to um of secondary offset and apply offsets if connected.
