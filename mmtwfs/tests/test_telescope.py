@@ -5,6 +5,7 @@ import os
 import pkg_resources
 import filecmp
 
+import numpy as np
 import astropy.units as u
 
 from ..config import mmt_config
@@ -15,6 +16,10 @@ from ..custom_exceptions import WFSConfigException
 def test_telescope():
     for s in mmt_config['secondary']:
         t = MMT(secondary=s)
+        t.connect()
+        assert(t.connected)
+        t.disconnect()
+        assert(not t.connected)
         assert(t.secondary.diameter == mmt_config['secondary'][s]['diameter'])
 
 def test_pupil_mask():
@@ -54,3 +59,15 @@ def test_force_file():
     t.to_rcell(f_table, filename="forcefile")
     test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "AST45_p1000.frc"))
     assert(filecmp.cmp("forcefile", test_file))
+
+def test_correct_primary():
+    t = MMT()
+    zv = ZernikeVector(Z05=1000, Z11=250)
+    force, focus = t.correct_primary(zv)
+    assert(np.abs(focus) > 0.0)
+    uforce, ufocus = t.undo_last()
+    assert(ufocus == -1 * focus)
+    assert(np.allclose(uforce['force'], -force['force']))
+    nullforce, nullfocus = t.clear_forces()
+    assert(nullfocus == 0.0)
+    assert(np.allclose(nullforce['force'].data, 0.0))

@@ -232,3 +232,16 @@ def test_rotate():
     zv.rotate(angle=90*u.deg)
     c = zv['Z05'].value
     assert(a == -c)
+
+def test_loadsave():
+    zv = ZernikeVector(Z04=100, Z05=200, Z06=-500)
+    zv.save(filename="test.json")
+    zv2 = ZernikeVector(coeffs="test.json")
+    for c in zv2:
+        assert(zv2[c] == zv[c])
+
+def test_labels():
+    zv = ZernikeVector(Z04=100, Z05=200, Z06=-500)
+    l = zv.label('Z04')
+    ls = zv.shortlabel('Z04')
+    assert(len(l) > len(ls))
