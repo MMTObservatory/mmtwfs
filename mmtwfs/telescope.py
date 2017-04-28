@@ -61,8 +61,8 @@ class MMT(object):
         # table with all forces set to 0.
         self.last_forces = self.bending_forces(zv=ZernikeVector())
         self.total_forces = self.bending_forces(zv=ZernikeVector())
-        self.last_m1focus = 0.0
-        self.total_m1focus = 0.0
+        self.last_m1focus = 0.0 * u.um
+        self.total_m1focus = 0.0 * u.um
 
     def _pupil_model(self):
         """
@@ -212,7 +212,7 @@ class MMT(object):
         self.last_m1focus = m1focus_corr
         self.total_forces['force'] += t['force']
         self.total_m1focus += m1focus_corr
-        return self.last_forces, self.last_m1focus
+        return self.last_forces.copy(), self.last_m1focus.copy()
 
     def undo_last(self, zfilename="zfile_undo"):
         """
@@ -226,9 +226,9 @@ class MMT(object):
             self.to_rcell(self.last_forces, filename=zfilename)
             os.system("/mmt/scripts/cell_send_forces %s" % zfilename)
 
-        self.total_m1focus += m1focus_undo
-        self.total_forces['force'] += t_undo['force']
-        return self.last_forces, self.last_m1focus
+        self.total_m1focus += self.last_m1focus
+        self.total_forces['force'] += self.last_forces['force']
+        return self.last_forces.copy(), self.last_m1focus.copy()
 
     def clear_forces(self):
         """
@@ -242,11 +242,11 @@ class MMT(object):
         # the 'last' corrections are negations of the current total. reset the totals to 0.
         self.last_forces = self.total_forces.copy(copy_data=True)
         self.last_forces['force'] *= -1
-        self.last_m1focus = -self.last_m1focus
+        self.last_m1focus = -self.total_m1focus
         self.total_forces = self.bending_forces(zv=ZernikeVector())
         self.total_m1focus = 0.0
 
-        return self.last_forces, self.last_m1focus
+        return self.last_forces.copy(), self.last_m1focus.copy()
 
     def load_influence_matrix(self):
         """
