@@ -57,6 +57,13 @@ class MMT(object):
         # use this boolean to determine if corrections are actually to be sent
         self.connected = False
 
+        # keep track of last and total forces. a blank ZernikeVector will generate the appropriate format
+        # table with all forces set to 0.
+        self.last_forces = self.bending_forces(zv=ZernikeVector())
+        self.total_forces = self.bending_forces(zv=ZernikeVector())
+        self.last_m1focus = 0.0
+        self.total_m1focus = 0.0
+
     def _pupil_model(self):
         """
         Use poppy to create a model of the pupil given the configured primary and secondary mirrors.
@@ -182,7 +189,7 @@ class MMT(object):
         # bending focus into the primary and then offsetting that by adjusting the secondary.  this has the effect of
         # reducing by ~1/4 to 1/3 the total force required to correct a given amount of spherical aberration.
         #
-        # this same scheme can be extended to the higher order spherical terms as well, Z22 and Z37.
+        # this same scheme can also be extended to the higher order spherical terms as well, Z22 and Z37.
         #
         # for reference:
         #   Z04 ~ 2r**2 - 1
@@ -201,22 +208,45 @@ class MMT(object):
             self.to_rcell(t, filename=filename)
             os.system("/mmt/scripts/cell_send_forces %s" % filename)
 
-        return t, m1focus
+        self.last_forces = t.copy(copy_data=True)
+        self.last_m1focus = m1focus_corr
+        self.total_forces['force'] += t['force']
+        self.total_m1focus += m1focus_corr
+        return self.last_forces, self.last_m1focus
+
+    def undo_last(self, zfilename="zfile_undo"):
+        """
+        Undo the last set of corrections.
+        """
+        print("Undoing last set of primary mirror corrections...")
+        self.last_forces['force'] *= -1
+        self.last_m1focus *= -1
+        if self.connected:
+            self.secondary.m1spherical(self.last_m1focus)
+            self.to_rcell(self.last_forces, filename=zfilename)
+            os.system("/mmt/scripts/cell_send_forces %s" % zfilename)
+
+        self.total_m1focus += m1focus_undo
+        self.total_forces['force'] += t_undo['force']
+        return self.last_forces, self.last_m1focus
 
     def clear_forces(self):
         """
         Clear applied forces from primary mirror and clear any m1spherical offsets from secondary hexapod
         """
         print("Clearing forces and spherical aberration focus offsets...")
-        # create a table of null forces to return
-        znull = ZernikeVector()
-        t = self.bending_forces(zv=znull)
-
         if self.connected:
             self.secondary.clear_m1spherical()
             os.system("/mmt/scripts/cell_clear_forces")
 
-        return t
+        # the 'last' corrections are negations of the current total. reset the totals to 0.
+        self.last_forces = self.total_forces.copy(copy_data=True)
+        self.last_forces['force'] *= -1
+        self.last_m1focus = -self.last_m1focus
+        self.total_forces = self.bending_forces(zv=ZernikeVector())
+        self.total_m1focus = 0.0
+
+        return self.last_forces, self.last_m1focus
 
     def load_influence_matrix(self):
         """
