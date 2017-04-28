@@ -817,8 +817,8 @@ class WFS(object):
         """
         z_denorm = zv.copy()
         z_denorm.denormalize()  # need to assure we're using fringe coeffs
-        t = self.telescope.correct_primary(zv=z_denorm, mask=mask, filename=forcefile, gain=self.m1_gain)
-        return t
+        forces, m1focus = self.telescope.correct_primary(zv=z_denorm, mask=mask, filename=forcefile, gain=self.m1_gain)
+        return forces, m1focus
 
     def correct_focus(self, zv):
         """
@@ -892,9 +892,9 @@ class WFS(object):
         Clear all applied WFS corrections
         """
         print("Clearing WFS corrections from primary and secondary...")
-        null_forces = self.telescope.clear_forces()
+        clear_forces, clear_m1focus = self.telescope.clear_forces()
         cmds = self.secondary.clear_wfs()
-        return null_forces
+        return clear_forces, clear_m1focus
 
 
 class F9(WFS):
