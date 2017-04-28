@@ -7,6 +7,8 @@ Classes and utilities for optical modeling and controlling the position of the s
 import socket
 import sys
 
+import astropy.units as u
+
 from .config import recursive_subclasses, merge_config, mmt_config
 from .custom_exceptions import WFSConfigException, WFSCommandException
 
