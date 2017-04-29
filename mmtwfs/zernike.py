@@ -479,17 +479,57 @@ class ZernikeVector(MutableMapping):
         "Z24": "Tertiary Astigmatism at 0˚ (6, 2)",
         "Z25": "Secondary X Trefoil (6, -4)",
         "Z26": "Secondary Y Trefoil (6, 4)",
-        "Z27": "Hexafoil Y (6, -6)",
-        "Z28": "Hexafoil X (6, 6)",
+        "Z27": "Y Hexafoil (6, -6)",
+        "Z28": "X Hexafoil (6, 6)",
         "Z29": "Tertiary Y Coma (7, -1)",
         "Z30": "Tertiary X Coma (7, 1)",
         "Z31": "Tertiary Y Trefoil (7, -3)",
         "Z32": "Tertiary X Trefoil (7, 3)",
-        "Z33": "Secondary Pentafoil Y (7, -5)",
-        "Z34": "Secondary Pentafoil X (7, 5)",
-        "Z35": "Heptafoil Y (7, -7)",
-        "Z36": "Heptafoil X (7, 7)",
+        "Z33": "Secondary Y Pentafoil (7, -5)",
+        "Z34": "Secondary X Pentafoil (7, 5)",
+        "Z35": "Y Heptafoil (7, -7)",
+        "Z36": "X Heptafoil (7, 7)",
         "Z37": "Tertiary Spherical (8, 0)"
+    }
+
+    __shortlabels = {
+        "Z01": "Piston",
+        "Z02": "X Tilt",
+        "Z03": "Y Tilt",
+        "Z04": "Defocus",
+        "Z05": "Astig 45˚",
+        "Z06": "Astig 0˚ ",
+        "Z07": "Y Coma",
+        "Z08": "X Coma",
+        "Z09": "Y Tref",
+        "Z10": "X Tref",
+        "Z11": "Spher",
+        "Z12": "Astig2 0˚",
+        "Z13": "Astig2 45˚",
+        "Z14": "X Tetra",
+        "Z15": "Y Tetra",
+        "Z16": "X Coma2",
+        "Z17": "Y Coma2",
+        "Z18": "X Tref2",
+        "Z19": "Y Tref2",
+        "Z20": "X Penta",
+        "Z21": "Y Penta",
+        "Z22": "Spher2",
+        "Z23": "Astig3 45˚",
+        "Z24": "Astig3 0˚",
+        "Z25": "X Tref2",
+        "Z26": "Y Tref2",
+        "Z27": "Y Hexa",
+        "Z28": "X Hexa",
+        "Z29": "Y Coma3",
+        "Z30": "X Coma3",
+        "Z31": "Y Tref3",
+        "Z32": "X Tref3",
+        "Z33": "Y Penta2",
+        "Z34": "X Penta2",
+        "Z35": "Y Hept",
+        "Z36": "X Hept",
+        "Z37": "Spher3"
     }
 
     def __init__(self, coeffs=[], modestart=2, normalized=False, zmap=None, units=u.nm, **kwargs):
@@ -843,8 +883,21 @@ class ZernikeVector(MutableMapping):
         """
         Return the RMS phase displacement of the Zernike set.
         """
-        x, y, r, p, ph = self.phase_map()
-        return u.Quantity(np.sqrt(np.mean(np.square(ph))), self.units)
+        # ignore piston and tilts when calculating wavefront RMSW
+        orig_modestart = self.modestart
+        self.modestart = 4
+        norm_coeffs = self.norm_array
+        # once coeffs are normalized, the RMS is simply the sqrt of the sum of the squares of the coefficients
+        rms = np.sqrt(np.sum(norm_coeffs**2))
+        self.modestart = orig_modestart
+        return rms
+
+    def copy(self):
+        """
+        Make a new ZernikeVector with the same configuration and coefficients
+        """
+        new = ZernikeVector(modestart=self.modestart, normalized=self.normalized, units=self.units, **self.coeffs)
+        return new
 
     def save(self, filename="zernike.json"):
         """
@@ -884,6 +937,24 @@ class ZernikeVector(MutableMapping):
         if 'coeffs' in json_data:
             for k, v in json_data['coeffs'].items():
                 self.__setitem__(k, v)
+
+    def label(self, key):
+        """
+        If defined, return the descriptive label for mode, 'key'
+        """
+        if key in self.__zernikelabels:
+            return self.__zernikelabels[key]
+        else:
+            return key
+
+    def shortlabel(self, key):
+        """
+        If defined, return the short label for mode, 'key'
+        """
+        if key in self.__shortlabels:
+            return self.__shortlabels[key]
+        else:
+            return key
 
     def from_array(self, coeffs, zmap=None, modestart=None):
         """

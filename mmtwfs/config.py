@@ -114,13 +114,17 @@ mmt_config = {
     },
     "secondary": {
         "f5": {
+            "host": "hexapod",
+            "port": 5341,
             "diameter": 1688.0 * u.mm,  # clear aperture of secondary
             "theta_cc": 79.0 * u.nm / u.arcsec,  # nm of coma per arcsec of center-of-curvature tilt.
-            "cc_trans": 25.0 * u.um / u.arcsec,  # um of hexapod translation per arcsec of center-of-curvature tilt.
-            "zc_trans": 9.45 * u.um / u.arcsec,  # um of hexapod translation per arcsec of zero-coma tilt.
+            "cc_trans": 24.97 * u.um / u.arcsec,  # um of hexapod translation per arcsec of center-of-curvature tilt.
+            "zc_trans": 9.453 * u.um / u.arcsec,  # um of hexapod translation per arcsec of zero-coma tilt.
             "focus_trans": 40.8 * u.nm / u.um  # nm of defocus per um of hexapod Z (focus) translation.
         },
         "f9": {
+            "host": "hexapod",
+            "port": 5341,
             "diameter": 1006.7 * u.mm,
             "theta_cc": 44.4 * u.nm / u.arcsec,
             "cc_trans": 13.6 * u.um / u.arcsec,
@@ -132,6 +136,7 @@ mmt_config = {
         "f5": {
             "secondary": "f5",  # secondary used with WFS system
             "default_mode": "hecto",
+            "cor_coords": [255.0, 255.0],  # image coordinates of the center of rotation
             "rotation": 234.0 * u.deg,  # rotation of aperture locations w.r.t. the primary mirror
             "pix_size": 0.135 * u.arcsec,  # arcsec per WFS detector pixel
             "pup_size": 460,  # pixels
@@ -172,6 +177,7 @@ mmt_config = {
         "f9": {
             "secondary": "f9",
             "default_mode": "blue",
+            "cor_coords": [255.0, 255.0],
             "rotation": -225. * u.deg,
             "pix_size": 0.119 * u.arcsec,  # old KX260e detector with 20 um pixels
             "pup_size": 440,  # pupil outer diameter in pixels
@@ -202,6 +208,7 @@ mmt_config = {
         "mmirs": {
             "secondary": "f5",
             "default_mode": None,
+            "cor_coords": [255.0, 255.0],
             "rotation": 180. * u.deg,  # this is referenced to camera2. camera1 is camera2+180, but is flipped by image acq
             "pix_size": 0.156 * u.arcsec,
             "pup_size": 335,  # pixels
