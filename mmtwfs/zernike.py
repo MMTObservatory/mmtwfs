@@ -15,6 +15,8 @@ import json
 
 import matplotlib
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+import matplotlib.colors as col
 from mpl_toolkits.mplot3d import Axes3D
 
 import numpy as np
@@ -852,7 +854,10 @@ class ZernikeVector(MutableMapping):
         arr = u.Quantity(np.zeros(last - self.modestart + 1), self.units)
         for k in keys:
             i = self._key_to_l(k) - self.modestart
-            arr[i] = u.Quantity(self.coeffs[k], self.units)
+            if i >= 0:
+                arr[i] = u.Quantity(self.coeffs[k], self.units)
+            else:
+                arr[0] = 0.0 * self.units
         return arr
 
     @property
@@ -883,9 +888,10 @@ class ZernikeVector(MutableMapping):
         """
         Return the RMS phase displacement of the Zernike set.
         """
-        # ignore piston and tilts when calculating wavefront RMSW
+        # ignore piston and tilts when calculating wavefront RMS
         orig_modestart = self.modestart
-        self.modestart = 4
+        if self.modestart < 4:
+            self.modestart = 4
         norm_coeffs = self.norm_array
         # once coeffs are normalized, the RMS is simply the sqrt of the sum of the squares of the coefficients
         rms = np.sqrt(np.sum(norm_coeffs**2))
@@ -1073,6 +1079,47 @@ class ZernikeVector(MutableMapping):
         ph = self.total_phase(r, p)
         return x, y, r, p, ph
 
+    def bar_chart(self, residual=None, max_c=250*u.nm):
+        """
+        Plot a bar chart of the coefficients and, optionally, a residual amount not included in the coefficients.
+        """
+        # we want to plot bars for each of the modes we usually use and thus label.
+        label_keys = sorted(self.__zernikelabels.keys())
+        last_label = self._key_to_l(label_keys[-1])
+        last_coeff = self._key_to_l(sorted(self.coeffs.keys())[-1])
+        modes = label_keys[3:]  # ignore piston and tilts in bar plot
+        labels = [self.shortlabel(m) for m in modes]
+        if self.normalized:
+            coeffs = [np.abs(self.__getitem__(m).value) for m in modes]
+        else:
+            coeffs = [np.abs(self.__getitem__(m).value) / noll_coefficient(self._key_to_l(m)) for m in modes]
+
+        # lump higher order terms into one RMS bin.
+        if last_coeff > last_label:
+            hi_orders = ZernikeVector(modestart=last_label+1, normalized=self.normalized, units=self.units, **self.coeffs)
+            labels.append("High Orders")
+            coeffs.append(hi_orders.rms.value)
+
+        # add residual RMS
+        if residual is not None:
+            resid = u.Quantity(residual, self.units).value
+            labels.append("Residual")
+            coeffs.append(resid)
+
+        max_c = u.Quantity(max_c, self.units).value
+        cmap = cm.ScalarMappable(col.Normalize(0, max_c), cm.plasma_r)
+        ind = np.arange(len(labels))
+        fig, ax = plt.subplots(figsize=(10, 6))
+        rects = ax.bar(ind, coeffs, color=cmap.to_rgba(coeffs))
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.yaxis.grid(color='gray', linestyle='dotted')
+        ax.set_axisbelow(True)
+        ax.set_xticks(ind)
+        ax.set_xticklabels(labels, rotation=45, ha='right', size='x-small')
+        ax.set_ylabel("RMS-normalized Amplitude (%s)" % self.units)
+        return fig
+
     def plot_map(self):
         """
         Plot 2D map of total phase displacement.
@@ -1083,6 +1130,7 @@ class ZernikeVector(MutableMapping):
         fig.axes.set_aspect(1.0)
         cbar = plt.colorbar()
         cbar.set_label(self.units.name, rotation=0)
+        return fig
 
     def plot_surface(self):
         """
@@ -1099,3 +1147,4 @@ class ZernikeVector(MutableMapping):
         ax.yaxis.set_ticks([-1, 0, 1])
         cbar = fig.colorbar(cset, shrink=1, aspect=30)
         cbar.set_label(self.units.name, rotation=0)
+        return fig
