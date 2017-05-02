@@ -143,7 +143,9 @@ class MMT(object):
             im = psf[0].data
             psf_fig, ax = plt.subplots()
             norm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.SqrtStretch())
-            ims = ax.imshow(psf[0].data, extent=[-0.5, 0.5, -0.5, 0.5], cmap=cm.magma, norm=norm)
+            ims = ax.imshow(psf[0].data, extent=[-fov/2, fov/2, -fov/2, fov/2], cmap=cm.magma, norm=norm)
+            ax.set_xlabel("arcsec")
+            ax.set_ylabel("arcsec")
             cb = psf_fig.colorbar(ims)
         return psf, psf_fig
 
