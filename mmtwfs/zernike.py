@@ -1120,7 +1120,7 @@ class ZernikeVector(MutableMapping):
         ax.set_xticklabels(labels, rotation=45, ha='right', size='x-small')
         ax.set_ylabel("RMS-normalized Amplitude (%s)" % self.units)
         cb = fig.colorbar(cmap)
-        cb.set_label(self.units)
+        cb.set_label("%s RMS" % self.units)
         return fig
 
     def plot_map(self):
