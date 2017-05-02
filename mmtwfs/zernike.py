@@ -459,15 +459,15 @@ class ZernikeVector(MutableMapping):
         "Z02": "X Tilt (1, 1)",
         "Z03": "Y Tilt (1, -1)",
         "Z04": "Defocus (2, 0)",
-        "Z05": "Primary Astig at 45˚ (2, -2)",
-        "Z06": "Primary Astig at 0˚ (2, 2)",
+        "Z05": "Primary Astig at 45\xb0 (2, -2)",
+        "Z06": "Primary Astig at 0\xb0 (2, 2)",
         "Z07": "Primary Y Coma (3, -1)",
         "Z08": "Primary X Coma (3, 1)",
         "Z09": "Y Trefoil (3, -3)",
         "Z10": "X Trefoil (3, 3)",
         "Z11": "Primary Spherical (4, 0)",
-        "Z12": "Secondary Astigmatism at 0˚ (4, 2)",
-        "Z13": "Secondary Astigmatism at 45˚ (4, -2)",
+        "Z12": "Secondary Astigmatism at 0\xb0 (4, 2)",
+        "Z13": "Secondary Astigmatism at 45\xb0 (4, -2)",
         "Z14": "X Tetrafoil (4, 4)",
         "Z15": "Y Tetrafoil (4, -4)",
         "Z16": "Secondary X Coma (5, 1)",
@@ -477,8 +477,8 @@ class ZernikeVector(MutableMapping):
         "Z20": "X Pentafoil (5, 5)",
         "Z21": "Y Pentafoil (5, -5)",
         "Z22": "Secondary Spherical (6, 0)",
-        "Z23": "Tertiary Astigmatism at 45˚ (6, -2)",
-        "Z24": "Tertiary Astigmatism at 0˚ (6, 2)",
+        "Z23": "Tertiary Astigmatism at 45\xb0 (6, -2)",
+        "Z24": "Tertiary Astigmatism at 0\xb0 (6, 2)",
         "Z25": "Secondary X Trefoil (6, -4)",
         "Z26": "Secondary Y Trefoil (6, 4)",
         "Z27": "Y Hexafoil (6, -6)",
@@ -499,15 +499,15 @@ class ZernikeVector(MutableMapping):
         "Z02": "X Tilt",
         "Z03": "Y Tilt",
         "Z04": "Defocus",
-        "Z05": "Astig 45˚",
-        "Z06": "Astig 0˚ ",
+        "Z05": "Astig 45\xb0",
+        "Z06": "Astig 0\xb0 ",
         "Z07": "Y Coma",
         "Z08": "X Coma",
         "Z09": "Y Tref",
         "Z10": "X Tref",
         "Z11": "Spher",
-        "Z12": "Astig2 0˚",
-        "Z13": "Astig2 45˚",
+        "Z12": "Astig2 0\xb0",
+        "Z13": "Astig2 45\xb0",
         "Z14": "X Tetra",
         "Z15": "Y Tetra",
         "Z16": "X Coma2",
@@ -517,8 +517,8 @@ class ZernikeVector(MutableMapping):
         "Z20": "X Penta",
         "Z21": "Y Penta",
         "Z22": "Spher2",
-        "Z23": "Astig3 45˚",
-        "Z24": "Astig3 0˚",
+        "Z23": "Astig3 45\xb0",
+        "Z24": "Astig3 0\xb0",
         "Z25": "X Tref2",
         "Z26": "Y Tref2",
         "Z27": "Y Hexa",
@@ -949,7 +949,7 @@ class ZernikeVector(MutableMapping):
         If defined, return the descriptive label for mode, 'key'
         """
         if key in self.__zernikelabels:
-            return self.__zernikelabels[key].encode('utf8')
+            return self.__zernikelabels[key]
         else:
             return key
 
@@ -958,7 +958,7 @@ class ZernikeVector(MutableMapping):
         If defined, return the short label for mode, 'key'
         """
         if key in self.__shortlabels:
-            return self.__shortlabels[key].encode('utf8')
+            return self.__shortlabels[key]
         else:
             return key
 
