@@ -1107,7 +1107,7 @@ class ZernikeVector(MutableMapping):
             coeffs.append(resid)
 
         max_c = u.Quantity(max_c, self.units).value
-        cmap = cm.ScalarMappable(col.Normalize(0, max_c), cm.plasma_r)
+        cmap = cm.ScalarMappable(col.Normalize(0, max_c), cm.magma_r)
         cmap._A = []  # stupid matplotlib
         ind = np.arange(len(labels))
         fig, ax = plt.subplots(figsize=(10, 6))
@@ -1128,10 +1128,13 @@ class ZernikeVector(MutableMapping):
         Plot 2D map of total phase displacement.
         """
         x, y, r, p, ph = self.phase_map(n=400)
-        fig = plt.pcolormesh(x, y, ph)
-        fig.axes.set_axis_off()
-        fig.axes.set_aspect(1.0)
-        cbar = plt.colorbar()
+        fig, ax = plt.subplots()
+        vmin = u.Quantity(-1000, u.nm).to(self.units).value
+        vmax = -vmin
+        pmesh = ax.pcolormesh(x, y, ph, vmin=vmin, vmax=vmax, cmap=cm.RdBu)
+        pmesh.axes.set_axis_off()
+        pmesh.axes.set_aspect(1.0)
+        cbar = fig.colorbar(pmesh)
         cbar.set_label(self.units.name, rotation=0)
         return fig
 
