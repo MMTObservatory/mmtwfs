@@ -949,7 +949,7 @@ class ZernikeVector(MutableMapping):
         If defined, return the descriptive label for mode, 'key'
         """
         if key in self.__zernikelabels:
-            return self.__zernikelabels[key]
+            return self.__zernikelabels[key].encode('utf8')
         else:
             return key
 
@@ -958,7 +958,7 @@ class ZernikeVector(MutableMapping):
         If defined, return the short label for mode, 'key'
         """
         if key in self.__shortlabels:
-            return self.__shortlabels[key]
+            return self.__shortlabels[key].encode('utf8')
         else:
             return key
 
