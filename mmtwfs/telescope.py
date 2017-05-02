@@ -10,6 +10,7 @@ from scipy.misc import imrotate
 import astropy.units as u
 from astropy.io import ascii
 from astropy.table import Table
+from astropy import visualization
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -110,7 +111,7 @@ class MMT(object):
         pup_im = pup_im / pup_im.max()
         return pup_im
 
-    def psf(self, zv=ZernikeVector(), wavelength=550.*u.nm, pixscale=0.01, fov=1.0):
+    def psf(self, zv=ZernikeVector(), wavelength=550.*u.nm, pixscale=0.01, fov=1.0, plot=True):
         """
         Take a ZernikeVector and calculate resulting MMTO PSF at given wavelength.
         """
@@ -137,7 +138,14 @@ class MMT(object):
         osys.add_pupil(wfe)
         osys.add_detector(pixelscale=pixscale, fov_arcsec=fov)
         psf = osys.calc_psf(w)
-        return psf
+        psf_fig = None
+        if plot:
+            im = psf[0].data
+            psf_fig, ax = plt.subplots()
+            norm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.SqrtStretch())
+            ims = ax.imshow(psf[0].data, extent=[-0.5, 0.5, -0.5, 0.5], cmap=cm.magma, norm=norm)
+            cb = psf_fig.colorbar(ims)
+        return psf, psf_fig
 
     def bending_forces(self, zv=ZernikeVector(), gain=0.5):
         """
