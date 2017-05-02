@@ -11,6 +11,7 @@ import numpy as np
 import photutils
 
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 
 from skimage import feature
 from skimage.morphology import reconstruction
@@ -75,7 +76,7 @@ def check_wfsdata(data):
     return data
 
 
-def wfsfind(data, fwhm=7.0, threshold=5.0, plot=False, ap_radius=5.0, std=None):
+def wfsfind(data, fwhm=7.0, threshold=5.0, plot=True, ap_radius=5.0, std=None):
     """
     Use photutils.DAOStarFinder() to find and centroid spots in a Shack-Hartmann WFS image.
 
@@ -107,16 +108,18 @@ def wfsfind(data, fwhm=7.0, threshold=5.0, plot=False, ap_radius=5.0, std=None):
     # only keep spots more than 1/4 as bright as the max. need this for f/9 especially.
     sources = sources[sources['flux'] > sources['flux'].max()/4.]
 
+    fig = None
     if plot:
+        fig, ax = plt.subplots()
         positions = (sources['xcentroid'], sources['ycentroid'])
         apertures = photutils.CircularAperture(positions, r=ap_radius)
         norm = wfs_norm(data)
-        plt.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
-        apertures.plot(color='red', lw=1.5, alpha=0.5)
-    return sources
+        ax.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
+        apertures.plot(color='red', lw=1.5, alpha=0.5, ax=ax)
+    return sources, fig
 
 
-def mk_reference(data, xoffset=0, yoffset=0, pup_inner=45., pup_outer=175., fwhm=4.0, threshold=30.0, plot=False):
+def mk_reference(data, xoffset=0, yoffset=0, pup_inner=45., pup_outer=175., fwhm=4.0, threshold=30.0, plot=True):
     """
     Read WFS reference image and generate reference magnifications (i.e. grid spacing) and
     aperture positions.
@@ -153,7 +156,7 @@ def mk_reference(data, xoffset=0, yoffset=0, pup_inner=45., pup_outer=175., fwhm
                 X and Y positions of apertures in pupil coordinates
     """
     data = check_wfsdata(data)
-    spots = wfsfind(data, fwhm=fwhm, threshold=threshold, plot=plot)
+    spots, wfsfind_fig = wfsfind(data, fwhm=fwhm, threshold=threshold, plot=plot)
     xcen = spots['xcentroid'].mean()
     ycen = spots['ycentroid'].mean()
     spacing = grid_spacing(data)
@@ -199,6 +202,7 @@ def mk_reference(data, xoffset=0, yoffset=0, pup_inner=45., pup_outer=175., fwhm
     ref['pup_outer'] = pup_outer
     ref['xcen'] = xcen
     ref['ycen'] = ycen
+    ref['figure'] = wfsfind_fig
 
     # set up 2D gaussian model plus constant background to fit to the coadded spot.  tested this compared to fitting each
     # spot individually and they give the same result with this method being faster.
@@ -249,7 +253,7 @@ def grid_spacing(data):
     return xspacing, yspacing
 
 
-def center_pupil(data, pup_mask, threshold=0.5, sigma=20., plot=False):
+def center_pupil(data, pup_mask, threshold=0.5, sigma=20., plot=True):
     """
     Find the center of the pupil in a WFS image using skimage.feature.match_template(). This generates
     a correlation image and we centroid the peak of the correlation to determine the center.
@@ -283,12 +287,14 @@ def center_pupil(data, pup_mask, threshold=0.5, sigma=20., plot=False):
     match = feature.match_template(smo, pup_mask, pad_input=True)
     match[match < threshold * match.max()] = 0
     cen = photutils.centroids.centroid_com(match)
+    fig = None
     if plot:
-        plt.imshow(match, interpolation=None, origin='lower')
-    return cen
+        fig, ax = plt.subplots()
+        ax.imshow(match, interpolation=None, cmap=cm.magma, origin='lower')
+    return cen[0], cen[1], fig
 
 
-def get_apertures(data, apsize):
+def get_apertures(data, apsize, plot=True):
     """
     Use wfsfind to locate and centroid spots.  Measure their S/N ratios and the sigma of a 2D gaussian fit to
     the co-added spot.
@@ -318,7 +324,7 @@ def get_apertures(data, apsize):
     # use wfsfind() and pass it the clipped stddev from here
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        srcs = wfsfind(data, std=stddev)
+        srcs, wfsfind_fig = wfsfind(data, std=stddev, plot=plot)
 
     # we use circular apertures here because they generate square masks of the appropriate size.
     # rectangular apertures produced masks that were sqrt(2) too large.
@@ -355,10 +361,10 @@ def get_apertures(data, apsize):
 
         sigma = 0.5 * (fit.x_stddev_0.value + fit.y_stddev_0.value)
 
-    return srcs, masks, snrs, sigma
+    return srcs, masks, snrs, sigma, wfsfind_fig
 
 
-def get_slopes(data, ref, pup_mask, plot=False):
+def get_slopes(data, ref, pup_mask, plot=True):
     """
     Analyze a WFS image and produce pixel offsets between reference and observed spot positions.
 
@@ -391,14 +397,14 @@ def get_slopes(data, ref, pup_mask, plot=False):
 
     # input data should be background subtracted for best results. this initial guess of the center positions
     # will be good enough to get the central obscuration, but will need to be fine-tuned.
-    xcen, ycen = center_pupil(data, pup_mask, plot=False)
+    xcen, ycen, pupcen_fig = center_pupil(data, pup_mask, plot=plot)
     xspacing, yspacing = grid_spacing(data)
 
     # using the mean spacing is straightforward for square apertures and a reasonable underestimate for hexagonal ones (e.g. f/9)
     apsize = np.mean([xspacing, yspacing])
     ref_spacing = np.mean([ref['xspacing'], ref['yspacing']])
 
-    srcs, masks, snrs, sigma = get_apertures(data, apsize)
+    srcs, masks, snrs, sigma, wfsfind_fig = get_apertures(data, apsize)
 
     # if we don't detect spots in at least half of the reference apertures, we can't usually get a good wavefront measurement
     if len(srcs) < 0.5 * len(ref['apertures']['xcentroid']):
@@ -481,12 +487,14 @@ def get_slopes(data, ref, pup_mask, plot=False):
     pup_size = ref['pup_outer']
     pup_coords = (ref_aps.positions - [xcen, ycen]) / [pup_size, pup_size]
 
+    aps_fig = None
     if plot:
         norm = wfs_norm(data)
-        plt.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
+        aps_fig, ax = plt.subplots()
+        ax.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
         #apers.plot(color='red')
-        plt.scatter(xcen, ycen)
-        src_aps.plot(color='blue')
+        ax.scatter(xcen, ycen)
+        src_aps.plot(color='blue', ax=ax)
 
     # need full slopes array the size of the complete set of reference apertures and pre-filled with np.nan for masking
     slopes = np.nan * np.ones((2, len(ref['apertures']['xcentroid'])))
@@ -505,7 +513,10 @@ def get_slopes(data, ref, pup_mask, plot=False):
 
     slopes[0][idx] = slope_x
     slopes[1][idx] = slope_y
-    return np.ma.masked_invalid(slopes), pup_coords.transpose(), src_aps, (xspacing, yspacing), (xcen, ycen), idx, sigma
+    figures = {}
+    figures['pupil_center'] = pupcen_fig
+    figures['slopes'] = aps_fig
+    return np.ma.masked_invalid(slopes), pup_coords.transpose(), src_aps, (xspacing, yspacing), (xcen, ycen), idx, sigma, figures
 
 
 def WFSFactory(wfs="f5", config={}, **kwargs):
@@ -549,7 +560,7 @@ class WFS(object):
                 yoffset=self.pup_offset[1],
                 pup_inner=self.pup_inner,
                 pup_outer=self.pup_size / 2.,
-                plot=False
+                plot=True
             )
 
         # now assign 'reference' for each mode so that it can be accessed consistently in all cases
@@ -566,7 +577,7 @@ class WFS(object):
                     yoffset=pup_off[1],
                     pup_inner=self.pup_inner,
                     pup_outer=self.pup_size / 2.,
-                    plot=False
+                    plot=True
                 )
             else:
                 self.modes[mode]['reference'] = reference
@@ -684,7 +695,7 @@ class WFS(object):
 
         return data, hdr
 
-    def measure_slopes(self, fitsfile, mode=None, plot=False):
+    def measure_slopes(self, fitsfile, mode=None, plot=True):
         """
         Take a WFS image in FITS format, perform background subtration, pupil centration, and then use get_slopes()
         to perform the aperture placement and spot centroiding.
@@ -708,13 +719,24 @@ class WFS(object):
         pup_mask = self.pupil_mask(rotator=rotator)
 
         try:
-            slopes, coords, aps, spacing, cen, mask, sigma = get_slopes(data, self.modes[mode]['reference'], pup_mask, plot=plot)
+            slopes, coords, aps, spacing, cen, mask, sigma, figures = get_slopes(
+                data,
+                self.modes[mode]['reference'],
+                pup_mask,
+                plot=plot
+            )
         except WFSAnalysisFailed as e:
             print("Wavefront slope measurement failed: %s" % e.args[1])
+            slope_fig = None
             if plot:
+                slope_fig, ax = plt.subplots()
                 norm = wfs_norm(data)
-                plt.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
-            return None
+                ax.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
+            results = {}
+            results['slopes'] = None
+            results['figures'] = {}
+            results['figures']['slopes'] = slope_fig
+            return results
         except Exception as e:
             raise WFSAnalysisFailed(value=str(e))
 
@@ -731,15 +753,17 @@ class WFS(object):
             uu = slopes[0][mask]
             vv = slopes[1][mask]
             norm = wfs_norm(data)
-            plt.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
-            plt.quiver(x, y, uu, vv, scale_units='xy', scale=0.2, pivot='tip', color='red')
+            ax = figures['slopes'].axes[0]
+            ax.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
+            aps.plot(color='blue', ax=ax)
+            ax.quiver(x, y, uu, vv, scale_units='xy', scale=0.2, pivot='tip', color='red')
             xl = [50.0]
             yl = [data.shape[0]-30]
             ul = [1.0/self.pix_size.value]
             vl = [0.0]
-            plt.quiver(xl, yl, ul, vl, scale_units='xy', scale=0.2, pivot='tip', color='red')
-            plt.scatter([cen[0]], [cen[1]])
-            plt.text(60, 480, "1\"", verticalalignment='center')
+            ax.quiver(xl, yl, ul, vl, scale_units='xy', scale=0.2, pivot='tip', color='red')
+            ax.scatter([cen[0]], [cen[1]])
+            ax.text(60, 480, "1\"", verticalalignment='center')
 
         results = {}
         results['seeing'] = seeing
@@ -758,9 +782,10 @@ class WFS(object):
         results['mode'] = mode
         results['ref_mask'] = mask
         results['fwhm'] = stats.funcs.gaussian_sigma_to_fwhm * sigma
+        results['figures'] = figures
         return results
 
-    def fit_wavefront(self, slope_results, plot=False):
+    def fit_wavefront(self, slope_results, plot=True):
         """
         Use results from self.measure_slopes() to fit a set of zernike polynomials to the wavefront shape.
         """
@@ -793,21 +818,24 @@ class WFS(object):
         results['zernike_rms'] = zsub.rms
         results['zernike_p2v'] = zsub.rms
 
+        fig = None
         if plot:
             ref_mask = slope_results['ref_mask']
             im = slope_results['data']
             gnorm = wfs_norm(im)
-            plt.imshow(im, cmap='Greys', origin='lower', norm=gnorm, interpolation='None')
+            fig, ax = plt.subplots()
+            ax.imshow(im, cmap='Greys', origin='lower', norm=gnorm, interpolation='None')
             x = slope_results['apertures'].positions.transpose()[0]
             y = slope_results['apertures'].positions.transpose()[1]
-            plt.quiver(x, y, diff[0][ref_mask], diff[1][ref_mask], scale_units='xy', scale=0.05, pivot='tip', color='red')
+            ax.quiver(x, y, diff[0][ref_mask], diff[1][ref_mask], scale_units='xy', scale=0.05, pivot='tip', color='red')
             xl = [50.0]
             yl = [im.shape[0]-30]
             ul = [0.2/self.pix_size.value]
             vl = [0.0]
-            plt.quiver(xl, yl, ul, vl, scale_units='xy', scale=0.05, pivot='tip', color='red')
-            plt.text(60, 480, "0.2\"", verticalalignment='center')
+            ax.quiver(xl, yl, ul, vl, scale_units='xy', scale=0.05, pivot='tip', color='red')
+            ax.text(60, 480, "0.2\"", verticalalignment='center')
 
+        results['resid_plot'] = fig
         return results
 
     def correct_primary(self, zv, forcefile="zfile.txt", mask=[]):
