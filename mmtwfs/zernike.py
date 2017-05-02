@@ -1108,6 +1108,7 @@ class ZernikeVector(MutableMapping):
 
         max_c = u.Quantity(max_c, self.units).value
         cmap = cm.ScalarMappable(col.Normalize(0, max_c), cm.plasma_r)
+        cmap._A = []  # stupid matplotlib
         ind = np.arange(len(labels))
         fig, ax = plt.subplots(figsize=(10, 6))
         rects = ax.bar(ind, coeffs, color=cmap.to_rgba(coeffs))
@@ -1118,6 +1119,8 @@ class ZernikeVector(MutableMapping):
         ax.set_xticks(ind)
         ax.set_xticklabels(labels, rotation=45, ha='right', size='x-small')
         ax.set_ylabel("RMS-normalized Amplitude (%s)" % self.units)
+        cb = fig.colorbar(cmap)
+        cb.set_label(self.units)
         return fig
 
     def plot_map(self):
