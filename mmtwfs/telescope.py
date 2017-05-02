@@ -11,6 +11,11 @@ import astropy.units as u
 from astropy.io import ascii
 from astropy.table import Table
 
+import matplotlib
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+import matplotlib.colors as col
+
 from .config import merge_config, mmt_config
 from .custom_exceptions import WFSConfigException
 from .secondary import SecondaryFactory
@@ -285,3 +290,27 @@ class MMT(object):
         coord['bcv_phi'].unit = u.radian
 
         return coord
+
+    def plot_forces(self, t):
+        """
+        Plot actuator forces given force table as output from self.bending_forces()
+        """
+        coords = self.actcoor
+        r_fac = 0.5 * self.diameter / self.bcv_radius  # adjust for slight difference
+        cmap = cm.ScalarMappable(col.Normalize(-100, 100), cm.bwr)
+        cmap._A = []  # grr stupid matplotlib
+        fig, ax = plt.subplots()
+        xcor, ycor = coords['act_x']/r_fac, coords['act_y']/r_fac
+        ax.scatter(xcor, ycor, color=cmap.to_rgba(t['force']))
+        for i, (x, y) in enumerate(zip(xcor, ycor)):
+            ax.text(x, y+0.02, t['actuator'][i],  horizontalalignment='center', verticalalignment='bottom', size='xx-small')
+
+        ax.set_aspect(1.0)
+        circle1 = plt.Circle((0, 0), 1.0, fill=False, color='black', alpha=0.2)
+        circle2 = plt.Circle((0, 0), 0.9/6.5, fill=False, color='black', alpha=0.2)
+        ax.add_artist(circle1)
+        ax.add_artist(circle2)
+        ax.set_axis_off()
+        cb = fig.colorbar(cmap)
+        cb.set_label("Actuator Force (N)")
+        return fig
