@@ -1,7 +1,10 @@
+# -*- coding: utf-8 -*-
 # Licensed under GPL3 (see LICENSE)
-# coding=utf-8
 
 import astropy.units as u
+
+from matplotlib.testing.decorators import cleanup
+
 from ..zernike import ZernikeVector
 from ..custom_exceptions import ZernikeException
 
@@ -245,3 +248,13 @@ def test_labels():
     l = zv.label('Z04')
     ls = zv.shortlabel('Z04')
     assert(len(l) > len(ls))
+
+@cleanup
+def test_plots():
+    zv = ZernikeVector(Z04=100, Z05=200, Z06=-500)
+    f1 = zv.bar_chart()
+    assert(f1 is not None)
+    f2 = zv.plot_map()
+    assert(f2 is not None)
+    f3 = zv.plot_surface()
+    assert(f3 is not None)

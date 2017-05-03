@@ -10,6 +10,12 @@ from scipy.misc import imrotate
 import astropy.units as u
 from astropy.io import ascii
 from astropy.table import Table
+from astropy import visualization
+
+import matplotlib
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+import matplotlib.colors as col
 
 from .config import merge_config, mmt_config
 from .custom_exceptions import WFSConfigException
@@ -105,7 +111,7 @@ class MMT(object):
         pup_im = pup_im / pup_im.max()
         return pup_im
 
-    def psf(self, zv=ZernikeVector(), wavelength=550.*u.nm, pixscale=0.01, fov=1.0):
+    def psf(self, zv=ZernikeVector(), wavelength=550.*u.nm, pixscale=0.01, fov=1.0, plot=True):
         """
         Take a ZernikeVector and calculate resulting MMTO PSF at given wavelength.
         """
@@ -132,7 +138,16 @@ class MMT(object):
         osys.add_pupil(wfe)
         osys.add_detector(pixelscale=pixscale, fov_arcsec=fov)
         psf = osys.calc_psf(w)
-        return psf
+        psf_fig = None
+        if plot:
+            im = psf[0].data
+            psf_fig, ax = plt.subplots()
+            norm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.SqrtStretch())
+            ims = ax.imshow(psf[0].data, extent=[-fov/2, fov/2, -fov/2, fov/2], cmap=cm.magma, norm=norm)
+            ax.set_xlabel("arcsec")
+            ax.set_ylabel("arcsec")
+            cb = psf_fig.colorbar(ims)
+        return psf, psf_fig
 
     def bending_forces(self, zv=ZernikeVector(), gain=0.5):
         """
@@ -285,3 +300,27 @@ class MMT(object):
         coord['bcv_phi'].unit = u.radian
 
         return coord
+
+    def plot_forces(self, t):
+        """
+        Plot actuator forces given force table as output from self.bending_forces()
+        """
+        coords = self.actcoor
+        r_fac = 0.5 * self.diameter / self.bcv_radius  # adjust for slight difference
+        cmap = cm.ScalarMappable(col.Normalize(-100, 100), cm.bwr)
+        cmap._A = []  # grr stupid matplotlib
+        fig, ax = plt.subplots()
+        xcor, ycor = coords['act_x']/r_fac, coords['act_y']/r_fac
+        ax.scatter(xcor, ycor, color=cmap.to_rgba(t['force']))
+        for i, (x, y) in enumerate(zip(xcor, ycor)):
+            ax.text(x, y+0.02, t['actuator'][i],  horizontalalignment='center', verticalalignment='bottom', size='xx-small')
+
+        ax.set_aspect(1.0)
+        circle1 = plt.Circle((0, 0), 1.0, fill=False, color='black', alpha=0.2)
+        circle2 = plt.Circle((0, 0), 0.9/6.5, fill=False, color='black', alpha=0.2)
+        ax.add_artist(circle1)
+        ax.add_artist(circle2)
+        ax.set_axis_off()
+        cb = fig.colorbar(cmap)
+        cb.set_label("Actuator Force (N)")
+        return fig

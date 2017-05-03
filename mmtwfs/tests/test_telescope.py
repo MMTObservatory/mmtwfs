@@ -8,6 +8,8 @@ import filecmp
 import numpy as np
 import astropy.units as u
 
+from matplotlib.testing.decorators import cleanup
+
 from ..config import mmt_config
 from ..telescope import MMT
 from ..zernike import ZernikeVector
@@ -46,9 +48,10 @@ def test_psf():
     for s in mmt_config['secondary']:
         t = MMT(secondary=s)
         zv = ZernikeVector(Z04=500*u.nm)
-        p = t.psf(zv=zv)
+        p, p_fig = t.psf(zv=zv)
         p_im = p[0].data
         assert(p_im.max() < 1.0)
+        assert(p_fig is not None)
 
 def test_force_file():
     t = MMT()
@@ -71,3 +74,11 @@ def test_correct_primary():
     nullforce, nullfocus = t.clear_forces()
     assert(nullfocus == 0.0)
     assert(np.allclose(nullforce['force'].data, 0.0))
+
+@cleanup
+def test_plots():
+    t = MMT()
+    zv = ZernikeVector(Z05=1000, Z11=250)
+    f_table = t.bending_forces(zv=zv)
+    fig = t.plot_forces(f_table)
+    assert(fig is not None)

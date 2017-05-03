@@ -15,6 +15,8 @@ import json
 
 import matplotlib
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+import matplotlib.colors as col
 from mpl_toolkits.mplot3d import Axes3D
 
 import numpy as np
@@ -457,15 +459,15 @@ class ZernikeVector(MutableMapping):
         "Z02": "X Tilt (1, 1)",
         "Z03": "Y Tilt (1, -1)",
         "Z04": "Defocus (2, 0)",
-        "Z05": "Primary Astig at 45˚ (2, -2)",
-        "Z06": "Primary Astig at 0˚ (2, 2)",
+        "Z05": u"Primary Astig at 45° (2, -2)",
+        "Z06": u"Primary Astig at 0° (2, 2)",
         "Z07": "Primary Y Coma (3, -1)",
         "Z08": "Primary X Coma (3, 1)",
         "Z09": "Y Trefoil (3, -3)",
         "Z10": "X Trefoil (3, 3)",
         "Z11": "Primary Spherical (4, 0)",
-        "Z12": "Secondary Astigmatism at 0˚ (4, 2)",
-        "Z13": "Secondary Astigmatism at 45˚ (4, -2)",
+        "Z12": u"Secondary Astigmatism at 0° (4, 2)",
+        "Z13": u"Secondary Astigmatism at 45° (4, -2)",
         "Z14": "X Tetrafoil (4, 4)",
         "Z15": "Y Tetrafoil (4, -4)",
         "Z16": "Secondary X Coma (5, 1)",
@@ -475,8 +477,8 @@ class ZernikeVector(MutableMapping):
         "Z20": "X Pentafoil (5, 5)",
         "Z21": "Y Pentafoil (5, -5)",
         "Z22": "Secondary Spherical (6, 0)",
-        "Z23": "Tertiary Astigmatism at 45˚ (6, -2)",
-        "Z24": "Tertiary Astigmatism at 0˚ (6, 2)",
+        "Z23": u"Tertiary Astigmatism at 45° (6, -2)",
+        "Z24": u"Tertiary Astigmatism at 0° (6, 2)",
         "Z25": "Secondary X Trefoil (6, -4)",
         "Z26": "Secondary Y Trefoil (6, 4)",
         "Z27": "Y Hexafoil (6, -6)",
@@ -497,15 +499,15 @@ class ZernikeVector(MutableMapping):
         "Z02": "X Tilt",
         "Z03": "Y Tilt",
         "Z04": "Defocus",
-        "Z05": "Astig 45˚",
-        "Z06": "Astig 0˚ ",
+        "Z05": u"Astig 45°",
+        "Z06": u"Astig 0° ",
         "Z07": "Y Coma",
         "Z08": "X Coma",
         "Z09": "Y Tref",
         "Z10": "X Tref",
         "Z11": "Spher",
-        "Z12": "Astig2 0˚",
-        "Z13": "Astig2 45˚",
+        "Z12": u"Astig2 0°",
+        "Z13": u"Astig2 45°",
         "Z14": "X Tetra",
         "Z15": "Y Tetra",
         "Z16": "X Coma2",
@@ -515,8 +517,8 @@ class ZernikeVector(MutableMapping):
         "Z20": "X Penta",
         "Z21": "Y Penta",
         "Z22": "Spher2",
-        "Z23": "Astig3 45˚",
-        "Z24": "Astig3 0˚",
+        "Z23": u"Astig3 45°",
+        "Z24": u"Astig3 0°",
         "Z25": "X Tref2",
         "Z26": "Y Tref2",
         "Z27": "Y Hexa",
@@ -647,8 +649,7 @@ class ZernikeVector(MutableMapping):
             print("Fringe Coefficients")
         for k in sorted(self.coeffs.keys()):
             if k in self.__zernikelabels:
-                label = self.__zernikelabels[k]
-                s += "%4s: %12s \t %s" % (k, "{0:0.03g}".format(self.coeffs[k]), label)
+                s += "%4s: %12s \t %s" % (k, "{0:0.03g}".format(self.coeffs[k]), self.label(k).encode('utf8'))
             else:
                 s += "%4s: %12s" % (k, "{0:0.03g}".format(self.coeffs[k]))
             s += "\n"
@@ -852,7 +853,10 @@ class ZernikeVector(MutableMapping):
         arr = u.Quantity(np.zeros(last - self.modestart + 1), self.units)
         for k in keys:
             i = self._key_to_l(k) - self.modestart
-            arr[i] = u.Quantity(self.coeffs[k], self.units)
+            if i >= 0:
+                arr[i] = u.Quantity(self.coeffs[k], self.units)
+            else:
+                arr[0] = 0.0 * self.units
         return arr
 
     @property
@@ -883,9 +887,10 @@ class ZernikeVector(MutableMapping):
         """
         Return the RMS phase displacement of the Zernike set.
         """
-        # ignore piston and tilts when calculating wavefront RMSW
+        # ignore piston and tilts when calculating wavefront RMS
         orig_modestart = self.modestart
-        self.modestart = 4
+        if self.modestart < 4:
+            self.modestart = 4
         norm_coeffs = self.norm_array
         # once coeffs are normalized, the RMS is simply the sqrt of the sum of the squares of the coefficients
         rms = np.sqrt(np.sum(norm_coeffs**2))
@@ -1073,16 +1078,64 @@ class ZernikeVector(MutableMapping):
         ph = self.total_phase(r, p)
         return x, y, r, p, ph
 
+    def bar_chart(self, residual=None, max_c=250*u.nm):
+        """
+        Plot a bar chart of the coefficients and, optionally, a residual amount not included in the coefficients.
+        """
+        # we want to plot bars for each of the modes we usually use and thus label.
+        label_keys = sorted(self.__zernikelabels.keys())
+        last_label = self._key_to_l(label_keys[-1])
+        last_coeff = self._key_to_l(sorted(self.coeffs.keys())[-1])
+        modes = label_keys[3:]  # ignore piston and tilts in bar plot
+        labels = [self.shortlabel(m) for m in modes]
+        if self.normalized:
+            coeffs = [np.abs(self.__getitem__(m).value) for m in modes]
+        else:
+            coeffs = [np.abs(self.__getitem__(m).value) / noll_coefficient(self._key_to_l(m)) for m in modes]
+
+        # lump higher order terms into one RMS bin.
+        if last_coeff > last_label:
+            hi_orders = ZernikeVector(modestart=last_label+1, normalized=self.normalized, units=self.units, **self.coeffs)
+            labels.append("High Orders")
+            coeffs.append(hi_orders.rms.value)
+
+        # add residual RMS
+        if residual is not None:
+            resid = u.Quantity(residual, self.units).value
+            labels.append("Residual")
+            coeffs.append(resid)
+
+        max_c = u.Quantity(max_c, self.units).value
+        cmap = cm.ScalarMappable(col.Normalize(0, max_c), cm.magma_r)
+        cmap._A = []  # stupid matplotlib
+        ind = np.arange(len(labels))
+        fig, ax = plt.subplots(figsize=(10, 6))
+        rects = ax.bar(ind, coeffs, color=cmap.to_rgba(coeffs))
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.yaxis.grid(color='gray', linestyle='dotted')
+        ax.set_axisbelow(True)
+        ax.set_xticks(ind)
+        ax.set_xticklabels(labels, rotation=45, ha='right', size='x-small')
+        ax.set_ylabel("RMS-normalized Amplitude (%s)" % self.units)
+        cb = fig.colorbar(cmap)
+        cb.set_label("%s RMS" % self.units)
+        return fig
+
     def plot_map(self):
         """
         Plot 2D map of total phase displacement.
         """
         x, y, r, p, ph = self.phase_map(n=400)
-        fig = plt.pcolormesh(x, y, ph)
-        fig.axes.set_axis_off()
-        fig.axes.set_aspect(1.0)
-        cbar = plt.colorbar()
+        fig, ax = plt.subplots()
+        vmin = u.Quantity(-1000, u.nm).to(self.units).value
+        vmax = -vmin
+        pmesh = ax.pcolormesh(x, y, ph, vmin=vmin, vmax=vmax, cmap=cm.RdBu)
+        pmesh.axes.set_axis_off()
+        pmesh.axes.set_aspect(1.0)
+        cbar = fig.colorbar(pmesh)
         cbar.set_label(self.units.name, rotation=0)
+        return fig
 
     def plot_surface(self):
         """
@@ -1099,3 +1152,4 @@ class ZernikeVector(MutableMapping):
         ax.yaxis.set_ticks([-1, 0, 1])
         cbar = fig.colorbar(cset, shrink=1, aspect=30)
         cbar.set_label(self.units.name, rotation=0)
+        return fig
