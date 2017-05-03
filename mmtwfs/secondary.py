@@ -9,6 +9,7 @@ import sys
 
 import astropy.units as u
 
+from .utils import srvlookup
 from .config import recursive_subclasses, merge_config, mmt_config
 from .custom_exceptions import WFSConfigException, WFSCommandException
 
@@ -39,6 +40,9 @@ class Secondary(object):
         key = self.__class__.__name__.lower()
         self.__dict__.update(merge_config(mmt_config['secondary'][key], config))
 
+        # get host/port to use for hexapod communication
+        self.host, self.port = srvlookup(self.hexserv)
+
         # use this boolean to determine if corrections are actually to be sent
         self.connected = False
         self.sock = None
@@ -57,14 +61,15 @@ class Secondary(object):
         """
         Set state to connected so that calculated corrections will be sent to the relevant systems
         """
-        self.connected = True
-        try:
-            hex_server = (self.host, self.port)
-            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.sock.connect(hex_server)
-        except Exception as e:
-            print("Error connecting to hexapod server. Remaining disconnected...: %s" % e)
-            self.connected = False
+        if self.host is not None:
+            self.connected = True
+            try:
+                hex_server = (self.host, self.port)
+                self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.sock.connect(hex_server)
+            except Exception as e:
+                print("Error connecting to hexapod server. Remaining disconnected...: %s" % e)
+                self.connected = False
 
     def disconnect(self):
         """

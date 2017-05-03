@@ -28,6 +28,7 @@ from astropy.coordinates import SkyCoord, match_coordinates_3d
 
 from astroscrappy import detect_cosmics
 
+from .utils import srvlookup
 from .config import recursive_subclasses, merge_config, mmt_config
 from .telescope import MMT
 from .zernike import zernike_influence_matrix, ZernikeVector, cart2pol, pol2cart
@@ -924,12 +925,51 @@ class WFS(object):
         cmds = self.secondary.clear_wfs()
         return clear_forces, clear_m1focus
 
+    def connect(self):
+        """
+        Set state to connected
+        """
+        pass
+
+    def disconnect(self):
+        """
+        Set state to disconnected
+        """
+        self.connected = False
+        if self.sock:
+            try:
+                self.sock.close()
+                self.sock = None
+            except Exception as e:
+                print("Error closing connection to topbox server: %s" % e)
+
 
 class F9(WFS):
     """
     Defines configuration and methods specific to the F/9 WFS system
     """
-    pass
+    def __init__(self, config={}):
+        super(F9, self).__init__(config=config)
+
+        self.connected = False
+        self.sock = None
+
+        # get host/port to use for topbox communication
+        self.host, self.port = srvlookup(self.lampsrv)
+
+    def connect(self):
+        """
+        Set state to connected
+        """
+        if self.host is not None:
+            self.connected = True
+            try:
+                topbox_server = (self.host, self.port)
+                self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.sock.connect(topbox_server)
+            except Exception as e:
+                print("Error connecting to topbox server. Remaining disconnected...: %s" % e)
+                self.connected = False
 
 
 class F5(WFS):
@@ -938,6 +978,9 @@ class F5(WFS):
     """
     def __init__(self, config={}):
         super(F5, self).__init__(config=config)
+
+        self.connected = False
+        self.sock = None
 
         # load lookup table for off-axis aberrations
         self.aberr_table = ascii.read(self.aberr_table_file)
@@ -949,6 +992,9 @@ class MMIRS(WFS):
     """
     def __init__(self, config={}):
         super(MMIRS, self).__init__(config=config)
+
+        self.connected = False
+        self.sock = None
 
         # load lookup table for off-axis aberrations
         self.aberr_table = ascii.read(self.aberr_table_file)
