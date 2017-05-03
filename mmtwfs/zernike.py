@@ -649,8 +649,7 @@ class ZernikeVector(MutableMapping):
             print("Fringe Coefficients")
         for k in sorted(self.coeffs.keys()):
             if k in self.__zernikelabels:
-                label = self.__zernikelabels[k]
-                s += "%4s: %12s \t %s" % (k, "{0:0.03g}".format(self.coeffs[k]), label)
+                s += "%4s: %12s \t %s" % (k, "{0:0.03g}".format(self.coeffs[k]), self.label(k).encode('utf8'))
             else:
                 s += "%4s: %12s" % (k, "{0:0.03g}".format(self.coeffs[k]))
             s += "\n"
@@ -949,7 +948,7 @@ class ZernikeVector(MutableMapping):
         If defined, return the descriptive label for mode, 'key'
         """
         if key in self.__zernikelabels:
-            return self.__zernikelabels[key].encode('utf8')
+            return self.__zernikelabels[key]
         else:
             return key
 
@@ -958,7 +957,7 @@ class ZernikeVector(MutableMapping):
         If defined, return the short label for mode, 'key'
         """
         if key in self.__shortlabels:
-            return self.__shortlabels[key].encode('utf8')
+            return self.__shortlabels[key]
         else:
             return key
 
