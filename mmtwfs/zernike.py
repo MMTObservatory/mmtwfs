@@ -12,6 +12,7 @@ Expressions for cartesian derivatives of the Zernike polynomials were adapted fr
 
 import re
 import json
+import sys
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -649,11 +650,15 @@ class ZernikeVector(MutableMapping):
             print("Fringe Coefficients")
         for k in sorted(self.coeffs.keys()):
             if k in self.__zernikelabels:
-                s += "%4s: %12s \t %s" % (k, "{0:0.03g}".format(self.coeffs[k]), self.label(k).encode('utf8'))
+                s += "%4s: %12s \t %s" % (k, "{0:0.03g}".format(self.coeffs[k]), self.label(k))
             else:
                 s += "%4s: %12s" % (k, "{0:0.03g}".format(self.coeffs[k]))
             s += "\n"
-        return s
+
+        if sys.version_info.major < 3:
+            return s.encode(sys.stdout.encoding or 'utf-8')
+        else:
+            return s
 
     def __str__(self):
         """
@@ -1145,7 +1150,7 @@ class ZernikeVector(MutableMapping):
         """
         x, y, r, p, ph = self.phase_map(n=100)
         fig = plt.figure(figsize=(8, 6))
-        fit.set_label("3D Wavefront Map")
+        fig.set_label("3D Wavefront Map")
         ax = fig.add_subplot(111, projection='3d')
         ax.plot_surface(x, y, ph, rstride=1, cstride=1, linewidth=0, alpha=0.6, cmap='plasma')
         v = max(abs(ph.max().value), abs(ph.min().value))

@@ -148,6 +148,7 @@ class MMT(object):
             ax.set_xlabel("arcsec")
             ax.set_ylabel("arcsec")
             cb = psf_fig.colorbar(ims)
+            cb.set_label("Fraction of Total Flux")
         return psf, psf_fig
 
     def bending_forces(self, zv=ZernikeVector(), gain=0.5):
