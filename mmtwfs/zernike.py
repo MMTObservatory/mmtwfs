@@ -1110,6 +1110,7 @@ class ZernikeVector(MutableMapping):
         cmap._A = []  # stupid matplotlib
         ind = np.arange(len(labels))
         fig, ax = plt.subplots(figsize=(10, 6))
+        fig.set_label("Wavefront RMS per Zernike Mode")
         rects = ax.bar(ind, coeffs, color=cmap.to_rgba(coeffs))
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
@@ -1128,6 +1129,7 @@ class ZernikeVector(MutableMapping):
         """
         x, y, r, p, ph = self.phase_map(n=400)
         fig, ax = plt.subplots()
+        fig.set_label("Wavefront Map")
         vmin = u.Quantity(-1000, u.nm).to(self.units).value
         vmax = -vmin
         pmesh = ax.pcolormesh(x, y, ph, vmin=vmin, vmax=vmax, cmap=cm.RdBu)
@@ -1143,6 +1145,7 @@ class ZernikeVector(MutableMapping):
         """
         x, y, r, p, ph = self.phase_map(n=100)
         fig = plt.figure(figsize=(8, 6))
+        fit.set_label("3D Wavefront Map")
         ax = fig.add_subplot(111, projection='3d')
         ax.plot_surface(x, y, ph, rstride=1, cstride=1, linewidth=0, alpha=0.6, cmap='plasma')
         v = max(abs(ph.max().value), abs(ph.min().value))

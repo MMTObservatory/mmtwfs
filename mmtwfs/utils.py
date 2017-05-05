@@ -21,4 +21,4 @@ def srvlookup(server):
         host = None
         port = None
 
-        return host, port
+    return host, port

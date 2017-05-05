@@ -112,6 +112,7 @@ def wfsfind(data, fwhm=7.0, threshold=5.0, plot=True, ap_radius=5.0, std=None):
     fig = None
     if plot:
         fig, ax = plt.subplots()
+        fig.set_label("WFSfind")
         positions = (sources['xcentroid'], sources['ycentroid'])
         apertures = photutils.CircularAperture(positions, r=ap_radius)
         norm = wfs_norm(data)
@@ -158,6 +159,7 @@ def mk_reference(data, xoffset=0, yoffset=0, pup_inner=45., pup_outer=175., fwhm
     """
     data = check_wfsdata(data)
     spots, wfsfind_fig = wfsfind(data, fwhm=fwhm, threshold=threshold, plot=plot)
+    wfsfind_fig.set_label("Reference Image")
     xcen = spots['xcentroid'].mean()
     ycen = spots['ycentroid'].mean()
     spacing = grid_spacing(data)
@@ -291,6 +293,7 @@ def center_pupil(data, pup_mask, threshold=0.5, sigma=20., plot=True):
     fig = None
     if plot:
         fig, ax = plt.subplots()
+        fig.set_label("Pupil Correlation Image (masked)")
         ax.imshow(match, interpolation=None, cmap=cm.magma, origin='lower')
     return cen[0], cen[1], fig
 
@@ -492,6 +495,7 @@ def get_slopes(data, ref, pup_mask, plot=True):
     if plot:
         norm = wfs_norm(data)
         aps_fig, ax = plt.subplots()
+        aps_fig.set_label("Aperture Positions")
         ax.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
         #apers.plot(color='red')
         ax.scatter(xcen, ycen)
@@ -731,6 +735,7 @@ class WFS(object):
             slope_fig = None
             if plot:
                 slope_fig, ax = plt.subplots()
+                slope_fig.set_label("WFS Image")
                 norm = wfs_norm(data)
                 ax.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
             results = {}
@@ -754,6 +759,7 @@ class WFS(object):
             uu = slopes[0][mask]
             vv = slopes[1][mask]
             norm = wfs_norm(data)
+            figures['slopes'].set_label("Aperture Positions and Spot Movement")
             ax = figures['slopes'].axes[0]
             ax.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
             aps.plot(color='blue', ax=ax)
@@ -825,6 +831,7 @@ class WFS(object):
             im = slope_results['data']
             gnorm = wfs_norm(im)
             fig, ax = plt.subplots()
+            fig.set_label("Zernike Fit Residuals")
             ax.imshow(im, cmap='Greys', origin='lower', norm=gnorm, interpolation='None')
             x = slope_results['apertures'].positions.transpose()[0]
             y = slope_results['apertures'].positions.transpose()[1]
@@ -929,12 +936,16 @@ class WFS(object):
         """
         Set state to connected
         """
-        pass
+        self.telescope.connect()
+        self.secondary.connect()
+        self.connected = True
 
     def disconnect(self):
         """
         Set state to disconnected
         """
+        self.telescope.disconnect()
+        self.secondary.disconnect()
         self.connected = False
         if self.sock:
             try:
@@ -961,8 +972,10 @@ class F9(WFS):
         """
         Set state to connected
         """
+        self.telescope.connect()
+        self.secondary.connect()
+        self.connected = True
         if self.host is not None:
-            self.connected = True
             try:
                 topbox_server = (self.host, self.port)
                 self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -970,6 +983,8 @@ class F9(WFS):
             except Exception as e:
                 print("Error connecting to topbox server. Remaining disconnected...: %s" % e)
                 self.connected = False
+        else:
+            self.connected = False
 
 
 class F5(WFS):

@@ -30,7 +30,7 @@ def test_bogus_wfs():
 def test_connect():
     wfs = WFSFactory(wfs='f5')
     wfs.connect()
-    assert(wfs.connected)
+    assert(not wfs.connected)  # can't access hardware so should stay disconnected
     wfs.disconnect()
     assert(not wfs.connected)
 
