@@ -1083,7 +1083,7 @@ class ZernikeVector(MutableMapping):
         ph = self.total_phase(r, p)
         return x, y, r, p, ph
 
-    def bar_chart(self, residual=None, max_c=250*u.nm):
+    def bar_chart(self, residual=None, total=True, max_c=500*u.nm):
         """
         Plot a bar chart of the coefficients and, optionally, a residual amount not included in the coefficients.
         """
@@ -1104,7 +1104,12 @@ class ZernikeVector(MutableMapping):
             labels.append("High Orders")
             coeffs.append(hi_orders.rms.value)
 
-        # add residual RMS
+        # add total RMS
+        if total:
+            labels.append("Total")
+            coeffs.append(self.rms.value)
+
+        # add residual RMS of zernike fit
         if residual is not None:
             resid = u.Quantity(residual, self.units).value
             labels.append("Residual")
@@ -1115,7 +1120,7 @@ class ZernikeVector(MutableMapping):
         cmap._A = []  # stupid matplotlib
         ind = np.arange(len(labels))
         fig, ax = plt.subplots(figsize=(10, 6))
-        fig.set_label("Wavefront RMS per Zernike Mode")
+        fig.set_label("RMS Wavefront Error per Zernike Mode")
         rects = ax.bar(ind, coeffs, color=cmap.to_rgba(coeffs))
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
@@ -1123,9 +1128,9 @@ class ZernikeVector(MutableMapping):
         ax.set_axisbelow(True)
         ax.set_xticks(ind)
         ax.set_xticklabels(labels, rotation=45, ha='right', size='x-small')
-        ax.set_ylabel("RMS-normalized Amplitude (%s)" % self.units)
+        ax.set_ylabel("RMS Wavefront Error (%s)" % self.units)
         cb = fig.colorbar(cmap)
-        cb.set_label("%s RMS" % self.units)
+        cb.set_label("%s" % self.units)
         return fig
 
     def plot_map(self):
