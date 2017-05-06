@@ -770,7 +770,8 @@ class WFS(object):
             vl = [0.0]
             ax.quiver(xl, yl, ul, vl, scale_units='xy', scale=0.2, pivot='tip', color='red')
             ax.scatter([cen[0]], [cen[1]])
-            ax.text(60, 480, "1\"", verticalalignment='center')
+            ax.text(60, data.shape[0]-30, "1\"", verticalalignment='center')
+            ax.set_title("Seeing: %.2f\" (%.2f\" @ zenith)" % (raw_seeing.value, seeing.value))
 
         results = {}
         results['seeing'] = seeing
@@ -823,7 +824,7 @@ class WFS(object):
         rms = self.pix_size * np.sqrt((diff[0]**2 + diff[1]**2).mean())
         results['residual_rms'] = rms.to(u.arcsec).value * self.tiltfactor * zsub.units
         results['zernike_rms'] = zsub.rms
-        results['zernike_p2v'] = zsub.rms
+        results['zernike_p2v'] = zsub.peak2valley
 
         fig = None
         if plot:
@@ -842,6 +843,7 @@ class WFS(object):
             vl = [0.0]
             ax.quiver(xl, yl, ul, vl, scale_units='xy', scale=0.05, pivot='tip', color='red')
             ax.text(60, 480, "0.2\"", verticalalignment='center')
+            ax.set_title("Residual RMS: {0:0.4g}".format(results['residual_rms']))
 
         results['resid_plot'] = fig
         return results
