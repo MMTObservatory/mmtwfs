@@ -204,6 +204,38 @@ mmt_config = {
                 }
             }
         },
+        "newf9": {
+            "secondary": "f9",
+            "default_mode": "blue",
+            "lampsrv": "_lampbox._tcp.mmto.arizona.edu",
+            "cor_coords": [424.0, 417.0],
+            "rotation": -225. * u.deg,
+            "pix_size": 0.09639 * u.arcsec,  # SBIG STT-8300 with 5.4 um pixels binned 3x3
+            "pup_size": 540,  # pupil outer diameter in pixels
+            "pup_inner": 65,  # inner obscuration radius in pixels
+            "pup_offset": [0.4, 0.75],  # [x, y] pupil offset from center of reference aperture pattern
+            "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
+            "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
+            "nzern": 36,  # number of zernike modes to fit
+            "reference_file": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "f9_new_ref.fits")),
+            "modes": {
+                "blue": {
+                    "ref_zern": {
+                        "Z04": 7982. * u.nm
+                    },
+                },
+                "red": {
+                    "ref_zern": {
+                        "Z04": 7982. * u.nm
+                    },
+                },
+                "spol": {
+                    "ref_zern": {
+                        "Z04": -308. * u.nm
+                    },
+                }
+            }
+        },
         "mmirs": {
             "secondary": "f5",
             "default_mode": None,
