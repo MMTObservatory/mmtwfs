@@ -12,6 +12,7 @@ Expressions for cartesian derivatives of the Zernike polynomials were adapted fr
 
 import re
 import json
+import sys
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -649,11 +650,15 @@ class ZernikeVector(MutableMapping):
             print("Fringe Coefficients")
         for k in sorted(self.coeffs.keys()):
             if k in self.__zernikelabels:
-                s += "%4s: %12s \t %s" % (k, "{0:0.03g}".format(self.coeffs[k]), self.label(k).encode('utf8'))
+                s += "%4s: %12s \t %s" % (k, "{0:0.03g}".format(self.coeffs[k]), self.label(k))
             else:
                 s += "%4s: %12s" % (k, "{0:0.03g}".format(self.coeffs[k]))
             s += "\n"
-        return s
+
+        if sys.version_info.major < 3:
+            return s.encode(sys.stdout.encoding or 'utf-8')
+        else:
+            return s
 
     def __str__(self):
         """
@@ -1078,7 +1083,7 @@ class ZernikeVector(MutableMapping):
         ph = self.total_phase(r, p)
         return x, y, r, p, ph
 
-    def bar_chart(self, residual=None, max_c=250*u.nm):
+    def bar_chart(self, residual=None, total=True, max_c=500*u.nm):
         """
         Plot a bar chart of the coefficients and, optionally, a residual amount not included in the coefficients.
         """
@@ -1099,7 +1104,12 @@ class ZernikeVector(MutableMapping):
             labels.append("High Orders")
             coeffs.append(hi_orders.rms.value)
 
-        # add residual RMS
+        # add total RMS
+        if total:
+            labels.append("Total")
+            coeffs.append(self.rms.value)
+
+        # add residual RMS of zernike fit
         if residual is not None:
             resid = u.Quantity(residual, self.units).value
             labels.append("Residual")
@@ -1110,6 +1120,7 @@ class ZernikeVector(MutableMapping):
         cmap._A = []  # stupid matplotlib
         ind = np.arange(len(labels))
         fig, ax = plt.subplots(figsize=(10, 6))
+        fig.set_label("RMS Wavefront Error per Zernike Mode")
         rects = ax.bar(ind, coeffs, color=cmap.to_rgba(coeffs))
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
@@ -1117,9 +1128,9 @@ class ZernikeVector(MutableMapping):
         ax.set_axisbelow(True)
         ax.set_xticks(ind)
         ax.set_xticklabels(labels, rotation=45, ha='right', size='x-small')
-        ax.set_ylabel("RMS-normalized Amplitude (%s)" % self.units)
+        ax.set_ylabel("RMS Wavefront Error (%s)" % self.units)
         cb = fig.colorbar(cmap)
-        cb.set_label("%s RMS" % self.units)
+        cb.set_label("%s" % self.units)
         return fig
 
     def plot_map(self):
@@ -1128,6 +1139,7 @@ class ZernikeVector(MutableMapping):
         """
         x, y, r, p, ph = self.phase_map(n=400)
         fig, ax = plt.subplots()
+        fig.set_label("Wavefront Map")
         vmin = u.Quantity(-1000, u.nm).to(self.units).value
         vmax = -vmin
         pmesh = ax.pcolormesh(x, y, ph, vmin=vmin, vmax=vmax, cmap=cm.RdBu)
@@ -1143,6 +1155,7 @@ class ZernikeVector(MutableMapping):
         """
         x, y, r, p, ph = self.phase_map(n=100)
         fig = plt.figure(figsize=(8, 6))
+        fig.set_label("3D Wavefront Map")
         ax = fig.add_subplot(111, projection='3d')
         ax.plot_surface(x, y, ph, rstride=1, cstride=1, linewidth=0, alpha=0.6, cmap='plasma')
         v = max(abs(ph.max().value), abs(ph.min().value))

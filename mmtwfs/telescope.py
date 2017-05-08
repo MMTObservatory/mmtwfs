@@ -142,11 +142,13 @@ class MMT(object):
         if plot:
             im = psf[0].data
             psf_fig, ax = plt.subplots()
+            psf_fig.set_label("PSF at {0:0.0f}".format(wavelength))
             norm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.SqrtStretch())
             ims = ax.imshow(psf[0].data, extent=[-fov/2, fov/2, -fov/2, fov/2], cmap=cm.magma, norm=norm)
             ax.set_xlabel("arcsec")
             ax.set_ylabel("arcsec")
             cb = psf_fig.colorbar(ims)
+            cb.set_label("Fraction of Total Flux")
         return psf, psf_fig
 
     def bending_forces(self, zv=ZernikeVector(), gain=0.5):
@@ -310,6 +312,7 @@ class MMT(object):
         cmap = cm.ScalarMappable(col.Normalize(-100, 100), cm.bwr)
         cmap._A = []  # grr stupid matplotlib
         fig, ax = plt.subplots()
+        fig.set_label("M1 Actuator Forces")
         xcor, ycor = coords['act_x']/r_fac, coords['act_y']/r_fac
         ax.scatter(xcor, ycor, color=cmap.to_rgba(t['force']))
         for i, (x, y) in enumerate(zip(xcor, ycor)):

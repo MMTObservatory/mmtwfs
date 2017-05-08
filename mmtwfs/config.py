@@ -114,8 +114,7 @@ mmt_config = {
     },
     "secondary": {
         "f5": {
-            "host": "hexapod",
-            "port": 5341,
+            "hexserv": "_hexapod._tcp.mmto.arizona.edu",
             "diameter": 1688.0 * u.mm,  # clear aperture of secondary
             "theta_cc": 79.0 * u.nm / u.arcsec,  # nm of coma per arcsec of center-of-curvature tilt.
             "cc_trans": 24.97 * u.um / u.arcsec,  # um of hexapod translation per arcsec of center-of-curvature tilt.
@@ -123,8 +122,7 @@ mmt_config = {
             "focus_trans": 40.8 * u.nm / u.um  # nm of defocus per um of hexapod Z (focus) translation.
         },
         "f9": {
-            "host": "hexapod",
-            "port": 5341,
+            "hexserv": "_hexapod._tcp.mmto.arizona.edu",
             "diameter": 1006.7 * u.mm,
             "theta_cc": 44.4 * u.nm / u.arcsec,
             "cc_trans": 13.6 * u.um / u.arcsec,
@@ -144,7 +142,7 @@ mmt_config = {
             "pup_offset": [-0.42, 0.47],  # [x, y] pupil offset from center of reference aperture pattern
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
-            "nzern": 20,  # number of zernike modes to fit
+            "nzern": 36,  # number of zernike modes to fit
             "reference_file": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "f5_hecto_ref.fits")),
             "aberr_table_file": pkg_resources.resource_filename(__name__, os.path.join("data", "f5zernfield.tab")),
             "modes": {
@@ -177,6 +175,7 @@ mmt_config = {
         "f9": {
             "secondary": "f9",
             "default_mode": "blue",
+            "lampsrv": "_lampbox._tcp.mmto.arizona.edu",
             "cor_coords": [255.0, 255.0],
             "rotation": -225. * u.deg,
             "pix_size": 0.119 * u.arcsec,  # old KX260e detector with 20 um pixels
@@ -185,7 +184,7 @@ mmt_config = {
             "pup_offset": [0.4, 0.75],  # [x, y] pupil offset from center of reference aperture pattern
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
-            "nzern": 20,  # number of zernike modes to fit
+            "nzern": 36,  # number of zernike modes to fit
             "reference_file": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "f9_ref.fits")),
             "modes": {
                 "blue": {
@@ -215,7 +214,7 @@ mmt_config = {
             "pup_inner": 50,
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
-            "nzern": 20,  # number of zernike modes to fit
+            "nzern": 36,  # number of zernike modes to fit
             "aberr_table_file": pkg_resources.resource_filename(__name__, os.path.join("data", "mmirszernfield.tab")),
             "modes": {
                 "mmirs1": {

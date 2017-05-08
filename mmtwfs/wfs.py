@@ -28,6 +28,7 @@ from astropy.coordinates import SkyCoord, match_coordinates_3d
 
 from astroscrappy import detect_cosmics
 
+from .utils import srvlookup
 from .config import recursive_subclasses, merge_config, mmt_config
 from .telescope import MMT
 from .zernike import zernike_influence_matrix, ZernikeVector, cart2pol, pol2cart
@@ -111,6 +112,7 @@ def wfsfind(data, fwhm=7.0, threshold=5.0, plot=True, ap_radius=5.0, std=None):
     fig = None
     if plot:
         fig, ax = plt.subplots()
+        fig.set_label("WFSfind")
         positions = (sources['xcentroid'], sources['ycentroid'])
         apertures = photutils.CircularAperture(positions, r=ap_radius)
         norm = wfs_norm(data)
@@ -157,6 +159,7 @@ def mk_reference(data, xoffset=0, yoffset=0, pup_inner=45., pup_outer=175., fwhm
     """
     data = check_wfsdata(data)
     spots, wfsfind_fig = wfsfind(data, fwhm=fwhm, threshold=threshold, plot=plot)
+    wfsfind_fig.set_label("Reference Image")
     xcen = spots['xcentroid'].mean()
     ycen = spots['ycentroid'].mean()
     spacing = grid_spacing(data)
@@ -290,6 +293,7 @@ def center_pupil(data, pup_mask, threshold=0.5, sigma=20., plot=True):
     fig = None
     if plot:
         fig, ax = plt.subplots()
+        fig.set_label("Pupil Correlation Image (masked)")
         ax.imshow(match, interpolation=None, cmap=cm.magma, origin='lower')
     return cen[0], cen[1], fig
 
@@ -491,6 +495,7 @@ def get_slopes(data, ref, pup_mask, plot=True):
     if plot:
         norm = wfs_norm(data)
         aps_fig, ax = plt.subplots()
+        aps_fig.set_label("Aperture Positions")
         ax.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
         #apers.plot(color='red')
         ax.scatter(xcen, ycen)
@@ -730,6 +735,7 @@ class WFS(object):
             slope_fig = None
             if plot:
                 slope_fig, ax = plt.subplots()
+                slope_fig.set_label("WFS Image")
                 norm = wfs_norm(data)
                 ax.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
             results = {}
@@ -753,6 +759,7 @@ class WFS(object):
             uu = slopes[0][mask]
             vv = slopes[1][mask]
             norm = wfs_norm(data)
+            figures['slopes'].set_label("Aperture Positions and Spot Movement")
             ax = figures['slopes'].axes[0]
             ax.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
             aps.plot(color='blue', ax=ax)
@@ -763,7 +770,8 @@ class WFS(object):
             vl = [0.0]
             ax.quiver(xl, yl, ul, vl, scale_units='xy', scale=0.2, pivot='tip', color='red')
             ax.scatter([cen[0]], [cen[1]])
-            ax.text(60, 480, "1\"", verticalalignment='center')
+            ax.text(60, data.shape[0]-30, "1\"", verticalalignment='center')
+            ax.set_title("Seeing: %.2f\" (%.2f\" @ zenith)" % (raw_seeing.value, seeing.value))
 
         results = {}
         results['seeing'] = seeing
@@ -816,7 +824,7 @@ class WFS(object):
         rms = self.pix_size * np.sqrt((diff[0]**2 + diff[1]**2).mean())
         results['residual_rms'] = rms.to(u.arcsec).value * self.tiltfactor * zsub.units
         results['zernike_rms'] = zsub.rms
-        results['zernike_p2v'] = zsub.rms
+        results['zernike_p2v'] = zsub.peak2valley
 
         fig = None
         if plot:
@@ -824,6 +832,7 @@ class WFS(object):
             im = slope_results['data']
             gnorm = wfs_norm(im)
             fig, ax = plt.subplots()
+            fig.set_label("Zernike Fit Residuals")
             ax.imshow(im, cmap='Greys', origin='lower', norm=gnorm, interpolation='None')
             x = slope_results['apertures'].positions.transpose()[0]
             y = slope_results['apertures'].positions.transpose()[1]
@@ -834,6 +843,7 @@ class WFS(object):
             vl = [0.0]
             ax.quiver(xl, yl, ul, vl, scale_units='xy', scale=0.05, pivot='tip', color='red')
             ax.text(60, 480, "0.2\"", verticalalignment='center')
+            ax.set_title("Residual RMS: {0:0.4g}".format(results['residual_rms']))
 
         results['resid_plot'] = fig
         return results
@@ -924,12 +934,59 @@ class WFS(object):
         cmds = self.secondary.clear_wfs()
         return clear_forces, clear_m1focus
 
+    def connect(self):
+        """
+        Set state to connected
+        """
+        self.telescope.connect()
+        self.secondary.connect()
+        self.connected = True
+
+    def disconnect(self):
+        """
+        Set state to disconnected
+        """
+        self.telescope.disconnect()
+        self.secondary.disconnect()
+        self.connected = False
+        if self.sock:
+            try:
+                self.sock.close()
+                self.sock = None
+            except Exception as e:
+                print("Error closing connection to topbox server: %s" % e)
+
 
 class F9(WFS):
     """
     Defines configuration and methods specific to the F/9 WFS system
     """
-    pass
+    def __init__(self, config={}):
+        super(F9, self).__init__(config=config)
+
+        self.connected = False
+        self.sock = None
+
+        # get host/port to use for topbox communication
+        self.host, self.port = srvlookup(self.lampsrv)
+
+    def connect(self):
+        """
+        Set state to connected
+        """
+        self.telescope.connect()
+        self.secondary.connect()
+        self.connected = True
+        if self.host is not None:
+            try:
+                topbox_server = (self.host, self.port)
+                self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.sock.connect(topbox_server)
+            except Exception as e:
+                print("Error connecting to topbox server. Remaining disconnected...: %s" % e)
+                self.connected = False
+        else:
+            self.connected = False
 
 
 class F5(WFS):
@@ -938,6 +995,9 @@ class F5(WFS):
     """
     def __init__(self, config={}):
         super(F5, self).__init__(config=config)
+
+        self.connected = False
+        self.sock = None
 
         # load lookup table for off-axis aberrations
         self.aberr_table = ascii.read(self.aberr_table_file)
@@ -949,6 +1009,9 @@ class MMIRS(WFS):
     """
     def __init__(self, config={}):
         super(MMIRS, self).__init__(config=config)
+
+        self.connected = False
+        self.sock = None
 
         # load lookup table for off-axis aberrations
         self.aberr_table = ascii.read(self.aberr_table_file)
