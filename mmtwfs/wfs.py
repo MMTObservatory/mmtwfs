@@ -989,6 +989,13 @@ class F9(WFS):
             self.connected = False
 
 
+class NewF9(F9):
+    """
+    Defines configuration and methods specific to the F/9 WFS system with the new SBIG CCD
+    """
+    pass
+
+
 class F5(WFS):
     """
     Defines configuration and methods specific to the F/5 WFS system
