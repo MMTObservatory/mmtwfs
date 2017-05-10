@@ -132,6 +132,7 @@ mmt_config = {
     },
     "wfs": {
         "f5": {
+            "name": "F/5 WFS",
             "secondary": "f5",  # secondary used with WFS system
             "default_mode": "hecto",
             "cor_coords": [255.0, 255.0],  # image coordinates of the center of rotation
@@ -173,6 +174,7 @@ mmt_config = {
             }
         },
         "f9": {
+            "name": "F/9 WFS with Apogee Camera",
             "secondary": "f9",
             "default_mode": "blue",
             "lampsrv": "_lampbox._tcp.mmto.arizona.edu",
@@ -205,6 +207,7 @@ mmt_config = {
             }
         },
         "newf9": {
+            "name": "F/9 WFS with SBIG Camera",
             "secondary": "f9",
             "default_mode": "blue",
             "lampsrv": "_lampbox._tcp.mmto.arizona.edu",
@@ -237,6 +240,7 @@ mmt_config = {
             }
         },
         "mmirs": {
+            "name": "MMIRS WFS",
             "secondary": "f5",
             "default_mode": None,
             "cor_coords": [255.0, 255.0],
