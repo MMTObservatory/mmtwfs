@@ -20,7 +20,7 @@ import tornado.httpserver
 import tornado.ioloop
 import tornado.websocket
 
-
+import matplotlib.pyplot as plt
 from matplotlib.backends.backend_webagg_core import (
     FigureManagerWebAgg, new_figure_manager_given_figure)
 from matplotlib.figure import Figure
@@ -30,6 +30,45 @@ import numpy as np
 import json
 
 from mmtwfs.wfs import WFSFactory
+from mmtwfs.zernike import ZernikeVector
+from mmtwfs.telescope import MMT
+
+
+def create_default_figures():
+    zv = ZernikeVector(Z04=1)
+    figures = {}
+    ax = {}
+    data = np.zeros((512, 512))
+    tel = MMT(secondary='f5')  # secondary doesn't matter, just need methods for mirror forces/plots
+    forces = tel.bending_forces(zv=zv)
+
+    # stub for plot showing bkg-subtracted WFS image with aperture positions
+    figures['slopes'], ax['slopes'] = plt.subplots()
+    figures['slopes'].set_label("Aperture Positions and Spot Movement")
+    ax['slopes'].imshow(data, cmap='Greys', origin='lower', interpolation='None')
+
+    # stub for plot showing bkg-subtracted WFS image and residuals slopes of wavefront fit
+    figures['residuals'], ax['residuals'] = plt.subplots()
+    figures['residuals'].set_label("Zernike Fit Residuals")
+    ax['residuals'].imshow(data, cmap='Greys', origin='lower', interpolation='None')
+
+    # stub for zernike wavefront map
+    figures['wavefront'] = zv.plot_map()
+
+    # stub for zernike bar chart
+    figures['barchart'] = zv.bar_chart()
+
+    # stubs for mirror forces
+    figures['forces'] = tel.plot_forces(forces)
+
+    # stubs for mirror forces
+    figures['totalforces'] = tel.plot_forces(forces)
+    figures['totalforces'].set_label("Total M1 Actuator Forces")
+
+    # stub for psf
+    psf, figures['psf'] = tel.psf(zv=zv)
+
+    return figures
 
 
 class WFSServ(tornado.web.Application):
@@ -45,7 +84,7 @@ class WFSServ(tornado.web.Application):
             try:
                 wfs = self.get_argument("wfs")
                 render = self.get_argument("render", default=False)
-                if wfs in self.application.wfs_names:
+                if wfs in self.application.wfs_keys:
                     print("setting %s" % wfs)
                     self.application.wfs = self.application.wfs_systems[wfs]
             except:
@@ -55,10 +94,20 @@ class WFSServ(tornado.web.Application):
         def get(self):
             try:
                 wfs = self.get_argument("wfs")
-                if wfs in self.application.wfs_names:
+                if wfs in self.application.wfs_keys:
                     print("setting %s" % wfs)
                     self.application.wfs = self.application.wfs_systems[wfs]
-                    self.render("wfs.html", wfsname=self.application.wfs)
+                    figkeys = []
+                    ws_uris = []
+                    fig_ids = []
+                    for k, f in self.application.figures.items():
+                        manager = self.application.managers[k]
+                        fig_ids.append(manager.num)
+                        figkeys.append(k)
+                        ws_uri = "ws://{req.host}/{figdiv}/ws".format(req=self.request, figdiv=k)
+                        ws_uris.append(ws_uri)
+
+                    self.render("wfs.html", wfsname=self.application.wfs.name, ws_uris=ws_uris, fig_ids=fig_ids, figures=figkeys)
             except Exception as e:
                 print("Must specify valid wfs: %s. %s" % (wfs, e))
 
@@ -232,17 +281,24 @@ class WFSServ(tornado.web.Application):
         print("self.wfs_systems[wfs] = WFSFactory(wfs=wfs)")
 
     def __init__(self):
-        self.wfs = None
-        self.wfs_systems = {}
-        self.wfs_names = ['newf9', 'f9', 'f5', 'mmirs']
-        for w in self.wfs_names:
-            self.wfs_systems[w] = w  # WFSFactory(wfs=w)
-        self.figures = {}
-        self.managers = {}
         if 'WFSROOT' in os.environ:
             self.datadir = os.environ['WFSROOT']
         else:
             self.datadir = "/mmt/shwfs/datadir"
+
+        self.wfs = None
+        self.wfs_systems = {}
+        self.wfs_keys = ['newf9', 'f9', 'f5', 'mmirs']
+        self.wfs_names = {}
+        for w in self.wfs_keys:
+            self.wfs_systems[w] = WFSFactory(wfs=w)
+            self.wfs_names[w] = self.wfs_systems[w].name
+
+        self.figures = create_default_figures()
+        self.managers = {}
+        for k, f in self.figures.items():
+            fignum = id(f)
+            self.managers[k] = new_figure_manager_given_figure(fignum, f)
 
         handlers = [
             (r"/", self.HomeHandler),
@@ -260,7 +316,7 @@ class WFSServ(tornado.web.Application):
             (r"/m2gain", self.M2GainHandler),
             (r'/mpl.js', self.MplJs),
             (r'/download.([a-z0-9.]+)', self.Download),
-            (r'/([0-9]+)/ws', self.WebSocket)
+            (r'/([a-z0-9.]+)/ws', self.WebSocket)
         ]
 
         settings = dict(

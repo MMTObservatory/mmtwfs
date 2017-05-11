@@ -1119,7 +1119,7 @@ class ZernikeVector(MutableMapping):
         cmap = cm.ScalarMappable(col.Normalize(0, max_c), cm.magma_r)
         cmap._A = []  # stupid matplotlib
         ind = np.arange(len(labels))
-        fig, ax = plt.subplots(figsize=(10, 6))
+        fig, ax = plt.subplots(figsize=(12, 5))
         fig.set_label("RMS Wavefront Error per Zernike Mode")
         rects = ax.bar(ind, coeffs, color=cmap.to_rgba(coeffs))
         ax.spines['top'].set_visible(False)

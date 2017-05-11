@@ -24,8 +24,8 @@
                 </div>
                 <div class="collapse navbar-collapse" id="select">
                     <ul class="nav navbar-nav">
-                        {% for w in wfslist %}
-                            <li role="presentation"><a href="/wfspage?wfs={{ w }}">{{ w }}</a></li>
+                        {% for w in sorted(wfslist.keys()) %}
+                            <li role="presentation"><a href="/wfspage?wfs={{ w }}">{{ wfslist[w] }}</a></li>
                         {% end %}
                     </ul>
                 </div>

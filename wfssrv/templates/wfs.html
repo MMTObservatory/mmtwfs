@@ -6,39 +6,48 @@
 
         <link rel="stylesheet" href="{{ static_url("css/bootstrap.min.css") }}" type="text/css">
         <link rel="stylesheet" href="{{ static_url("css/bootstrap-theme.min.css") }}" type="text/css" />
-        <link rel="stylesheet" href="{{ static_url("css/theme.css") }}" type="text/css" />
+        <link rel="stylesheet" href="{{ static_url("css/style.min.css") }}" type="text/css" />
+        <link rel="stylesheet" href="{{ static_url("css/fbm.css") }}" type="text/css" />
+        <link rel="stylesheet" href="{{ static_url("jquery-ui/themes/smoothness/jquery-ui.min.css") }}" >
+        <script src="{{ static_url("js/jquery-1.11.3.min.js") }}"></script>
+        <script src="{{ static_url("js/jquery-ui.min.js") }}"></script>
+        <script src="{{ static_url("js/bootstrap.min.js") }}"></script>
 
-        <!-- <script>
-          /* This is a callback that is called when the user saves
+        <script src="mpl.js"></script>
+        <script>
+            /* This is a callback that is called when the user saves
              (downloads) a file.  Its purpose is really to map from a
              figure and file format to a url in the application. */
-          function ondownload(figure, format) {
+            function ondownload(figure, format) {
             window.open('download.' + format, '_blank');
-          };
+            };
 
-          $(document).ready(
-            function() {
-              /* It is up to the application to provide a websocket that the figure
-                 will use to communicate to the server.  This websocket object can
-                 also be a "fake" websocket that underneath multiplexes messages
-                 from multiple figures, if necessary. */
-              var websocket_type = mpl.get_websocket_type();
-              var websocket = new websocket_type("%(ws_uri)sws");
+            $(document).ready(
+                function() {
+                    /* It is up to the application to provide a websocket that the figure
+                     will use to communicate to the server.  This websocket object can
+                     also be a "fake" websocket that underneath multiplexes messages
+                     from multiple figures, if necessary. */
+                    var websocket_type = mpl.get_websocket_type();
 
-              // mpl.figure creates a new figure on the webpage.
-              var fig = new mpl.figure(
-                  // A unique numeric identifier for the figure
-                  "%(fig_id)s",
-                  // A websocket object (or something that behaves like one)
-                  websocket,
-                  // A function called when a file type is selected for download
-                  ondownload,
-                  // The HTML element in which to place the figure
-                  $('div#figure'));
-            }
+                    {% for ws_uri, fig_id, figure in zip(ws_uris, fig_ids, figures) %}
+                        var websocket_{{ figure }} = new websocket_type("{{ ws_uri }}");
 
-          );
-        </script> -->
+                        // mpl.figure creates a new figure on the webpage.
+                        var fig = new mpl.figure(
+                            // A unique numeric identifier for the figure
+                            {{ fig_id }},
+                            // A websocket object (or something that behaves like one)
+                            websocket_{{ figure }},
+                            // A function called when a file type is selected for download
+                            ondownload,
+                            // The HTML element in which to place the figure
+                            $('div#{{ figure }}')
+                        );
+                    {% end %}
+                }
+            );
+        </script>
 
         <title>{{ wfsname }}</title>
     </head>
@@ -57,8 +66,39 @@
             </div>
         </nav>
 
-        <script src="{{ static_url("js/bootstrap.min.js") }}"></script>
-        <script src="{{ static_url("js/jquery.min.js") }}"></script>
-        <script src="mpl.js"></script>
+        <table class="table table-striped">
+            <tbody>
+                <tr>
+                    <td>
+                        <div id="slopes"></div>
+                    </td>
+                    <td>
+                        <div id="residuals"></div>
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="2" align="center">
+                        <div id="barchart"></div>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <div id="wavefront"></div>
+                    </td>
+                    <td>
+                        <div id="psf"></div>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <div id="forces"></div>
+                    </td>
+                    <td>
+                        <div id="totalforces"></div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
     </body>
 </html>

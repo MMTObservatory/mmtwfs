@@ -143,7 +143,7 @@ class MMT(object):
             im = psf[0].data
             psf_fig, ax = plt.subplots()
             psf_fig.set_label("PSF at {0:0.0f}".format(wavelength))
-            norm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.SqrtStretch())
+            norm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.LinearStretch())
             ims = ax.imshow(psf[0].data, extent=[-fov/2, fov/2, -fov/2, fov/2], cmap=cm.magma, norm=norm)
             ax.set_xlabel("arcsec")
             ax.set_ylabel("arcsec")
