@@ -195,7 +195,7 @@ class WFSServ(tornado.web.Application):
         """
         Handles downloading of the figure in various file formats.
         """
-        def get(self, fmt):
+        def get(self, fig, fmt):
             managers = self.application.managers
 
             mimetypes = {
@@ -212,7 +212,7 @@ class WFSServ(tornado.web.Application):
             self.set_header('Content-Type', mimetypes.get(fmt, 'binary'))
 
             buff = io.BytesIO()
-            managers['reference'].canvas.print_figure(buff, format=fmt)
+            managers[fig].canvas.print_figure(buff, format=fmt)
             self.write(buff.getvalue())
 
     class WebSocket(tornado.websocket.WebSocketHandler):
@@ -315,7 +315,7 @@ class WFSServ(tornado.web.Application):
             (r"/m1gain", self.M1GainHandler),
             (r"/m2gain", self.M2GainHandler),
             (r'/mpl.js', self.MplJs),
-            (r'/download.([a-z0-9.]+)', self.Download),
+            (r'/download_([a-z]+).([a-z0-9.]+)', self.Download),
             (r'/([a-z0-9.]+)/ws', self.WebSocket)
         ]
 
