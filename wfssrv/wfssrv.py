@@ -21,8 +21,7 @@ import tornado.ioloop
 import tornado.websocket
 
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_webagg_core import (
-    FigureManagerWebAgg, new_figure_manager_given_figure)
+from matplotlib.backends.backend_webagg_core import (FigureManagerWebAgg, FigureCanvasWebAggCore, new_figure_manager_given_figure)
 from matplotlib.figure import Figure
 
 import numpy as np
@@ -60,6 +59,7 @@ def create_default_figures():
 
     # stubs for mirror forces
     figures['forces'] = tel.plot_forces(forces)
+    figures['forces'].set_label("Requested M1 Actuator Forces")
 
     # stubs for mirror forces
     figures['totalforces'] = tel.plot_forces(forces)
@@ -96,6 +96,7 @@ class WFSServ(tornado.web.Application):
                 wfs = self.get_argument("wfs")
                 if wfs in self.application.wfs_keys:
                     print("setting %s" % wfs)
+                    #self.application.refresh_figures()
                     self.application.wfs = self.application.wfs_systems[wfs]
                     figkeys = []
                     ws_uris = []
@@ -125,11 +126,40 @@ class WFSServ(tornado.web.Application):
 
     class AnalyzeHandler(tornado.web.RequestHandler):
         def get(self):
+            self.application.close_figures()
             try:
                 filename = self.get_argument("fitsfile")
                 print(filename)
             except:
                 print("no wfs or file specified.")
+            if os.path.isfile(filename):
+                results = self.application.wfs.measure_slopes(filename, plot=True)
+                zresults = self.application.wfs.fit_wavefront(results, plot=True)
+                zvec = zresults['zernike']
+                tel = self.application.wfs.telescope
+                m1gain = self.application.wfs.m1_gain
+                m2gain = self.application.wfs.m2_gain
+                forces, m1focus = tel.calculate_primary_corrections(zvec, gain=m1gain)
+                figures = {}
+                figures['slopes'] = results['figures']['slopes']
+                figures['residuals'] = zresults['resid_plot']
+                figures['wavefront'] = zvec.plot_map()
+                figures['barchart'] = zvec.bar_chart(residual=zresults['residual_rms'])
+                figures['forces'] = tel.plot_forces(forces, m1focus)
+                figures['forces'].set_label("Requested M1 Actuator Forces")
+                figures['totalforces'] = tel.plot_forces(tel.total_forces)
+                figures['totalforces'].set_label("Total M1 Actuator Forces")
+                psf, figures['psf'] = tel.psf(zv=zvec.copy())
+                print(zvec)
+                self.application.wavefront_fit = zvec
+                self.application.pending_forces = forces
+                self.application.pending_m1focus = m1focus
+                self.application.pending_focus = self.application.wfs.calculate_focus(zvec)
+                self.application.pending_cc_x, self.application.pending_cc_y = self.application.wfs.calculate_cc(zvec)
+
+                figures['barchart'].axes[0].set_title("Focus: {0:0.1f}".format(self.application.pending_focus))
+
+                self.application.refresh_figures(figures=figures)
 
     class M1CorrectHandler(tornado.web.RequestHandler):
         def get(self):
@@ -258,7 +288,7 @@ class WFSServ(tornado.web.Application):
             if message['type'] == 'supports_binary':
                 self.supports_binary = message['value']
             else:
-                manager = self.application.managers[self.figname]
+                manager = self.application.fig_id_map[message['figure_id']]
                 manager.handle_json(message)
 
         def send_json(self, content):
@@ -280,6 +310,29 @@ class WFSServ(tornado.web.Application):
         self.wfs_systems[wfs] = wfs
         print("self.wfs_systems[wfs] = WFSFactory(wfs=wfs)")
 
+    def close_figures(self):
+        if self.figures is not None:
+            for k, f in self.figures.items():
+                plt.close(f)
+
+    def refresh_figures(self, figures=None):
+        if figures is None:
+            self.figures = create_default_figures()
+        else:
+            self.figures = figures
+
+        for k, f in self.figures.items():
+            if k not in self.managers:
+                fignum = id(f)
+                self.managers[k] = new_figure_manager_given_figure(fignum, f)
+                self.fig_id_map[fignum] = self.managers[k]
+            else:
+                canvas = FigureCanvasWebAggCore(f)
+                self.managers[k].canvas = canvas
+                self.managers[k].canvas.manager = self.managers[k]
+                self.managers[k]._get_toolbar(canvas)
+                self.managers[k].refresh_all()
+
     def __init__(self):
         if 'WFSROOT' in os.environ:
             self.datadir = os.environ['WFSROOT']
@@ -294,11 +347,11 @@ class WFSServ(tornado.web.Application):
             self.wfs_systems[w] = WFSFactory(wfs=w)
             self.wfs_names[w] = self.wfs_systems[w].name
 
-        self.figures = create_default_figures()
+        self.figures = None
         self.managers = {}
-        for k, f in self.figures.items():
-            fignum = id(f)
-            self.managers[k] = new_figure_manager_given_figure(fignum, f)
+        self.fig_id_map = {}
+        self.refresh_figures()
+        self.wavefront_fit = ZernikeVector(Z04=1)
 
         handlers = [
             (r"/", self.HomeHandler),
