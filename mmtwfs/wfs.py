@@ -848,29 +848,28 @@ class WFS(object):
         results['resid_plot'] = fig
         return results
 
-    def correct_primary(self, zv, forcefile="zfile.txt", mask=[]):
+    def calculate_primary(self, zv, mask=[]):
         """
-        Apply force corrections to primary mirror. Use 'mask' to determine which terms in 'zv' to use in the force
-        calculations.
+        Calculate force corrections to primary mirror and any required focus offsets. Use 'mask' to determine which
+        terms in 'zv' to use in the force calculations.
         """
         z_denorm = zv.copy()
         z_denorm.denormalize()  # need to assure we're using fringe coeffs
-        forces, m1focus = self.telescope.correct_primary(zv=z_denorm, mask=mask, filename=forcefile, gain=self.m1_gain)
+        forces, m1focus = self.telescope.calculate_primary_corrections(zv=z_denorm, mask=mask, gain=self.m1_gain)
+
         return forces, m1focus
 
-    def correct_focus(self, zv):
+    def calculate_focus(self, zv):
         """
-        Convert Zernike defocus to um of secondary offset and apply offsets if connected.
+        Convert Zernike defocus to um of secondary offset.
         """
         z_denorm = zv.copy()
         z_denorm.denormalize()  # need to assure we're using fringe coeffs
         foc_corr = -self.m2_gain * z_denorm['Z04'] / self.secondary.focus_trans
-        print("Correcting focus by moving secondary {0:0.03f}...".format(foc_corr))
-        if self.connected:
-            self.secondary.focus(foc_corr)
+
         return foc_corr
 
-    def correct_coma(self, zv):
+    def calculate_cc(self, zv):
         """
         Convert Zernike coma (Z07 and Z08) into arcsec of secondary center-of-curvature tilts.
         """
@@ -889,12 +888,10 @@ class WFS(object):
 
         print("Correcting {0:0.03f} Y coma with {1:0.03f} of CC tilt in X...".format(zv['Z07'], cc_x_corr))
         print("Correcting {0:0.03f} X coma with {1:0.03f} of CC tilt in Y...".format(zv['Z08'], cc_y_corr))
-        if self.connected:
-            self.secondary.cc('x', cc_x_corr)
-            self.secondary.cc('y', cc_y_corr)
+
         return cc_x_corr, cc_y_corr
 
-    def recenter(self, fit_results):
+    def calculate_recenter(self, fit_results):
         """
         Perform zero-coma hexapod tilts to align the pupil center to the center-of-rotation. The location of the CoR is configured
         to be at self.cor_coords
@@ -917,7 +914,7 @@ class WFS(object):
         az *= self.pix_size
         el *= self.pix_size
 
-        print("Offsetting hexapod {0:0.03f} in AZ and {1:0.03f} in EL...".format(az, el))
+        print("Pupil center offset {0:0.03f} in AZ and {1:0.03f} in EL...".format(az, el))
 
         if self.connected:
             self.secondary.zc('x', el)
