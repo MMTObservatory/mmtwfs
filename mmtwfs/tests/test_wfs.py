@@ -70,20 +70,20 @@ def test_no_spots():
 def test_correct_primary():
     wfs = WFSFactory(wfs='f5')
     zv = ZernikeVector()
-    f, m1f = wfs.correct_primary(zv)
+    f, m1f = wfs.calculate_primary(zv)
     assert(m1f == 0.0)
     assert(np.allclose(f['force'], 0.0))
 
 def test_correct_focus():
     wfs = WFSFactory(wfs='f5')
     zv = ZernikeVector()
-    corr = wfs.correct_focus(zv)
+    corr = wfs.calculate_focus(zv)
     assert(corr == 0.0)
 
 def test_correct_coma():
     wfs = WFSFactory(wfs='f5')
     zv = ZernikeVector()
-    cx, cy = wfs.correct_coma(zv)
+    cx, cy = wfs.calculate_cc(zv)
     assert(cx == 0.0)
     assert(cy == 0.0)
 
@@ -91,7 +91,7 @@ def test_recenter():
     test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "auto_wfs_0037_ave.fits"))
     f5 = WFSFactory(wfs='f5')
     results = f5.measure_slopes(test_file, plot=False)
-    az, el = f5.recenter(results)
+    az, el = f5.calculate_recenter(results)
     assert(np.abs(az) > 0.0)
     assert(np.abs(el) > 0.0)
 
