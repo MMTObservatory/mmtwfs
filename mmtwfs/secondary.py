@@ -146,6 +146,24 @@ class Secondary(object):
             self.sock.sendall("apply_offsets")
         return cmd
 
+    def correct_coma(self, cc_x_corr, cc_y_corr):
+        """
+        Apply calculated tilts to correct coma
+        """
+        if self.connected:
+            self.cc('x', cc_x_corr)
+            self.cc('y', cc_y_corr)
+        return cc_x_corr, cc_y_corr
+
+    def recenter(self, az, el):
+        """
+        Apply calculated az/el offsets using ZC tilts
+        """
+        if self.connected:
+            self.zc('x', el)
+            self.zc('y', az)
+        return az, el
+
     def clear_m1spherical(self):
         """
         When clearing forces from the primary mirror, also need to clear any focus offsets applied to secondary to help
