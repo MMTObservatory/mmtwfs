@@ -207,20 +207,6 @@ class WFSServ(tornado.web.Application):
             except:
                 print("no m2_gain specified")
 
-    class MplJs(tornado.web.RequestHandler):
-        """
-        Serves the generated matplotlib javascript file.  The content
-        is dynamically generated based on which toolbar functions the
-        user has defined.  Call `FigureManagerWebAgg` to get its
-        content.
-        """
-        def get(self):
-            self.set_header('Content-Type', 'application/javascript')
-
-            js_content = FigureManagerWebAgg.get_javascript()
-
-            self.write(js_content)
-
     class Download(tornado.web.RequestHandler):
         """
         Handles downloading of the figure in various file formats.
@@ -331,7 +317,8 @@ class WFSServ(tornado.web.Application):
                 self.managers[k].canvas = canvas
                 self.managers[k].canvas.manager = self.managers[k]
                 self.managers[k]._get_toolbar(canvas)
-                self.managers[k].refresh_all()
+                self.managers[k]._send_event("refresh")
+                self.managers[k].canvas.draw()
 
     def __init__(self):
         if 'WFSROOT' in os.environ:
@@ -367,7 +354,6 @@ class WFSServ(tornado.web.Application):
             (r"/setdatadir", self.DataDirHandler),
             (r"/m1gain", self.M1GainHandler),
             (r"/m2gain", self.M2GainHandler),
-            (r'/mpl.js', self.MplJs),
             (r'/download_([a-z]+).([a-z0-9.]+)', self.Download),
             (r'/([a-z0-9.]+)/ws', self.WebSocket)
         ]
