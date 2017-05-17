@@ -136,6 +136,8 @@ mmt_config = {
             "secondary": "f5",  # secondary used with WFS system
             "default_mode": "hecto",
             "cor_coords": [255.0, 255.0],  # image coordinates of the center of rotation
+            "find_fwhm": 7.0,  # FWHM for DAOfind kernel
+            "find_thresh": 5.0,  # threshold for DAOfind
             "rotation": 234.0 * u.deg,  # rotation of aperture locations w.r.t. the primary mirror
             "pix_size": 0.135 * u.arcsec,  # arcsec per WFS detector pixel
             "pup_size": 460,  # pixels
@@ -179,6 +181,8 @@ mmt_config = {
             "default_mode": "blue",
             "lampsrv": "_lampbox._tcp.mmto.arizona.edu",
             "cor_coords": [255.0, 255.0],
+            "find_fwhm": 7.0,
+            "find_thresh": 5.0,
             "rotation": -225. * u.deg,
             "pix_size": 0.119 * u.arcsec,  # old KX260e detector with 20 um pixels
             "pup_size": 440,  # pupil outer diameter in pixels
@@ -211,12 +215,14 @@ mmt_config = {
             "secondary": "f9",
             "default_mode": "blue",
             "lampsrv": "_lampbox._tcp.mmto.arizona.edu",
-            "cor_coords": [424.0, 417.0],
+            "cor_coords": [433.0, 431.0],
+            "find_fwhm": 15.0,
+            "find_thresh": 7.0,
             "rotation": -225. * u.deg,
             "pix_size": 0.09639 * u.arcsec,  # SBIG STT-8300 with 5.4 um pixels binned 3x3
             "pup_size": 540,  # pupil outer diameter in pixels
             "pup_inner": 65,  # inner obscuration radius in pixels
-            "pup_offset": [0.4, 0.75],  # [x, y] pupil offset from center of reference aperture pattern
+            "pup_offset": [0.0, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 36,  # number of zernike modes to fit
@@ -244,6 +250,8 @@ mmt_config = {
             "secondary": "f5",
             "default_mode": None,
             "cor_coords": [255.0, 255.0],
+            "find_fwhm": 7.0,
+            "find_thresh": 5.0,
             "rotation": 180. * u.deg,  # this is referenced to camera2. camera1 is camera2+180, but is flipped by image acq
             "pix_size": 0.156 * u.arcsec,
             "pup_size": 335,  # pixels
