@@ -6,7 +6,7 @@ Classes and utilities for operating the wavefront sensors of the MMTO and analyz
 """
 
 import warnings
-
+import socket
 import numpy as np
 import photutils
 
@@ -162,7 +162,7 @@ def mk_reference(data, xoffset=0, yoffset=0, pup_inner=45., pup_outer=175., fwhm
     wfsfind_fig.set_label("Reference Image")
     xcen = spots['xcentroid'].mean()
     ycen = spots['ycentroid'].mean()
-    spacing = grid_spacing(data)
+    spacing = grid_spacing(data, spots)
 
     # make masks for each reference spot and fit a 2D gaussian to get its FWHM. the reference FWHM is subtracted in
     # quadrature from the observed FWHM when calculating the seeing.
@@ -226,14 +226,15 @@ def mk_reference(data, xoffset=0, yoffset=0, pup_inner=45., pup_outer=175., fwhm
     return ref
 
 
-def grid_spacing(data):
+def grid_spacing(data, apertures):
     """
     Measure the WFS grid spacing which changes with telescope focus.
 
     Arguments
     ---------
-    data: str or 2D ndarray
-        WFS data to analyze
+    data: WFS image (FITS or np.ndarray)
+    apertures: astropy.table.Table
+        WFS aperture data to analyze
 
     Returns
     -------
@@ -241,18 +242,24 @@ def grid_spacing(data):
         Average grid spacing in X and Y axes
     """
     data = check_wfsdata(data)
+    x = np.arange(data.shape[1])
+    y = np.arange(data.shape[0])
+    bx = np.arange(data.shape[1]+1)
+    by = np.arange(data.shape[0]+1)
+
     # sum along the axes and use Lomb-Scargle to measure the grid spacing in each direction
-    xsum = np.sum(data, axis=0)
-    ysum = np.sum(data, axis=1)
-    x = np.arange(len(xsum))
-    y = np.arange(len(ysum))
+    xsum = np.histogram(apertures['xcentroid'], bins=bx)
+    ysum = np.histogram(apertures['ycentroid'], bins=by)
+
     k = np.linspace(5.0, 50., 1000)  # look for spacings from 5 to 50 pixels (plenty of range)
     f = 1.0 / k  # convert spacing to frequency
-    xp = stats.LombScargle(x, xsum).power(f)
-    yp = stats.LombScargle(y, ysum).power(f)
+    xp = stats.LombScargle(x, xsum[0]).power(f)
+    yp = stats.LombScargle(y, ysum[0]).power(f)
+
     # the peak of the power spectrum will coincide with the average spacing
     xspacing = k[xp.argmax()]
     yspacing = k[yp.argmax()]
+
     return xspacing, yspacing
 
 
@@ -298,7 +305,7 @@ def center_pupil(data, pup_mask, threshold=0.5, sigma=20., plot=True):
     return cen[0], cen[1], fig
 
 
-def get_apertures(data, apsize, plot=True):
+def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True):
     """
     Use wfsfind to locate and centroid spots.  Measure their S/N ratios and the sigma of a 2D gaussian fit to
     the co-added spot.
@@ -328,7 +335,7 @@ def get_apertures(data, apsize, plot=True):
     # use wfsfind() and pass it the clipped stddev from here
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        srcs, wfsfind_fig = wfsfind(data, std=stddev, plot=plot)
+        srcs, wfsfind_fig = wfsfind(data, fwhm=fwhm, threshold=thresh, std=stddev, plot=plot)
 
     # we use circular apertures here because they generate square masks of the appropriate size.
     # rectangular apertures produced masks that were sqrt(2) too large.
@@ -368,7 +375,7 @@ def get_apertures(data, apsize, plot=True):
     return srcs, masks, snrs, sigma, wfsfind_fig
 
 
-def get_slopes(data, ref, pup_mask, plot=True):
+def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
     """
     Analyze a WFS image and produce pixel offsets between reference and observed spot positions.
 
@@ -402,13 +409,13 @@ def get_slopes(data, ref, pup_mask, plot=True):
     # input data should be background subtracted for best results. this initial guess of the center positions
     # will be good enough to get the central obscuration, but will need to be fine-tuned.
     xcen, ycen, pupcen_fig = center_pupil(data, pup_mask, plot=plot)
-    xspacing, yspacing = grid_spacing(data)
 
     # using the mean spacing is straightforward for square apertures and a reasonable underestimate for hexagonal ones (e.g. f/9)
-    apsize = np.mean([xspacing, yspacing])
     ref_spacing = np.mean([ref['xspacing'], ref['yspacing']])
+    apsize = ref_spacing
 
-    srcs, masks, snrs, sigma, wfsfind_fig = get_apertures(data, apsize)
+    srcs, masks, snrs, sigma, wfsfind_fig = get_apertures(data, apsize, fwhm=fwhm, thresh=thresh)
+    xspacing, yspacing = grid_spacing(data, srcs)
 
     # if we don't detect spots in at least half of the reference apertures, we can't usually get a good wavefront measurement
     if len(srcs) < 0.5 * len(ref['apertures']['xcentroid']):
@@ -728,6 +735,8 @@ class WFS(object):
                 data,
                 self.modes[mode]['reference'],
                 pup_mask,
+                fwhm=self.find_fwhm,
+                thresh=self.find_thresh,
                 plot=plot
             )
         except WFSAnalysisFailed as e:
@@ -764,7 +773,7 @@ class WFS(object):
             ax.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
             aps.plot(color='blue', ax=ax)
             ax.quiver(x, y, uu, vv, scale_units='xy', scale=0.2, pivot='tip', color='red')
-            xl = [50.0]
+            xl = [60.0]
             yl = [data.shape[0]-30]
             ul = [1.0/self.pix_size.value]
             vl = [0.0]
@@ -842,7 +851,7 @@ class WFS(object):
             ul = [0.2/self.pix_size.value]
             vl = [0.0]
             ax.quiver(xl, yl, ul, vl, scale_units='xy', scale=0.05, pivot='tip', color='red')
-            ax.text(60, 480, "0.2\"", verticalalignment='center')
+            ax.text(60, im.shape[0]-30, "0.2\"", verticalalignment='center')
             ax.set_title("Residual RMS: {0:0.4g}".format(results['residual_rms']))
 
         results['resid_plot'] = fig
@@ -876,18 +885,9 @@ class WFS(object):
         z_denorm = zv.copy()
         z_denorm.denormalize()  # need to assure we're using fringe coeffs
 
-        #
-        # Y coma is caused by a rotation around the X axis and X coma by a rotation around the Y axis.
-        #
-        # the zernike convention has Y coma as a positive tilt towards the +Y direction. however,
-        # the hexapod control obeys the right-hand rule so a positive tilt around the X axis tilts
-        # the wavefront towards -Y. X coma moves in the same sense as Y tilts, though. hence the difference
-        # in signs here.
-        cc_x_corr = self.m2_gain * z_denorm['Z07'] / self.secondary.theta_cc
-        cc_y_corr = -self.m2_gain * z_denorm['Z08'] / self.secondary.theta_cc
-
-        print("Correcting {0:0.03f} Y coma with {1:0.03f} of CC tilt in X...".format(zv['Z07'], cc_x_corr))
-        print("Correcting {0:0.03f} X coma with {1:0.03f} of CC tilt in Y...".format(zv['Z08'], cc_y_corr))
+        # fix coma using tilts around the M2 center of curvature.
+        cc_y_corr = -self.m2_gain * z_denorm['Z07'] / self.secondary.theta_cc
+        cc_x_corr = -self.m2_gain * z_denorm['Z08'] / self.secondary.theta_cc
 
         return cc_x_corr, cc_y_corr
 
@@ -990,7 +990,34 @@ class NewF9(F9):
     """
     Defines configuration and methods specific to the F/9 WFS system with the new SBIG CCD
     """
-    pass
+    def process_image(self, fitsfile):
+        """
+        Process the image to make it suitable for accurate wavefront analysis.  Steps include nuking cosmic rays,
+        subtracting background, handling overscan regions, etc.
+        """
+        # we're a fits file (hopefully)
+        try:
+            fitsdata = fits.open(fitsfile)[0]
+            rawdata = fitsdata.data
+            hdr = fitsdata.header
+        except Exception as e:
+            msg = "Error reading FITS file, %s (%s)" % (fitsfile, repr(e))
+            raise WFSConfigException(value=msg)
+        rawdata = check_wfsdata(rawdata)
+
+        # MMIRS gets a lot of hot pixels/CRs so make a quick pass to nuke them
+        cr_mask, data = detect_cosmics(rawdata, sigclip=4., niter=10, cleantype='medmask', psffwhm=5.)
+
+        # calculate the background and subtract it
+        bkg_estimator = photutils.MedianBackground()
+        bkg = photutils.Background2D(data, (50, 50), filter_size=(15, 15), bkg_estimator=bkg_estimator)
+        data -= bkg.background
+
+        # trim overscan (this is needed for MMIRS, but ok for rest)
+        data[:5, :] = 0.0
+        data[:, :12] = 0.0
+
+        return data, hdr
 
 
 class F5(WFS):
