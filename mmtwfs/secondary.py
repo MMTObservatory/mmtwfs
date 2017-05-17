@@ -53,8 +53,8 @@ class Secondary(object):
         """
         cmd = "offset_inc %s %s %f" % (offset, axis, value)
         if self.connected:
-            self.sock.sendall(cmd)
-            self.sock.sendall("apply_offsets")
+            self.sock.sendall(cmd.encode('utf8'))
+            self.sock.sendall("apply_offsets".encode('utf8'))
         return cmd
 
     def connect(self):
