@@ -859,14 +859,19 @@ class WFS(object):
         results['resid_plot'] = fig
         return results
 
-    def calculate_primary(self, zv, mask=[]):
+    def calculate_primary(self, zv, threshold=0.0 * u.nm, mask=[]):
         """
-        Calculate force corrections to primary mirror and any required focus offsets. Use 'mask' to determine which
-        terms in 'zv' to use in the force calculations.
+        Calculate force corrections to primary mirror and any required focus offsets. Use threshold to determine which
+        terms in 'zv' to use in the force calculations. Any terms with normalized amplitude less than threshold will
+        not be used in the force calculation. In addition, individual terms can be forced to be masked.
         """
-        z_denorm = zv.copy()
-        z_denorm.denormalize()  # need to assure we're using fringe coeffs
-        forces, m1focus = self.telescope.calculate_primary_corrections(zv=z_denorm, mask=mask, gain=self.m1_gain)
+        zv.normalize()
+        zv_masked = ZernikeVector()
+        for z in zv:
+            if zv[z] >= threshold:
+                zv_masked[z] = zv[z]
+        zv_masked.denormalize()  # need to assure we're using fringe coeffs
+        forces, m1focus = self.telescope.calculate_primary_corrections(zv=zv_masked, mask=mask, gain=self.m1_gain)
 
         return forces, m1focus
 
@@ -937,7 +942,11 @@ class WFS(object):
         """
         self.telescope.connect()
         self.secondary.connect()
-        self.connected = True
+
+        if self.telescope.connected and self.secondary.connected:
+            self.connected = True
+        else:
+            self.connected = False
 
     def disconnect(self):
         """
@@ -967,13 +976,18 @@ class F9(WFS):
         # get host/port to use for topbox communication
         self.host, self.port = srvlookup(self.lampsrv)
 
-    def connect(self):
+    def topbox_connect(self):
         """
         Set state to connected
         """
         self.telescope.connect()
         self.secondary.connect()
-        self.connected = True
+
+        if self.telescope.connected and self.secondary.connected:
+            self.connected = True
+        else:
+            self.connected = False
+
         if self.host is not None:
             try:
                 topbox_server = (self.host, self.port)
