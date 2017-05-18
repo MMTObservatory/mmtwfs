@@ -12,6 +12,11 @@ import io
 import os
 import socket
 
+import logging
+import logging.handlers
+logger = logging.getLogger("")
+logger.setLevel(logging.INFO)
+
 try:
     import tornado
 except ImportError:
@@ -22,7 +27,6 @@ import tornado.ioloop
 import tornado.websocket
 from tornado.log import enable_pretty_logging
 enable_pretty_logging()
-import logging
 
 import matplotlib
 matplotlib.use('webagg')
@@ -408,8 +412,10 @@ class WFSServ(tornado.web.Application):
 
         if os.path.isdir(self.datadir):
             logfile = os.path.join(self.datadir, "wfs.log")
-            handler = logging.FileHandler(logfile)
-            log.addHandler(handler)
+            formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+            handler = logging.handlers.WatchedFileHandler(logfile)
+            handler.setFormatter(formatter)
+            logger.addHandler(handler)
             enable_pretty_logging(logger=log)
 
         self.wfs = None
