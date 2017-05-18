@@ -868,7 +868,7 @@ class WFS(object):
         zv.normalize()
         zv_masked = ZernikeVector()
         for z in zv:
-            if zv[z] >= threshold:
+            if abs(zv[z]) >= threshold:
                 zv_masked[z] = zv[z]
         zv_masked.denormalize()  # need to assure we're using fringe coeffs
         forces, m1focus = self.telescope.calculate_primary_corrections(zv=zv_masked, mask=mask, gain=self.m1_gain)

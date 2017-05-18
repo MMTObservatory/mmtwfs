@@ -173,7 +173,7 @@ class MMT(object):
 
         # get surface displacements at the BCV node positions. multiply the wavefront amplitude by 0.5 to account for reflection
         # off the surface.
-        surf_corr = 0.5 * gain * zv.total_phase(self.nodecoor['bcv_rho'], self.nodecoor['bcv_phi'])
+        surf_corr = -0.5 * gain * zv.total_phase(self.nodecoor['bcv_rho'], self.nodecoor['bcv_phi'])
         if isinstance(surf_corr, float):  # means we got 0.0 from zv.total_phase()
             force_vec = np.zeros(self.n_act)
         else:
