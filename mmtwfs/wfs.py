@@ -921,10 +921,6 @@ class WFS(object):
         az *= self.pix_size
         el *= self.pix_size
 
-        if self.connected:
-            self.secondary.zc('x', el)
-            self.secondary.zc('y', az)
-
         return az, el
 
     def clear_corrections(self):

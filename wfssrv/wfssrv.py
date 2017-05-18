@@ -162,8 +162,8 @@ class WFSServ(tornado.web.Application):
                 self.application.pending_cc_x, self.application.pending_cc_y = self.application.wfs.calculate_cc(zvec)
                 self.application.pending_az, self.application.pending_el = self.application.wfs.calculate_recenter(results)
                 self.application.pending_forces, self.application.pending_m1focus = \
-                    self.application.wfs.calculate_primary(zvec, threshold=zresults['residual_rms'])
-                self.application.pending_forcefile = filename + ".zfile"
+                    self.application.wfs.calculate_primary(zvec, threshold=m1gain*zresults['residual_rms'])
+                self.application.pending_forcefile = os.path.join(self.application.datadir, filename + ".zfile")
                 figures['forces'] = tel.plot_forces(self.application.pending_forces, self.application.pending_m1focus)
                 figures['forces'].set_label("Requested M1 Actuator Forces")
                 figures['barchart'].axes[0].set_title("Focus: {0:0.1f}  CC_X: {1:0.1f}  CC_Y: {2:0.1f}".format(
@@ -181,7 +181,8 @@ class WFSServ(tornado.web.Application):
             if self.application.has_pending and self.application.wfs.connected:
                 self.application.wfs.telescope.correct_primary(
                     self.application.pending_forces,
-                    self.application.pending_m1focus
+                    self.application.pending_m1focus,
+                    filename=self.application.pending_forcefile
                 )
                 print(self.application.pending_forces)
                 print(self.application.pending_m1focus)
