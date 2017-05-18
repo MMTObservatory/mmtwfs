@@ -167,7 +167,7 @@ class WFSServ(tornado.web.Application):
                 limit = np.round(np.abs(self.application.pending_forcefile['force']))
                 figures['forces'] = tel.plot_forces(
                     self.application.pending_forces,
-                    self.application.pending_m1focus
+                    self.application.pending_m1focus,
                     limit=limit
                 )
                 figures['forces'].set_label("Requested M1 Actuator Forces")
