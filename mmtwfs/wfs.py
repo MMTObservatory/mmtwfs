@@ -247,7 +247,7 @@ def grid_spacing(data, apertures):
     bx = np.arange(data.shape[1]+1)
     by = np.arange(data.shape[0]+1)
 
-    # sum along the axes and use Lomb-Scargle to measure the grid spacing in each direction
+    # bin the spot positions along the axes and use Lomb-Scargle to measure the grid spacing in each direction
     xsum = np.histogram(apertures['xcentroid'], bins=bx)
     ysum = np.histogram(apertures['ycentroid'], bins=by)
 
@@ -361,6 +361,7 @@ def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True):
         snrs.append(snr)
 
     snrs = np.array(snrs)
+
     # set up 2D gaussian model plus constant background to fit to the coadded spot
     with warnings.catch_warnings():
         # ignore astropy warnings about issues with the fit...
@@ -638,7 +639,8 @@ class WFS(object):
         if sigma > ref_sigma:
             corr_sigma = np.sqrt(sigma**2 - ref_sigma**2)
         else:
-            corr_sigma = 0.0
+            return 0.0 * u.arcsec, 0.0 * u.arcsec
+
         corr_sigma *= self.pix_size.to(u.rad).value  # r_0 equation expects radians so convert
 
         # this equation relates the motion within a single aperture to the characteristic scale size of the
@@ -914,8 +916,6 @@ class WFS(object):
         az *= self.pix_size
         el *= self.pix_size
 
-        print("Pupil center offset {0:0.03f} in AZ and {1:0.03f} in EL...".format(az, el))
-
         if self.connected:
             self.secondary.zc('x', el)
             self.secondary.zc('y', az)
@@ -1005,17 +1005,12 @@ class NewF9(F9):
             raise WFSConfigException(value=msg)
         rawdata = check_wfsdata(rawdata)
 
-        # MMIRS gets a lot of hot pixels/CRs so make a quick pass to nuke them
-        cr_mask, data = detect_cosmics(rawdata, sigclip=4., niter=10, cleantype='medmask', psffwhm=5.)
+        cr_mask, data = detect_cosmics(rawdata, sigclip=5., niter=5, cleantype='medmask', psffwhm=10.)
 
         # calculate the background and subtract it
         bkg_estimator = photutils.MedianBackground()
         bkg = photutils.Background2D(data, (50, 50), filter_size=(15, 15), bkg_estimator=bkg_estimator)
         data -= bkg.background
-
-        # trim overscan (this is needed for MMIRS, but ok for rest)
-        data[:5, :] = 0.0
-        data[:, :12] = 0.0
 
         return data, hdr
 
