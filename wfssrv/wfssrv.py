@@ -164,7 +164,7 @@ class WFSServ(tornado.web.Application):
                 self.application.pending_forces, self.application.pending_m1focus = \
                     self.application.wfs.calculate_primary(zvec, threshold=m1gain*zresults['residual_rms'])
                 self.application.pending_forcefile = os.path.join(self.application.datadir, filename + ".zfile")
-                limit = np.round(np.abs(self.application.pending_forcefile['force']))
+                limit = np.round(np.abs(self.application.pending_forces['force']))
                 figures['forces'] = tel.plot_forces(
                     self.application.pending_forces,
                     self.application.pending_m1focus,
