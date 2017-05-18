@@ -51,10 +51,10 @@ class Secondary(object):
         """
         Apply an incremental 'offset' of 'value' to 'axis'.
         """
-        cmd = "offset_inc %s %s %f" % (offset, axis, value)
+        cmd = b"offset_inc %s %s %f\n" % (offset, axis, value)
         if self.connected:
-            self.sock.sendall(cmd.encode('utf8'))
-            self.sock.sendall("apply_offsets".encode('utf8'))
+            self.sock.sendall(cmd)
+            self.sock.sendall(b"apply_offsets\n")
         return cmd
 
     def connect(self):
@@ -118,10 +118,10 @@ class Secondary(object):
             tilt,
             axis)
         )
-        cmd = "offset_cc wfs tilt%s %f" % (axis, tilt)
+        cmd = b"offset_cc wfs tilt%s %f\n" % (axis, tilt)
         if self.connected:
             self.sock.sendall(cmd)
-            self.sock.sendall("apply_offsets")
+            self.sock.sendall(b"apply_offsets\n")
         return cmd
 
     def zc(self, axis, tilt):
@@ -140,10 +140,10 @@ class Secondary(object):
             tilt,
             axis)
         )
-        cmd = "offset_zc wfs tilt%s %f" % (axis, tilt)
+        cmd = b"offset_zc wfs tilt%s %f\n" % (axis, tilt)
         if self.connected:
             self.sock.sendall(cmd)
-            self.sock.sendall("apply_offsets")
+            self.sock.sendall(b"apply_offsets\n")
         return cmd
 
     def correct_coma(self, cc_x_corr, cc_y_corr):
@@ -170,10 +170,10 @@ class Secondary(object):
         correct spherical aberration.
         """
         print("Resetting hexapod's spherical aberration offset to 0...")
-        cmd = "offset m1spherical z 0.0"
+        cmd = b"offset m1spherical z 0.0\n"
         if self.connected:
             self.sock.sendall(cmd)
-            self.sock.sendall("apply_offsets")
+            self.sock.sendall(b"apply_offsets\n")
         return cmd
 
     def clear_wfs(self):
@@ -185,10 +185,10 @@ class Secondary(object):
         cmds = []
         if self.connected:
             for ax in axes:
-                cmd = "offset wfs %s 0.0" % ax
+                cmd = b"offset wfs %s 0.0\n" % ax
                 cmds.append(cmd)
                 self.sock.sendall(cmd)
-            self.sock.sendall("apply_offsets")
+            self.sock.sendall(b"apply_offsets\n")
         return cmds
 
 class F5(Secondary):
