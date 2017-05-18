@@ -406,6 +406,11 @@ class WFSServ(tornado.web.Application):
         else:
             self.datadir = "/mmt/shwfs/datadir"
 
+        if os.path.isdir(self.datadir):
+            logfile = os.path.join(self.datadir, "wfs.log")
+            handler = logging.FileHandler(logfile)
+            log.addHandler(handler)
+
         self.wfs = None
         self.wfs_systems = {}
         self.wfs_keys = ['newf9', 'f9', 'f5', 'mmirs']
