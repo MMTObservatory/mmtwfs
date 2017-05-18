@@ -357,8 +357,7 @@ class WFSServ(tornado.web.Application):
 
     def close_figures(self):
         if self.figures is not None:
-            for k, f in self.figures.items():
-                plt.close(f)
+            plt.close('all')
 
     def refresh_figures(self, figures=None):
         if figures is None:
