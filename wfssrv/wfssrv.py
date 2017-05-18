@@ -10,6 +10,7 @@ The framework being used must support web sockets.
 
 import io
 import os
+import socket
 
 try:
     import tornado
@@ -142,6 +143,7 @@ class WFSServ(tornado.web.Application):
 
             if os.path.isfile(filename):
                 results = self.application.wfs.measure_slopes(filename, plot=True)
+                self.application.update_seeing(results['seeing'])
                 zresults = self.application.wfs.fit_wavefront(results, plot=True)
                 zvec = zresults['zernike']
                 tel = self.application.wfs.telescope
@@ -379,6 +381,17 @@ class WFSServ(tornado.web.Application):
                 self.managers[k]._get_toolbar(canvas)
                 self.managers[k]._send_event("refresh")
                 self.managers[k].canvas.draw()
+
+    def update_seeing(self, seeing):
+        try:
+            seeing_server = ("hacksaw.mmto.org", 7666)
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.connect(seeing_server)
+            cmd = "set wfs_seeing {0:0.2f}".format(seeing)
+            sock.sendall(cmd.encode("utf8"))
+            sock.close()
+        except Exception as e:
+            print("Error connecting to hacksaw... : %s" % e)
 
     def __init__(self):
         if 'WFSROOT' in os.environ:
