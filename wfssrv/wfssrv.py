@@ -164,7 +164,12 @@ class WFSServ(tornado.web.Application):
                 self.application.pending_forces, self.application.pending_m1focus = \
                     self.application.wfs.calculate_primary(zvec, threshold=m1gain*zresults['residual_rms'])
                 self.application.pending_forcefile = os.path.join(self.application.datadir, filename + ".zfile")
-                figures['forces'] = tel.plot_forces(self.application.pending_forces, self.application.pending_m1focus)
+                limit = np.round(np.abs(self.application.pending_forcefile['force']))
+                figures['forces'] = tel.plot_forces(
+                    self.application.pending_forces,
+                    self.application.pending_m1focus
+                    limit=limit
+                )
                 figures['forces'].set_label("Requested M1 Actuator Forces")
                 figures['barchart'].axes[0].set_title("Focus: {0:0.1f}  CC_X: {1:0.1f}  CC_Y: {2:0.1f}".format(
                     self.application.pending_focus,

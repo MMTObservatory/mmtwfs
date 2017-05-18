@@ -309,13 +309,13 @@ class MMT(object):
 
         return coord
 
-    def plot_forces(self, t, m1focus=None):
+    def plot_forces(self, t, m1focus=None, limit=100.):
         """
         Plot actuator forces given force table as output from self.bending_forces()
         """
         coords = self.actcoor
         r_fac = 0.5 * self.diameter / self.bcv_radius  # adjust for slight difference
-        cmap = cm.ScalarMappable(col.Normalize(-100, 100), cm.bwr)
+        cmap = cm.ScalarMappable(col.Normalize(-1*limit, limit), cm.bwr)
         cmap._A = []  # grr stupid matplotlib
         fig, ax = plt.subplots()
         fig.set_label("M1 Actuator Forces")
