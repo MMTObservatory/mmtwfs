@@ -166,7 +166,12 @@ class WFSServ(tornado.web.Application):
                 self.application.pending_forcefile = filename + ".zfile"
                 figures['forces'] = tel.plot_forces(self.application.pending_forces, self.application.pending_m1focus)
                 figures['forces'].set_label("Requested M1 Actuator Forces")
-                figures['barchart'].axes[0].set_title("Focus: {0:0.1f}".format(self.application.pending_focus))
+                figures['barchart'].axes[0].set_title("Focus: {0:0.1f}  CC_X: {1:0.1f}  CC_Y: {2:0.1f}".format(
+                    self.application.pending_focus,
+                    self.application.pending_cc_x,
+                    self.application.pending_cc_y,
+                    )
+                )
 
                 self.application.refresh_figures(figures=figures)
 

@@ -881,7 +881,7 @@ class WFS(object):
         """
         z_denorm = zv.copy()
         z_denorm.denormalize()  # need to assure we're using fringe coeffs
-        foc_corr = -self.m2_gain * z_denorm['Z04'] / self.secondary.focus_trans
+        foc_corr = -self.m2_gain * 0.5 * z_denorm['Z04'] / self.secondary.focus_trans
 
         return foc_corr
 
