@@ -226,9 +226,9 @@ class WFSServ(tornado.web.Application):
     class M1GainHandler(tornado.web.RequestHandler):
         def get(self):
             if self.application.wfs is not None:
-                return self.application.wfs.m1_gain
+                self.write("%f" % self.application.wfs.m1_gain)
             else:
-                return None
+                self.write("no WFS selected.")
 
         def post(self):
             try:
@@ -241,9 +241,9 @@ class WFSServ(tornado.web.Application):
     class M2GainHandler(tornado.web.RequestHandler):
         def get(self):
             if self.application.wfs is not None:
-                return self.application.wfs.m2_gain
+                self.write("%f" % self.application.wfs.m2_gain)
             else:
-                return None
+                self.write("no WFS selected.")
 
         def post(self):
             try:
@@ -255,7 +255,7 @@ class WFSServ(tornado.web.Application):
 
     class PendingHandler(tornado.web.RequestHandler):
         def get(self):
-            return self.application.has_pending
+            self.write("%s" % self.application.has_pending)
 
         def post(self):
             self.application.has_pending = False
