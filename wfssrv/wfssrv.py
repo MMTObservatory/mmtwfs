@@ -410,6 +410,7 @@ class WFSServ(tornado.web.Application):
             logfile = os.path.join(self.datadir, "wfs.log")
             handler = logging.FileHandler(logfile)
             log.addHandler(handler)
+            enable_pretty_logging(logger=log)
 
         self.wfs = None
         self.wfs_systems = {}
