@@ -51,9 +51,9 @@ class Secondary(object):
         """
         Apply an incremental 'offset' of 'value' to 'axis'.
         """
-        cmd = b"offset_inc %s %s %f\n" % (offset, axis, value)
+        cmd = "offset_inc %s %s %f\n" % (offset, axis, value)
         if self.connected:
-            self.sock.sendall(cmd)
+            self.sock.sendall(cmd.encode("utf8"))
             self.sock.sendall(b"apply_offsets\n")
         return cmd
 
@@ -118,9 +118,9 @@ class Secondary(object):
             tilt,
             axis)
         )
-        cmd = b"offset_cc wfs tilt%s %f\n" % (axis, tilt)
+        cmd = "offset_cc wfs tilt%s %f\n" % (axis, tilt)
         if self.connected:
-            self.sock.sendall(cmd)
+            self.sock.sendall(cmd.encode("utf8"))
             self.sock.sendall(b"apply_offsets\n")
         return cmd
 
@@ -140,9 +140,9 @@ class Secondary(object):
             tilt,
             axis)
         )
-        cmd = b"offset_zc wfs tilt%s %f\n" % (axis, tilt)
+        cmd = "offset_zc wfs tilt%s %f\n" % (axis, tilt)
         if self.connected:
-            self.sock.sendall(cmd)
+            self.sock.sendall(cmd.encode("utf8"))
             self.sock.sendall(b"apply_offsets\n")
         return cmd
 
@@ -170,9 +170,9 @@ class Secondary(object):
         correct spherical aberration.
         """
         print("Resetting hexapod's spherical aberration offset to 0...")
-        cmd = b"offset m1spherical z 0.0\n"
+        cmd = "offset m1spherical z 0.0\n"
         if self.connected:
-            self.sock.sendall(cmd)
+            self.sock.sendall(cmd.encode("utf8"))
             self.sock.sendall(b"apply_offsets\n")
         return cmd
 
@@ -185,9 +185,9 @@ class Secondary(object):
         cmds = []
         if self.connected:
             for ax in axes:
-                cmd = b"offset wfs %s 0.0\n" % ax
+                cmd = "offset wfs %s 0.0\n" % ax
                 cmds.append(cmd)
-                self.sock.sendall(cmd)
+                self.sock.sendall(cmd.encode("utf8"))
             self.sock.sendall(b"apply_offsets\n")
         return cmds
 
