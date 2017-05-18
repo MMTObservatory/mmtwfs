@@ -96,7 +96,6 @@ class WFSServ(tornado.web.Application):
                 wfs = self.get_argument("wfs")
                 if wfs in self.application.wfs_keys:
                     print("setting %s" % wfs)
-                    #self.application.refresh_figures()
                     self.application.wfs = self.application.wfs_systems[wfs]
                     figkeys = []
                     ws_uris = []
@@ -117,12 +116,18 @@ class WFSServ(tornado.web.Application):
             if self.application.wfs is not None:
                 if not self.application.wfs.connected:
                     self.application.wfs.connect()
+                    print(self.application.wfs.connected)
+                else:
+                    print("wfs already connected")
 
     class DisconnectHandler(tornado.web.RequestHandler):
         def get(self):
             if self.application.wfs is not None:
                 if self.application.wfs.connected:
                     self.application.wfs.disconnect()
+                    print(self.application.wfs.connected)
+                else:
+                    print("wfs already disconnected")
 
     class AnalyzeHandler(tornado.web.RequestHandler):
         def get(self):
@@ -132,6 +137,7 @@ class WFSServ(tornado.web.Application):
                 print(filename)
             except:
                 print("no wfs or file specified.")
+
             if os.path.isfile(filename):
                 results = self.application.wfs.measure_slopes(filename, plot=True)
                 zresults = self.application.wfs.fit_wavefront(results, plot=True)
@@ -139,24 +145,27 @@ class WFSServ(tornado.web.Application):
                 tel = self.application.wfs.telescope
                 m1gain = self.application.wfs.m1_gain
                 m2gain = self.application.wfs.m2_gain
-                forces, m1focus = tel.calculate_primary_corrections(zvec, gain=m1gain)
+                # this is the total if we try to correct everything as fit
+                totforces, totm1focus = tel.calculate_primary_corrections(zvec, gain=m1gain)
                 figures = {}
                 figures['slopes'] = results['figures']['slopes']
                 figures['residuals'] = zresults['resid_plot']
                 figures['wavefront'] = zvec.plot_map()
                 figures['barchart'] = zvec.bar_chart(residual=zresults['residual_rms'])
-                figures['forces'] = tel.plot_forces(forces, m1focus)
-                figures['forces'].set_label("Requested M1 Actuator Forces")
-                figures['totalforces'] = tel.plot_forces(tel.total_forces)
+                figures['totalforces'] = tel.plot_forces(totforces, totm1focus)
                 figures['totalforces'].set_label("Total M1 Actuator Forces")
                 psf, figures['psf'] = tel.psf(zv=zvec.copy())
                 print(zvec)
+                self.application.has_pending = True
                 self.application.wavefront_fit = zvec
-                self.application.pending_forces = forces
-                self.application.pending_m1focus = m1focus
                 self.application.pending_focus = self.application.wfs.calculate_focus(zvec)
                 self.application.pending_cc_x, self.application.pending_cc_y = self.application.wfs.calculate_cc(zvec)
-
+                self.application.pending_az, self.application.pending_el = self.application.wfs.calculate_recenter(results)
+                self.application.pending_forces, self.application.pending_m1focus = \
+                    self.application.wfs.calculate_primary(zvec, threshold=zresults['residual_rms'])
+                self.application.pending_forcefile = filename + ".zfile"
+                figures['forces'] = tel.plot_forces(self.application.pending_forces, self.application.pending_m1focus)
+                figures['forces'].set_label("Requested M1 Actuator Forces")
                 figures['barchart'].axes[0].set_title("Focus: {0:0.1f}".format(self.application.pending_focus))
 
                 self.application.refresh_figures(figures=figures)
@@ -164,14 +173,32 @@ class WFSServ(tornado.web.Application):
     class M1CorrectHandler(tornado.web.RequestHandler):
         def get(self):
             print("m1correct")
+            if self.application.has_pending and self.application.wfs.connected:
+                self.application.wfs.telescope.correct_primary(
+                    self.application.pending_forces,
+                    self.application.pending_m1focus
+                )
+                print(self.application.pending_forces)
+                print(self.application.pending_m1focus)
+            else:
+                print("no M1 corrections sent")
 
     class M2CorrectHandler(tornado.web.RequestHandler):
         def get(self):
             print("m2correct")
+            if self.application.has_pending and self.application.wfs.connected:
+                self.application.wfs.secondary.focus(self.application.pending_focus)
+                self.application.wfs.secondary.correct_coma(self.application.pending_cc_x, self.application.pending_cc_y)
+            else:
+                print("no M2 corrections sent")
 
     class RecenterHandler(tornado.web.RequestHandler):
         def get(self):
             print("recenter")
+            if self.application.has_pending and self.application.wfs.connected:
+                self.application.wfs.secondary.recenter(self.application.pending_az, self.application.pending_el)
+            else:
+                print("no M2 recenter corrections sent")
 
     class RestartHandler(tornado.web.RequestHandler):
         def get(self):
@@ -185,27 +212,48 @@ class WFSServ(tornado.web.Application):
         def get(self):
             try:
                 datadir = self.get_argument("datadir")
-                print(datadir)
+                if os.path.isdir(datadir):
+                    print("setting datadir to %s" % datadir)
+                    self.application.datadir = datadir
             except:
                 print("no datadir specified")
 
     class M1GainHandler(tornado.web.RequestHandler):
         def get(self):
+            if self.application.wfs is not None:
+                return self.application.wfs.m1_gain
+            else:
+                return None
+
+        def post(self):
             try:
                 gain = float(self.get_argument(gain))
-                for k, w in self.application.wfs_systems.items():
-                    print("seeing m1_gain to %f in %s" % (gain, k))
+                if self.application.wfs is not None:
+                    self.application.wfs.m1_gain = gain
             except:
                 print("no m1_gain specified")
 
     class M2GainHandler(tornado.web.RequestHandler):
         def get(self):
+            if self.application.wfs is not None:
+                return self.application.wfs.m2_gain
+            else:
+                return None
+
+        def post(self):
             try:
                 gain = float(self.get_argument(gain))
-                for k, w in self.application.wfs_systems.items():
-                    print("seeing m2_gain to %f in %s" % (gain, k))
+                if self.application.wfs is not None:
+                    self.application.wfs.m2_gain = gain
             except:
                 print("no m2_gain specified")
+
+    class PendingHandler(tornado.web.RequestHandler):
+        def get(self):
+            return self.application.has_pending
+
+        def post(self):
+            self.application.has_pending = False
 
     class Download(tornado.web.RequestHandler):
         """
@@ -334,6 +382,7 @@ class WFSServ(tornado.web.Application):
             self.wfs_systems[w] = WFSFactory(wfs=w)
             self.wfs_names[w] = self.wfs_systems[w].name
 
+        self.has_pending = False
         self.figures = None
         self.managers = {}
         self.fig_id_map = {}
@@ -354,6 +403,7 @@ class WFSServ(tornado.web.Application):
             (r"/setdatadir", self.DataDirHandler),
             (r"/m1gain", self.M1GainHandler),
             (r"/m2gain", self.M2GainHandler),
+            (r"/clearpending", self.PendingHandler),
             (r'/download_([a-z]+).([a-z0-9.]+)', self.Download),
             (r'/([a-z0-9.]+)/ws', self.WebSocket)
         ]
