@@ -169,7 +169,7 @@ class MMT(object):
         zv.denormalize()
 
         # need to rotate the wavefront -90 degrees to match the BCV angle convention of +Y being 0 deg.
-        #zv.rotate(-90*u.deg)
+        zv.rotate(-90*u.deg)
 
         # get surface displacements at the BCV node positions. multiply the wavefront amplitude by 0.5 to account for reflection
         # off the surface.
