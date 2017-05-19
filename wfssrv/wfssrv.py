@@ -11,6 +11,8 @@ The framework being used must support web sockets.
 import io
 import os
 import socket
+import glob
+import json
 
 import logging
 import logging.handlers
@@ -36,7 +38,7 @@ from matplotlib.figure import Figure
 
 import numpy as np
 
-import json
+import astropy.units as u
 
 from mmtwfs.wfs import WFSFactory
 from mmtwfs.zernike import ZernikeVector
@@ -119,7 +121,14 @@ class WFSServ(tornado.web.Application):
                         ws_uri = "ws://{req.host}/{figdiv}/ws".format(req=self.request, figdiv=k)
                         ws_uris.append(ws_uri)
 
-                    self.render("wfs.html", wfsname=self.application.wfs.name, ws_uris=ws_uris, fig_ids=fig_ids, figures=figkeys)
+                    self.render(
+                        "wfs.html",
+                        wfsname=self.application.wfs.name,
+                        ws_uris=ws_uris,
+                        fig_ids=fig_ids,
+                        figures=figkeys,
+                        datadir=self.application.datadir + "/"
+                    )
             except Exception as e:
                 log.warn("Must specify valid wfs: %s. %s" % (wfs, e))
 
@@ -154,6 +163,7 @@ class WFSServ(tornado.web.Application):
                 log.warn("no wfs or file specified.")
 
             if os.path.isfile(filename):
+                self.application.wfs.connect()
                 results = self.application.wfs.measure_slopes(filename, plot=True)
                 self.application.update_seeing(results['seeing'])
                 zresults = self.application.wfs.fit_wavefront(results, plot=True)
@@ -172,14 +182,24 @@ class WFSServ(tornado.web.Application):
                 figures['totalforces'].set_label("Total M1 Actuator Forces")
                 psf, figures['psf'] = tel.psf(zv=zvec.copy())
                 log.info(zvec)
-                self.application.has_pending = True
+                zvec_file = os.path.join(self.application.datadir, filename + ".zernike")
+                zvec.save(filename=zvec_file)
+
+                # check the RMS of the wavefront fit and only apply corrections if the fit is good enough.
+                # M2 can be more lenient to take care of large amounts of focus or coma.
+                if zresults['residual_rms'] < 800 * u.nm:
+                    self.application.has_pending_m2 = True
+                if zresults['residual_rms'] < 400 * u.nm:
+                    self.application.has_pending_m1 = True
+                self.application.has_pending_recenter = True
+
                 self.application.wavefront_fit = zvec
                 self.application.pending_focus = self.application.wfs.calculate_focus(zvec)
                 self.application.pending_cc_x, self.application.pending_cc_y = self.application.wfs.calculate_cc(zvec)
                 self.application.pending_az, self.application.pending_el = self.application.wfs.calculate_recenter(results)
                 self.application.pending_forces, self.application.pending_m1focus = \
                     self.application.wfs.calculate_primary(zvec, threshold=m1gain*zresults['residual_rms'])
-                self.application.pending_forcefile = os.path.join(self.application.datadir, filename + ".zfile")
+                self.application.pending_forcefile = os.path.join(self.application.datadir, filename + ".forces")
                 limit = np.round(np.abs(self.application.pending_forces['force']).max())
                 figures['forces'] = tel.plot_forces(
                     self.application.pending_forces,
@@ -199,38 +219,55 @@ class WFSServ(tornado.web.Application):
     class M1CorrectHandler(tornado.web.RequestHandler):
         def get(self):
             log.info("M1 corrections")
-            if self.application.has_pending and self.application.wfs.connected:
+            if self.application.has_pending_m1 and self.application.wfs.connected:
                 self.application.wfs.telescope.correct_primary(
                     self.application.pending_forces,
                     self.application.pending_m1focus,
                     filename=self.application.pending_forcefile
                 )
                 log.info(self.application.pending_forces)
-                log.info(self.application.pending_m1focus)
+                log.info("m1focus = %s" % self.application.pending_m1focus)
+                self.application.has_pending_m1 = False
+                self.write("Sending forces to cell and %s focus to secondary..." % self.application.pending_m1focus)
             else:
                 log.info("no M1 corrections sent")
+                self.write("No M1 corrections sent")
 
     class M2CorrectHandler(tornado.web.RequestHandler):
         def get(self):
             log.info("M2 corrections")
-            if self.application.has_pending and self.application.wfs.connected:
+            if self.application.has_pending_m2 and self.application.wfs.connected:
                 self.application.wfs.secondary.focus(self.application.pending_focus)
                 self.application.wfs.secondary.correct_coma(self.application.pending_cc_x, self.application.pending_cc_y)
+                self.application.has_pending_m2 = False
+                self.write("Sending %s focus and %s/%s CC_X/CC_Y to secondary..." % (
+                    self.application.pending_focus,
+                    self.application.pending_cc_x,
+                    self.application.pending_cc_y
+                ))
             else:
                 log.info("no M2 corrections sent")
+                self.write("No M2 corrections sent")
 
     class RecenterHandler(tornado.web.RequestHandler):
         def get(self):
             log.info("Recentering...")
-            if self.application.has_pending and self.application.wfs.connected:
+            if self.application.has_pending_recenter and self.application.wfs.connected:
                 self.application.wfs.secondary.recenter(self.application.pending_az, self.application.pending_el)
+                self.application.has_pending_recenter = False
+                self.write("Sending %s/%s of az/el to recenter..." % (
+                    self.application.pending_az,
+                    self.application.pending_el
+                ))
             else:
                 log.info("no M2 recenter corrections sent")
+                self.write("No M2 recenter corrections sent")
 
     class RestartHandler(tornado.web.RequestHandler):
         def get(self):
             try:
                 wfs = self.get_argument('wfs')
+                self.application.restart_wfs(wfs)
                 log.info("restarting %s" % wfs)
             except:
                 log.info("no wfs specified")
@@ -277,10 +314,22 @@ class WFSServ(tornado.web.Application):
 
     class PendingHandler(tornado.web.RequestHandler):
         def get(self):
-            self.write("%s" % self.application.has_pending)
+            self.write("M1: %s" % self.application.has_pending_m1)
+            self.write("M2: %s" % self.application.has_pending_m2)
+            self.write("recenter: %s" % self.application.has_pending_recenter)
 
         def post(self):
-            self.application.has_pending = False
+            self.application.has_pending_m1 = False
+            self.application.has_pending_m2 = False
+            self.application.has_pending_recenter = False
+
+    class FilesHandler(tornado.web.RequestHandler):
+        def get(self):
+            fullfiles = glob.glob(os.path.join(self.application.datadir, "*.fits"))
+            files = []
+            for f in fullfiles:
+                files.append(os.path.split(f)[1])
+            self.write(json.dumps(files))
 
     class Download(tornado.web.RequestHandler):
         """
@@ -416,7 +465,7 @@ class WFSServ(tornado.web.Application):
             handler = logging.handlers.WatchedFileHandler(logfile)
             handler.setFormatter(formatter)
             logger.addHandler(handler)
-            enable_pretty_logging(logger=log)
+            enable_pretty_logging()
 
         self.wfs = None
         self.wfs_systems = {}
@@ -426,7 +475,10 @@ class WFSServ(tornado.web.Application):
             self.wfs_systems[w] = WFSFactory(wfs=w)
             self.wfs_names[w] = self.wfs_systems[w].name
 
-        self.has_pending = False
+        self.has_pending_m1 = False
+        self.has_pending_m2 = False
+        self.has_pending_recenter = False
+
         self.figures = None
         self.managers = {}
         self.fig_id_map = {}
@@ -448,6 +500,7 @@ class WFSServ(tornado.web.Application):
             (r"/m1gain", self.M1GainHandler),
             (r"/m2gain", self.M2GainHandler),
             (r"/clearpending", self.PendingHandler),
+            (r"/files", self.FilesHandler),
             (r'/download_([a-z]+).([a-z0-9.]+)', self.Download),
             (r'/([a-z0-9.]+)/ws', self.WebSocket)
         ]

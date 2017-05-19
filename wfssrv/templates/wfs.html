@@ -5,12 +5,13 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
         <link rel="stylesheet" href="{{ static_url("css/boilerplate.css") }}" type="text/css" />
-        <link rel="stylesheet" href="{{ static_url("css/bootstrap.min.css") }}" type="text/css">
-        <link rel="stylesheet" href="{{ static_url("css/bootstrap-theme.min.css") }}" type="text/css" />
+
         <link rel="stylesheet" href="{{ static_url("css/style.min.css") }}" type="text/css" />
         <link rel="stylesheet" href="{{ static_url("css/page.css") }}" type="text/css" />
         <link rel="stylesheet" href="{{ static_url("css/fbm.css") }}" type="text/css" />
         <link rel="stylesheet" href="{{ static_url("jquery-ui/themes/smoothness/jquery-ui.min.css") }}" >
+        <link rel="stylesheet" href="{{ static_url("css/bootstrap.min.css") }}" type="text/css">
+        <link rel="stylesheet" href="{{ static_url("css/bootstrap-theme.min.css") }}" type="text/css" />
         <script src="{{ static_url("js/jquery-1.11.3.min.js") }}"></script>
         <script src="{{ static_url("js/jquery-ui.min.js") }}"></script>
         <script src="{{ static_url("js/bootstrap.min.js") }}"></script>
@@ -69,6 +70,81 @@
                 </div>
             </div>
         </nav>
+
+        <div class="row">
+            <div class='col-lg-6'>
+                <label for="datafile"><b>FITS file to analyze:</b></label>
+                <div class="input-group">
+                    <span class="input-group-addon" id="datadir">{{ datadir }}</span>
+                    <input type="text" class="form-control" id="datafile" aria-describedby="datadir">
+                    <span class="input-group-btn">
+                        <button class="btn btn-primary" id='analyze' data-loading-text="Running..." type="button">Analyze</button>
+                    </span>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class='col-lg-6'>
+                <button type="button" id='m2correct' data-loading-text="Running..." class="btn btn-primary">Correct M2</button>
+                <button type="button" id='m1correct' data-loading-text="Running..." class="btn btn-primary">Correct M1</button>
+                <button type="button" id='recenter' data-loading-text="Running..." class="btn btn-primary">Recenter</button>
+            </div>
+        </div>
+
+        <script>
+        $(function () {
+            var getData = function(request, response) {
+                $.getJSON(
+                    "files",
+                    function(data) {
+                        response(data);
+                    }
+                );
+            };
+
+            var selectItem = function(event, ui) {
+                $("#datafile").val(ui.item.value);
+                return false;
+            }
+
+            $("#datafile").autocomplete({
+                source: getData,
+                select: selectItem,
+                minLength: 1
+            });
+        });
+        $('#m2correct').on('click', function() {
+            var $btn = $(this).button('loading');
+            $.get("m2correct", function(data, status) {
+                alert(data);
+            });
+            $btn.button('reset');
+        });
+        $('#m1correct').on('click', function() {
+            var $btn = $(this).button('loading');
+            $.get("m1correct", function(data, status) {
+                alert(data);
+            });
+            $btn.button('reset');
+        });
+        $('#recenter').on('click', function() {
+            var $btn = $(this).button('loading');
+            $.get("recenter", function(data, status) {
+                alert(data);
+            });
+            $btn.button('reset');
+        });
+        $('#analyze').on('click', function() {
+            var $btn = $(this).button('loading');
+            var file = $('#datafile').val();
+            var dir = $('#datadir').html();
+            var url = "analyze?fitsfile=" + dir + file;
+            $.get(url, function(data, status) {
+                var logstuff = data + status;
+                $btn.button('reset');
+            });
+        });
+        </script>
 
         <table class="table table-striped">
             <tbody>
