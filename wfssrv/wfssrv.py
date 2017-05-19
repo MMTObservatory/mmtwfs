@@ -335,6 +335,8 @@ class WFSServ(tornado.web.Application):
             files = []
             for f in fullfiles:
                 files.append(os.path.split(f)[1])
+            files.sort()
+            files.reverse()
             self.write(json.dumps(files))
 
     class Download(tornado.web.RequestHandler):
