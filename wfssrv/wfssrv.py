@@ -228,7 +228,7 @@ class WFSServ(tornado.web.Application):
                 log.info(self.application.pending_forces)
                 log.info("Adjusting M1 focus by {0:0.1f}".format(self.application.pending_m1focus))
                 self.application.has_pending_m1 = False
-                self.write("Sending forces to cell and {0:0.1f} focus to secondary...".format(self.application.pending_m1focus)
+                self.write("Sending forces to cell and {0:0.1f} focus to secondary...".format(self.application.pending_m1focus))
             else:
                 log.info("no M1 corrections sent")
                 self.write("No M1 corrections sent")
