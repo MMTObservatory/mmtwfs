@@ -159,55 +159,60 @@ class WFSServ(tornado.web.Application):
             if os.path.isfile(filename):
                 self.application.wfs.connect()
                 results = self.application.wfs.measure_slopes(filename, plot=True)
-                if 'seeing' in results:
-                    self.application.update_seeing(results['seeing'])
-                zresults = self.application.wfs.fit_wavefront(results, plot=True)
-                zvec = zresults['zernike']
-                tel = self.application.wfs.telescope
-                m1gain = self.application.wfs.m1_gain
-                m2gain = self.application.wfs.m2_gain
-                # this is the total if we try to correct everything as fit
-                totforces, totm1focus = tel.calculate_primary_corrections(zvec, gain=m1gain)
-                figures = {}
-                figures['slopes'] = results['figures']['slopes']
-                figures['residuals'] = zresults['resid_plot']
-                figures['wavefront'] = zvec.plot_map()
-                figures['barchart'] = zvec.bar_chart(residual=zresults['residual_rms'])
-                figures['totalforces'] = tel.plot_forces(totforces, totm1focus)
-                figures['totalforces'].set_label("Total M1 Actuator Forces")
-                psf, figures['psf'] = tel.psf(zv=zvec.copy())
-                log.info(zvec)
-                zvec_file = os.path.join(self.application.datadir, filename + ".zernike")
-                zvec.save(filename=zvec_file)
+                if results['slopes'] is not None:
+                    if 'seeing' in results:
+                        self.application.update_seeing(results['seeing'])
+                    zresults = self.application.wfs.fit_wavefront(results, plot=True)
+                    zvec = zresults['zernike']
+                    tel = self.application.wfs.telescope
+                    m1gain = self.application.wfs.m1_gain
+                    m2gain = self.application.wfs.m2_gain
+                    # this is the total if we try to correct everything as fit
+                    totforces, totm1focus = tel.calculate_primary_corrections(zvec, gain=m1gain)
+                    figures = {}
+                    figures['slopes'] = results['figures']['slopes']
+                    figures['residuals'] = zresults['resid_plot']
+                    figures['wavefront'] = zvec.plot_map()
+                    figures['barchart'] = zvec.bar_chart(residual=zresults['residual_rms'])
+                    figures['totalforces'] = tel.plot_forces(totforces, totm1focus)
+                    figures['totalforces'].set_label("Total M1 Actuator Forces")
+                    psf, figures['psf'] = tel.psf(zv=zvec.copy())
+                    log.info(zvec)
+                    zvec_file = os.path.join(self.application.datadir, filename + ".zernike")
+                    zvec.save(filename=zvec_file)
 
-                # check the RMS of the wavefront fit and only apply corrections if the fit is good enough.
-                # M2 can be more lenient to take care of large amounts of focus or coma.
-                if zresults['residual_rms'] < 800 * u.nm:
-                    self.application.has_pending_m2 = True
-                if zresults['residual_rms'] < 400 * u.nm:
-                    self.application.has_pending_m1 = True
-                self.application.has_pending_recenter = True
+                    # check the RMS of the wavefront fit and only apply corrections if the fit is good enough.
+                    # M2 can be more lenient to take care of large amounts of focus or coma.
+                    if zresults['residual_rms'] < 800 * u.nm:
+                        self.application.has_pending_m2 = True
+                    if zresults['residual_rms'] < 400 * u.nm:
+                        self.application.has_pending_m1 = True
+                    self.application.has_pending_recenter = True
 
-                self.application.wavefront_fit = zvec
-                self.application.pending_focus = self.application.wfs.calculate_focus(zvec)
-                self.application.pending_cc_x, self.application.pending_cc_y = self.application.wfs.calculate_cc(zvec)
-                self.application.pending_az, self.application.pending_el = self.application.wfs.calculate_recenter(results)
-                self.application.pending_forces, self.application.pending_m1focus = \
-                    self.application.wfs.calculate_primary(zvec, threshold=m1gain*zresults['residual_rms'])
-                self.application.pending_forcefile = os.path.join(self.application.datadir, filename + ".forces")
-                limit = np.round(np.abs(self.application.pending_forces['force']).max())
-                figures['forces'] = tel.plot_forces(
-                    self.application.pending_forces,
-                    self.application.pending_m1focus,
-                    limit=limit
-                )
-                figures['forces'].set_label("Requested M1 Actuator Forces")
-                figures['barchart'].axes[0].set_title("Focus: {0:0.1f}  CC_X: {1:0.1f}  CC_Y: {2:0.1f}".format(
-                        self.application.pending_focus,
-                        self.application.pending_cc_x,
-                        self.application.pending_cc_y,
+                    self.application.wavefront_fit = zvec
+                    self.application.pending_focus = self.application.wfs.calculate_focus(zvec)
+                    self.application.pending_cc_x, self.application.pending_cc_y = self.application.wfs.calculate_cc(zvec)
+                    self.application.pending_az, self.application.pending_el = self.application.wfs.calculate_recenter(results)
+                    self.application.pending_forces, self.application.pending_m1focus = \
+                        self.application.wfs.calculate_primary(zvec, threshold=m1gain*zresults['residual_rms'])
+                    self.application.pending_forcefile = os.path.join(self.application.datadir, filename + ".forces")
+                    limit = np.round(np.abs(self.application.pending_forces['force']).max())
+                    figures['forces'] = tel.plot_forces(
+                        self.application.pending_forces,
+                        self.application.pending_m1focus,
+                        limit=limit
                     )
-                )
+                    figures['forces'].set_label("Requested M1 Actuator Forces")
+                    figures['barchart'].axes[0].set_title("Focus: {0:0.1f}  CC_X: {1:0.1f}  CC_Y: {2:0.1f}".format(
+                            self.application.pending_focus,
+                            self.application.pending_cc_x,
+                            self.application.pending_cc_y,
+                        )
+                    )
+                else:
+                    log.warn("Wavefront measurement failed: %s" % filename)
+                    figures = create_default_figures()
+                    figures['slopes'] = results['figures']['slopes']
 
                 self.application.refresh_figures(figures=figures)
 

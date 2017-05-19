@@ -809,55 +809,58 @@ class WFS(object):
         """
         Use results from self.measure_slopes() to fit a set of zernike polynomials to the wavefront shape.
         """
-        results = {}
-        mode = slope_results['mode']
-        infmat = self.modes[mode]['zernike_matrix'][0]
-        inverse_infmat = self.modes[mode]['zernike_matrix'][1]
-        slopes = slope_results['slopes']
-        slope_vec = -self.tiltfactor * slopes.ravel()  # convert arcsec to radians
-        zfit = np.dot(slope_vec, infmat)
+        if slope_results['slopes'] is not None:
+            results = {}
+            mode = slope_results['mode']
+            infmat = self.modes[mode]['zernike_matrix'][0]
+            inverse_infmat = self.modes[mode]['zernike_matrix'][1]
+            slopes = slope_results['slopes']
+            slope_vec = -self.tiltfactor * slopes.ravel()  # convert arcsec to radians
+            zfit = np.dot(slope_vec, infmat)
 
-        results['raw_zernike'] = ZernikeVector(coeffs=zfit)
+            results['raw_zernike'] = ZernikeVector(coeffs=zfit)
 
-        # derotate the zernike solution to match the primary mirror coordinate system
-        total_rotation = slope_results['rotator'] + self.rotation
-        zv_rot = ZernikeVector(coeffs=zfit)
-        zv_rot.rotate(angle=-total_rotation)
-        results['rot_zernike'] = zv_rot
+            # derotate the zernike solution to match the primary mirror coordinate system
+            total_rotation = slope_results['rotator'] + self.rotation
+            zv_rot = ZernikeVector(coeffs=zfit)
+            zv_rot.rotate(angle=-total_rotation)
+            results['rot_zernike'] = zv_rot
 
-        # subtract the reference aberrations
-        zref = self.reference_aberrations(mode, hdr=slope_results['header'])
-        zsub = zv_rot - zref
-        results['zernike'] = zsub
+            # subtract the reference aberrations
+            zref = self.reference_aberrations(mode, hdr=slope_results['header'])
+            zsub = zv_rot - zref
+            results['zernike'] = zsub
 
-        pred = np.dot(zfit, inverse_infmat)
-        pred_slopes = -(1. / self.tiltfactor) * pred.reshape(2, slopes.shape[1])
-        diff = slopes - pred_slopes
-        rms = self.pix_size * np.sqrt((diff[0]**2 + diff[1]**2).mean())
-        results['residual_rms'] = rms.to(u.arcsec).value * self.tiltfactor * zsub.units
-        results['zernike_rms'] = zsub.rms
-        results['zernike_p2v'] = zsub.peak2valley
+            pred = np.dot(zfit, inverse_infmat)
+            pred_slopes = -(1. / self.tiltfactor) * pred.reshape(2, slopes.shape[1])
+            diff = slopes - pred_slopes
+            rms = self.pix_size * np.sqrt((diff[0]**2 + diff[1]**2).mean())
+            results['residual_rms'] = rms.to(u.arcsec).value * self.tiltfactor * zsub.units
+            results['zernike_rms'] = zsub.rms
+            results['zernike_p2v'] = zsub.peak2valley
 
-        fig = None
-        if plot:
-            ref_mask = slope_results['ref_mask']
-            im = slope_results['data']
-            gnorm = wfs_norm(im)
-            fig, ax = plt.subplots()
-            fig.set_label("Zernike Fit Residuals")
-            ax.imshow(im, cmap='Greys', origin='lower', norm=gnorm, interpolation='None')
-            x = slope_results['apertures'].positions.transpose()[0]
-            y = slope_results['apertures'].positions.transpose()[1]
-            ax.quiver(x, y, diff[0][ref_mask], diff[1][ref_mask], scale_units='xy', scale=0.05, pivot='tip', color='red')
-            xl = [50.0]
-            yl = [im.shape[0]-30]
-            ul = [0.2/self.pix_size.value]
-            vl = [0.0]
-            ax.quiver(xl, yl, ul, vl, scale_units='xy', scale=0.05, pivot='tip', color='red')
-            ax.text(60, im.shape[0]-30, "0.2\"", verticalalignment='center')
-            ax.set_title("Residual RMS: {0:0.4g}".format(results['residual_rms']))
+            fig = None
+            if plot:
+                ref_mask = slope_results['ref_mask']
+                im = slope_results['data']
+                gnorm = wfs_norm(im)
+                fig, ax = plt.subplots()
+                fig.set_label("Zernike Fit Residuals")
+                ax.imshow(im, cmap='Greys', origin='lower', norm=gnorm, interpolation='None')
+                x = slope_results['apertures'].positions.transpose()[0]
+                y = slope_results['apertures'].positions.transpose()[1]
+                ax.quiver(x, y, diff[0][ref_mask], diff[1][ref_mask], scale_units='xy', scale=0.05, pivot='tip', color='red')
+                xl = [50.0]
+                yl = [im.shape[0]-30]
+                ul = [0.2/self.pix_size.value]
+                vl = [0.0]
+                ax.quiver(xl, yl, ul, vl, scale_units='xy', scale=0.05, pivot='tip', color='red')
+                ax.text(60, im.shape[0]-30, "0.2\"", verticalalignment='center')
+                ax.set_title("Residual RMS: {0:0.4g}".format(results['residual_rms']))
 
-        results['resid_plot'] = fig
+            results['resid_plot'] = fig
+        else:
+            results = None
         return results
 
     def calculate_primary(self, zv, threshold=0.0 * u.nm, mask=[]):
