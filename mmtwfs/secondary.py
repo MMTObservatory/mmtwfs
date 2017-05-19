@@ -125,7 +125,7 @@ class Secondary(object):
             tilt,
             axis)
         )
-        cmd = "offset_cc wfs tilt%s %f\n" % (axis, tilt)
+        cmd = "offset_cc wfs t%s %f\n" % (axis, tilt)
         if self.connected:
             sock = self.hex_sock()
             sock.sendall(cmd.encode("utf8"))
@@ -149,7 +149,7 @@ class Secondary(object):
             tilt,
             axis)
         )
-        cmd = "offset_zc wfs tilt%s %f\n" % (axis, tilt)
+        cmd = "offset_zc wfs t%s %f\n" % (axis, tilt)
         if self.connected:
             sock = self.hex_sock()
             sock.sendall(cmd.encode("utf8"))
