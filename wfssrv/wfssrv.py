@@ -208,9 +208,9 @@ class WFSServ(tornado.web.Application):
                 )
                 figures['forces'].set_label("Requested M1 Actuator Forces")
                 figures['barchart'].axes[0].set_title("Focus: {0:0.1f}  CC_X: {1:0.1f}  CC_Y: {2:0.1f}".format(
-                    self.application.pending_focus,
-                    self.application.pending_cc_x,
-                    self.application.pending_cc_y,
+                        self.application.pending_focus,
+                        self.application.pending_cc_x,
+                        self.application.pending_cc_y,
                     )
                 )
 
@@ -228,7 +228,7 @@ class WFSServ(tornado.web.Application):
                 log.info(self.application.pending_forces)
                 log.info("m1focus = %s" % self.application.pending_m1focus)
                 self.application.has_pending_m1 = False
-                self.write("Sending forces to cell and %s focus to secondary..." % self.application.pending_m1focus)
+                self.write("Sending forces to cell and {0:0.1f} focus to secondary...".format(self.application.pending_m1focus)
             else:
                 log.info("no M1 corrections sent")
                 self.write("No M1 corrections sent")
@@ -240,7 +240,7 @@ class WFSServ(tornado.web.Application):
                 self.application.wfs.secondary.focus(self.application.pending_focus)
                 self.application.wfs.secondary.correct_coma(self.application.pending_cc_x, self.application.pending_cc_y)
                 self.application.has_pending_m2 = False
-                self.write("Sending %s focus and %s/%s CC_X/CC_Y to secondary..." % (
+                self.write("Sending {0:0.1f} focus and {1:0.1f}/{2:0.1f} CC_X/CC_Y to secondary...".format(
                     self.application.pending_focus,
                     self.application.pending_cc_x,
                     self.application.pending_cc_y
@@ -255,7 +255,7 @@ class WFSServ(tornado.web.Application):
             if self.application.has_pending_recenter and self.application.wfs.connected:
                 self.application.wfs.secondary.recenter(self.application.pending_az, self.application.pending_el)
                 self.application.has_pending_recenter = False
-                self.write("Sending %s/%s of az/el to recenter..." % (
+                self.write("Sending {0:0.1f}/{1:0.1f} of az/el to recenter...".format(
                     self.application.pending_az,
                     self.application.pending_el
                 ))
