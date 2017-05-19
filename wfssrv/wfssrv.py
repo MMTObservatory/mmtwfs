@@ -226,7 +226,7 @@ class WFSServ(tornado.web.Application):
                     filename=self.application.pending_forcefile
                 )
                 log.info(self.application.pending_forces)
-                log.info("m1focus = %s" % self.application.pending_m1focus)
+                log.info("Adjusting M1 focus by {0:0.1f}".format(self.application.pending_m1focus))
                 self.application.has_pending_m1 = False
                 self.write("Sending forces to cell and {0:0.1f} focus to secondary...".format(self.application.pending_m1focus)
             else:
@@ -240,11 +240,13 @@ class WFSServ(tornado.web.Application):
                 self.application.wfs.secondary.focus(self.application.pending_focus)
                 self.application.wfs.secondary.correct_coma(self.application.pending_cc_x, self.application.pending_cc_y)
                 self.application.has_pending_m2 = False
-                self.write("Sending {0:0.1f} focus and {1:0.1f}/{2:0.1f} CC_X/CC_Y to secondary...".format(
+                log_str = "Sending {0:0.1f} focus and {1:0.1f}/{2:0.1f} CC_X/CC_Y to secondary...".format(
                     self.application.pending_focus,
                     self.application.pending_cc_x,
                     self.application.pending_cc_y
-                ))
+                )
+                log.info(log_str)
+                self.write(log_str)
             else:
                 log.info("no M2 corrections sent")
                 self.write("No M2 corrections sent")
@@ -255,10 +257,12 @@ class WFSServ(tornado.web.Application):
             if self.application.has_pending_recenter and self.application.wfs.connected:
                 self.application.wfs.secondary.recenter(self.application.pending_az, self.application.pending_el)
                 self.application.has_pending_recenter = False
-                self.write("Sending {0:0.1f}/{1:0.1f} of az/el to recenter...".format(
+                log_str = "Sending {0:0.1f}/{1:0.1f} of az/el to recenter...".format(
                     self.application.pending_az,
                     self.application.pending_el
-                ))
+                )
+                log.info(log_str)
+                self.write(log_str)
             else:
                 log.info("no M2 recenter corrections sent")
                 self.write("No M2 recenter corrections sent")
@@ -294,6 +298,7 @@ class WFSServ(tornado.web.Application):
                 gain = float(self.get_argument(gain))
                 if self.application.wfs is not None:
                     self.application.wfs.m1_gain = gain
+                    log.info("Seeing M1 gain to %f" % gain)
             except:
                 log.info("no m1_gain specified")
 
@@ -309,6 +314,7 @@ class WFSServ(tornado.web.Application):
                 gain = float(self.get_argument(gain))
                 if self.application.wfs is not None:
                     self.application.wfs.m2_gain = gain
+                    log.info("Seeing M2 gain to %f" % gain)
             except:
                 log.info("no m2_gain specified")
 
@@ -450,6 +456,7 @@ class WFSServ(tornado.web.Application):
             cmd = "set wfs_seeing {0:0.2f}".format(seeing)
             sock.sendall(cmd.encode("utf8"))
             sock.close()
+            log.info(cmd)
         except Exception as e:
             log.warn("Error connecting to hacksaw... : %s" % e)
 
