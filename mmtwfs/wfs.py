@@ -752,6 +752,7 @@ class WFS(object):
             results = {}
             results['slopes'] = None
             results['figures'] = {}
+            results['mode'] = mode
             results['figures']['slopes'] = slope_fig
             return results
         except Exception as e:

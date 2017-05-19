@@ -1,11 +1,5 @@
 """
-This example demonstrates how to embed matplotlib WebAgg interactive
-plotting in your own web application and framework.  It is not
-necessary to do all this if you merely want to display a plot in a
-browser or use matplotlib's built-in Tornado-based server "on the
-side".
-
-The framework being used must support web sockets.
+MMT WFS Server
 """
 
 import io
@@ -165,7 +159,8 @@ class WFSServ(tornado.web.Application):
             if os.path.isfile(filename):
                 self.application.wfs.connect()
                 results = self.application.wfs.measure_slopes(filename, plot=True)
-                self.application.update_seeing(results['seeing'])
+                if 'seeing' in results:
+                    self.application.update_seeing(results['seeing'])
                 zresults = self.application.wfs.fit_wavefront(results, plot=True)
                 zvec = zresults['zernike']
                 tel = self.application.wfs.telescope
