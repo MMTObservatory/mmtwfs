@@ -696,7 +696,7 @@ class WFS(object):
         rawdata = check_wfsdata(rawdata)
 
         # MMIRS gets a lot of hot pixels/CRs so make a quick pass to nuke them
-        cr_mask, data = detect_cosmics(rawdata, sigclip=4., niter=10, cleantype='medmask', psffwhm=5.)
+        cr_mask, data = detect_cosmics(rawdata, sigclip=5., niter=5, cleantype='medmask', psffwhm=5.)
 
         # calculate the background and subtract it
         bkg_estimator = photutils.MedianBackground()
