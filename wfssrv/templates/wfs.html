@@ -64,30 +64,51 @@
 
         <nav class="navbar navbar-default">
             <div class="container-fluid">
-                <!-- Brand and toggle get grouped for better mobile display -->
                 <div class="navbar-header">
                     <a class="navbar-brand" href="/">Home</a>
                 </div>
             </div>
         </nav>
 
-        <div class="row">
-            <div class='col-lg-6'>
-                <label for="datafile"><b>FITS file to analyze:</b></label>
-                <div class="input-group">
-                    <span class="input-group-addon" id="datadir">{{ datadir }}</span>
-                    <input type="text" class="form-control" id="datafile" aria-describedby="datadir">
-                    <span class="input-group-btn">
-                        <button class="btn btn-primary" id='analyze' data-loading-text="Running..." type="button">Analyze</button>
-                    </span>
+        <div class="container-fluid">
+            <div class="row">
+                <div class='col-lg-6'>
+                    <label for="datafile"><b>FITS file to analyze:</b></label>
+                    <div class="input-group">
+                        <span class="input-group-addon" id="datadir">{{ datadir }}</span>
+                        <input type="text" class="form-control" id="datafile" aria-describedby="datadir">
+                        <span class="input-group-btn">
+                            <button class="btn btn-primary" id='analyze' data-loading-text="Running..." type="button">Analyze</button>
+                        </span>
+                    </div>
                 </div>
             </div>
-        </div>
-        <div class="row">
-            <div class='col-lg-6'>
-                <button type="button" id='m2correct' data-loading-text="Running..." class="btn btn-primary">Correct M2</button>
-                <button type="button" id='m1correct' data-loading-text="Running..." class="btn btn-primary">Correct M1</button>
-                <button type="button" id='recenter' data-loading-text="Running..." class="btn btn-primary">Recenter</button>
+            <div class="row">
+                <div class='col-lg-6'>
+                    <form class="form-inline">
+                        <div class="form-group">
+                            <label for="mode">Mode:</label>
+                            <select class="form-control" id="mode">
+                                {% for m in modes %}
+                                    {% if m == default_mode %}
+                                        <option selected value={{ m }}>{{ modes[m]['label'] }}</option>
+                                    {% else %}
+                                        <option value={{ m }}>{{ modes[m]['label'] }}</option>
+                                    {% end %}
+                                {% end %}
+                            </select>
+                            <label for="connect">Enable Corrections:</label>
+                            <input type="checkbox" id="connect" checked>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <div class="row">
+                <div class='col-lg-6'>
+                    <button type="button" id='m2correct' data-loading-text="Running..." class="btn btn-primary">Correct M2</button>
+                    <button type="button" id='m1correct' data-loading-text="Running..." class="btn btn-primary">Correct M1</button>
+                    <button type="button" id='recenter' data-loading-text="Running..." class="btn btn-primary">Recenter</button>
+                </div>
             </div>
         </div>
 
@@ -138,7 +159,9 @@
             var $btn = $(this).button('loading');
             var file = $('#datafile').val();
             var dir = $('#datadir').html();
-            var url = "analyze?fitsfile=" + dir + file;
+            var mode = $('#mode').val();
+            var connect = document.getElementById('connect').checked;
+            var url = "analyze?connect=" + connect + "&mode=" + mode + "&fitsfile=" + dir + file;
             $.get(url, function(data, status) {
                 var logstuff = data + status;
                 $btn.button('reset');
