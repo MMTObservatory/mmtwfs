@@ -150,24 +150,28 @@ mmt_config = {
             "aberr_table_file": pkg_resources.resource_filename(__name__, os.path.join("data", "f5zernfield.tab")),
             "modes": {
                 "megacam": {
+                    "label": "Megacam",
                     "ref_zern": {
                         "Z04": -468. * u.nm,  # defocus
                         "Z11": -80. * u.nm  # primary spherical
                     },
                 },
                 "hecto": {
+                    "label": "Hecto",
                     "ref_zern": {
                         "Z04": -2810. * u.nm,
                         "Z11": -150. * u.nm
                     },
                 },
                 "maestro": {
+                    "label": "Maestro",
                     "ref_zern": {
                         "Z04": -2820. * u.nm,
                         "Z11": -150. * u.nm
                     },
                 },
                 "swirc": {
+                    "label": "SWIRC",
                     "ref_zern": {
                         "Z04": -2017. * u.nm,
                         "Z11": -1079. * u.nm
@@ -194,16 +198,19 @@ mmt_config = {
             "reference_file": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "f9_ref.fits")),
             "modes": {
                 "blue": {
+                    "label": "Blue Channel",
                     "ref_zern": {
                         "Z04": 7982. * u.nm
                     },
                 },
                 "red": {
+                    "label": "Red Channel",
                     "ref_zern": {
                         "Z04": 7982. * u.nm
                     },
                 },
                 "spol": {
+                    "label": "SPOL",
                     "ref_zern": {
                         "Z04": -308. * u.nm
                     },
@@ -229,16 +236,19 @@ mmt_config = {
             "reference_file": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "f9_new_ref.fits")),
             "modes": {
                 "blue": {
+                    "label": "Blue Channel",
                     "ref_zern": {
                         "Z04": 7982. * u.nm
                     },
                 },
                 "red": {
+                    "label": "Red Channel",
                     "ref_zern": {
                         "Z04": 7982. * u.nm
                     },
                 },
                 "spol": {
+                    "label": "SPOL",
                     "ref_zern": {
                         "Z04": -308. * u.nm
                     },
@@ -262,6 +272,7 @@ mmt_config = {
             "aberr_table_file": pkg_resources.resource_filename(__name__, os.path.join("data", "mmirszernfield.tab")),
             "modes": {
                 "mmirs1": {
+                    "label": "Camera 1",
                     "pup_offset": [0.0, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
                     "ref_zern": {
                         "Z04": -1325. * u.nm
@@ -272,6 +283,7 @@ mmt_config = {
                     ),
                 },
                 "mmirs2": {
+                    "label": "Camera 2",
                     "pup_offset": [0.75, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
                     "ref_zern": {
                         "Z04": 1912. * u.nm
