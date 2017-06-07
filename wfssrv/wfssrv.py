@@ -121,7 +121,9 @@ class WFSServ(tornado.web.Application):
                         ws_uris=ws_uris,
                         fig_ids=fig_ids,
                         figures=figkeys,
-                        datadir=self.application.datadir + "/"
+                        datadir=self.application.datadir + "/",
+                        modes=self.application.wfs.modes,
+                        default_mode=self.application.wfs.default_mode
                     )
             except Exception as e:
                 log.warn("Must specify valid wfs: %s. %s" % (wfs, e))
@@ -156,11 +158,18 @@ class WFSServ(tornado.web.Application):
             except:
                 log.warn("no wfs or file specified.")
 
+            mode = self.get_argument("mode", default=None)
+            connect = self.get_argument("connect", default=True)
+
             if os.path.isfile(filename):
-                self.application.wfs.connect()
-                results = self.application.wfs.measure_slopes(filename, plot=True)
+                if connect == "true":
+                    self.application.wfs.connect()
+                else:
+                    self.application.wfs.disconnect()
+
+                results = self.application.wfs.measure_slopes(filename, mode=mode, plot=True)
                 if results['slopes'] is not None:
-                    if 'seeing' in results:
+                    if 'seeing' in results and self.application.wfs.connected:
                         self.application.update_seeing(results['seeing'])
                     zresults = self.application.wfs.fit_wavefront(results, plot=True)
                     zvec = zresults['zernike']
