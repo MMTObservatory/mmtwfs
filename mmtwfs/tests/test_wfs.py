@@ -39,14 +39,14 @@ def test_mmirs_analysis():
     mmirs = WFSFactory(wfs='mmirs')
     results = mmirs.measure_slopes(test_file)
     zresults = mmirs.fit_wavefront(results)
-    assert(int(zresults['zernike']['Z10'].value) == -231)
+    assert(int(zresults['zernike']['Z10'].value) == -218)
 
 def test_f9_analysis():
     test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "TREX_p500_0000.fits"))
     f9 = WFSFactory(wfs='f9')
     results = f9.measure_slopes(test_file)
     zresults = f9.fit_wavefront(results)
-    assert(int(zresults['zernike']['Z09'].value) == 454)
+    assert(int(zresults['zernike']['Z09'].value) == 456)
 
 def test_f5_analysis():
     test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "auto_wfs_0037_ave.fits"))
