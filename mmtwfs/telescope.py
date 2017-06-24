@@ -117,7 +117,7 @@ class MMT(object):
         """
         # poppy wants the wavelength in meters
         try:
-            w = wavelength.to(u.m)
+            w = wavelength.to(u.m).value
         except AttributeError:
             w = wavelength  # if no unit provided, assumed meters
 
