@@ -111,7 +111,7 @@ class MMT(object):
         pup_im = pup_im / pup_im.max()
         return pup_im
 
-    def psf(self, zv=ZernikeVector(), wavelength=550.*u.nm, pixscale=0.01, fov=1.0, plot=True):
+    def psf(self, zv=ZernikeVector(), wavelength=550.*u.nm, pixscale=0.02, fov=1.0, plot=True):
         """
         Take a ZernikeVector and calculate resulting MMTO PSF at given wavelength.
         """

@@ -912,7 +912,7 @@ class WFS(object):
         xref = self.cor_coords[0]
         yref = self.cor_coords[1]
         dx = xc - xref
-        dy = yc - yref
+        dy = yc - yref  # python Y axis starts at top and goes down
 
         total_rotation = u.Quantity(fit_results['rotator'] + self.rotation, u.rad).value
 
@@ -923,7 +923,7 @@ class WFS(object):
         az, el = pol2cart([dr, derot_phi])
 
         az *= self.pix_size
-        el *= self.pix_size
+        el *= -1 * self.pix_size  # cassegrain image flip
 
         return az, el
 
