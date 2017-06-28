@@ -24,7 +24,6 @@ from astropy.io import ascii
 from astropy import stats, visualization
 from astropy.modeling.models import Gaussian2D, Polynomial2D
 from astropy.modeling.fitting import LevMarLSQFitter
-from astropy.coordinates import SkyCoord, match_coordinates_3d
 
 from astroscrappy import detect_cosmics
 
@@ -376,6 +375,26 @@ def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True):
     return srcs, masks, snrs, sigma, wfsfind_fig
 
 
+def match_apertures(refx, refy, spotx, spoty, max_dist=25.):
+    """
+    Given reference aperture and spot X/Y positions, loop through reference apertures and find closest spot. Use
+    max_dist to exclude matches that are too far from reference position.
+    """
+    refs = np.array([refx, refy])
+    spots = np.array([spotx, spoty])
+    match = np.nan * np.ones(len(refx))
+    for i in np.arange(len(refx)):
+        dists = np.sqrt( (spots[0]-refs[0][i])**2 + (spots[1]-refs[1][i])**2 )
+        if np.min(dists) < max_dist:
+            min_i = np.argmin(dists)
+            match[i] = min_i
+        else:
+            match[i] = np.nan
+    ref_mask = ~np.isnan(match)
+    src_mask = match[ref_mask]
+    return ref_mask, src_mask.astype(int)
+
+
 def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
     """
     Analyze a WFS image and produce pixel offsets between reference and observed spot positions.
@@ -428,9 +447,6 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
         r=apsize/2.
     )
 
-    # should make this a config var, but need to play with it more...
-    snr_mask = np.where(snrs < 0.1*snrs.max())
-
     # the first step to fine-tuning the WFS pattern center is compare the marginal sums for the whole image to the ones
     # for the part centered on the initial guess for the center position.
     xl = int(xcen - 2*xspacing)
@@ -461,40 +477,36 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
     refx = (xspacing / ref['xspacing']) * ref['apertures']['xcentroid'] + xcen
     refy = (yspacing / ref['yspacing']) * ref['apertures']['ycentroid'] + ycen
 
-    # set up cartesian coordinates for the measured and reference spot positions
-    src_coord = SkyCoord(x=srcs['xcentroid'], y=srcs['ycentroid'], z=0.0, representation='cartesian')
-    ref_coord = SkyCoord(x=refx, y=refy, z=0.0, representation='cartesian')
-
-    # perform the matching...
-    idx, sep, dist = match_coordinates_3d(src_coord, ref_coord)
+    # match reference apertures to spots
+    spacing = np.mean([xspacing, yspacing])
+    ref_mask, src_mask = match_apertures(refx, refy, srcs['xcentroid'], srcs['ycentroid'], max_dist=spacing/2.)
 
     # sometimes the initial center will be up to ~half aperture off so some apertures will go one way, while the rest go another.
     # fix that by finding the mean offset from the first match, apply it to the reference coords, and then re-match.
-    xoff = np.mean(srcs['xcentroid'] - refx[idx])
-    yoff = np.mean(srcs['ycentroid'] - refy[idx])
+    xoff = np.mean(srcs['xcentroid'][src_mask] - refx[ref_mask])
+    yoff = np.mean(srcs['ycentroid'][src_mask] - refy[ref_mask])
     refx += xoff
     refy += yoff
     xcen += xoff
     ycen += yoff
 
     # now do the re-matching with better center position...
-    ref_coord = SkyCoord(x=refx, y=refy, z=0.0, representation='cartesian')
-    idx, sep, dist = match_coordinates_3d(src_coord, ref_coord)
-    xoff = np.mean(srcs['xcentroid'] - refx[idx])
-    yoff = np.mean(srcs['ycentroid'] - refy[idx])
+    ref_mask, src_mask = match_apertures(refx, refy, srcs['xcentroid'], srcs['ycentroid'], max_dist=spacing/2.)
+    xoff = np.mean(srcs['xcentroid'][src_mask] - refx[ref_mask])
+    yoff = np.mean(srcs['ycentroid'][src_mask] - refy[ref_mask])
     xcen += xoff
     ycen += yoff
 
     # these are unscaled so that the slope includes defocus
-    trim_refx = ref['apertures']['xcentroid'][idx] + xcen
-    trim_refy = ref['apertures']['ycentroid'][idx] + ycen
+    trim_refx = ref['apertures']['xcentroid'][ref_mask] + xcen
+    trim_refy = ref['apertures']['ycentroid'][ref_mask] + ycen
     ref_aps = photutils.CircularAperture(
         (trim_refx, trim_refy),
         r=ref_spacing/2.
     )
 
-    slope_x = srcs['xcentroid'] - trim_refx
-    slope_y = srcs['ycentroid'] - trim_refy
+    slope_x = srcs['xcentroid'][src_mask] - trim_refx
+    slope_y = srcs['ycentroid'][src_mask] - trim_refy
 
     pup_size = ref['pup_outer']
     pup_coords = (ref_aps.positions - [xcen, ycen]) / [pup_size, pup_size]
@@ -512,24 +524,13 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
     # need full slopes array the size of the complete set of reference apertures and pre-filled with np.nan for masking
     slopes = np.nan * np.ones((2, len(ref['apertures']['xcentroid'])))
 
-    # check mis-IDed spots
-    spacing = np.max([xspacing, yspacing])
-    diffx = srcs['xcentroid'] - refx[idx]
-    diffy = srcs['ycentroid'] - refy[idx]
-    dist = np.sqrt(diffx**2 + diffy**2)
-    slope_x[dist > spacing/2.] = np.nan
-    slope_y[dist > spacing/2.] = np.nan
+    slopes[0][ref_mask] = slope_x
+    slopes[1][ref_mask] = slope_y
 
-    # apply SNR mask
-    slope_x[snr_mask] = np.nan
-    slope_y[snr_mask] = np.nan
-
-    slopes[0][idx] = slope_x
-    slopes[1][idx] = slope_y
     figures = {}
     figures['pupil_center'] = pupcen_fig
     figures['slopes'] = aps_fig
-    return np.ma.masked_invalid(slopes), pup_coords.transpose(), src_aps, (xspacing, yspacing), (xcen, ycen), idx, sigma, figures
+    return np.ma.masked_invalid(slopes), pup_coords.transpose(), src_aps, (xspacing, yspacing), (xcen, ycen), ref_mask, src_mask, sigma, figures
 
 
 def WFSFactory(wfs="f5", config={}, **kwargs):
@@ -733,7 +734,7 @@ class WFS(object):
         pup_mask = self.pupil_mask(rotator=rotator)
 
         try:
-            slopes, coords, aps, spacing, cen, mask, sigma, figures = get_slopes(
+            slopes, coords, aps, spacing, cen, ref_mask, src_mask, sigma, figures = get_slopes(
                 data,
                 self.modes[mode]['reference'],
                 pup_mask,
@@ -766,10 +767,10 @@ class WFS(object):
         seeing, raw_seeing = self.seeing(mode=mode, sigma=sigma, airmass=airmass)
 
         if plot:
-            x = aps.positions.transpose()[0]
-            y = aps.positions.transpose()[1]
-            uu = slopes[0][mask]
-            vv = slopes[1][mask]
+            x = aps.positions.transpose()[0][src_mask]
+            y = aps.positions.transpose()[1][src_mask]
+            uu = slopes[0][ref_mask]
+            vv = slopes[1][ref_mask]
             norm = wfs_norm(data)
             figures['slopes'].set_label("Aperture Positions and Spot Movement")
             ax = figures['slopes'].axes[0]
@@ -800,7 +801,8 @@ class WFS(object):
         results['header'] = hdr
         results['rotator'] = rotator
         results['mode'] = mode
-        results['ref_mask'] = mask
+        results['ref_mask'] = ref_mask
+        results['src_mask'] = src_mask
         results['fwhm'] = stats.funcs.gaussian_sigma_to_fwhm * sigma
         results['figures'] = figures
         return results
@@ -842,13 +844,14 @@ class WFS(object):
             fig = None
             if plot:
                 ref_mask = slope_results['ref_mask']
+                src_mask = slope_results['src_mask']
                 im = slope_results['data']
                 gnorm = wfs_norm(im)
                 fig, ax = plt.subplots()
                 fig.set_label("Zernike Fit Residuals")
                 ax.imshow(im, cmap='Greys', origin='lower', norm=gnorm, interpolation='None')
-                x = slope_results['apertures'].positions.transpose()[0]
-                y = slope_results['apertures'].positions.transpose()[1]
+                x = slope_results['apertures'].positions.transpose()[0][src_mask]
+                y = slope_results['apertures'].positions.transpose()[1][src_mask]
                 ax.quiver(x, y, diff[0][ref_mask], diff[1][ref_mask], scale_units='xy', scale=0.05, pivot='tip', color='red')
                 xl = [50.0]
                 yl = [im.shape[0]-30]
