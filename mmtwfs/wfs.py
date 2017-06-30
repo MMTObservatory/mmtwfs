@@ -15,7 +15,7 @@ import matplotlib.cm as cm
 
 from skimage import feature
 from skimage.morphology import reconstruction
-from scipy import stats, ndimage
+from scipy import stats, ndimage, optimize
 from scipy.misc import imrotate
 
 import astropy.units as u
@@ -378,21 +378,64 @@ def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True):
 def match_apertures(refx, refy, spotx, spoty, max_dist=25.):
     """
     Given reference aperture and spot X/Y positions, loop through reference apertures and find closest spot. Use
-    max_dist to exclude matches that are too far from reference position.
+    max_dist to exclude matches that are too far from reference position.  Return masks to use to denote validly
+    matched apertures.
     """
     refs = np.array([refx, refy])
     spots = np.array([spotx, spoty])
     match = np.nan * np.ones(len(refx))
+    matched = []
     for i in np.arange(len(refx)):
         dists = np.sqrt( (spots[0]-refs[0][i])**2 + (spots[1]-refs[1][i])**2 )
+        min_i = np.argmin(dists)
         if np.min(dists) < max_dist:
-            min_i = np.argmin(dists)
-            match[i] = min_i
+            if min_i not in matched:
+                match[i] = min_i
+                matched.append(min_i)
         else:
-            match[i] = np.nan
+            if min_i not in matched:
+                match[i] = np.nan
     ref_mask = ~np.isnan(match)
     src_mask = match[ref_mask]
     return ref_mask, src_mask.astype(int)
+
+
+def aperture_distance(refx, refy, spotx, spoty):
+    """
+    Calculate the sum of the distances between each reference aperture and the closest measured spot position.
+    This total distance is the statistic to minimize when fitting the reference aperture grid to the data.
+    """
+    tot_dist = 0.0
+    refs = np.array([refx, refy])
+    spots = np.array([spotx, spoty])
+    for i in np.arange(len(refx)):
+        dists = np.sqrt( (spots[0]-refs[0][i])**2 + (spots[1]-refs[1][i])**2 )
+        tot_dist += np.min(dists)
+    return np.log(tot_dist)
+
+
+def fit_apertures(pars, ref, spots):
+    """
+    Scale the reference positions by the fit parameters and calculate the total distance between the matches.
+    The parameters are:
+        xc, yc = center positions
+        xscale, yscale = magnification of the grid (focus)
+        xcoma, ycoma = linear change in magnification as a function of x/y (coma)
+
+    'ref' and 'spots' are assumed to be dict-like and must have the keys 'xcentroid' and 'ycentroid'.
+    """
+    xc = pars[0]
+    yc = pars[1]
+    xscale = pars[2]
+    yscale = pars[3]
+    xcoma = pars[4]
+    ycoma = pars[5]
+    refx = ref['xcentroid'] * (xscale + ref['xcentroid'] * xcoma) + xc
+    refy = ref['ycentroid'] * (yscale + ref['ycentroid'] * ycoma) + yc
+    spotx = spots['xcentroid']
+    spoty = spots['ycentroid']
+    dist = aperture_distance(refx, refy, spotx, spoty)
+    return dist
 
 
 def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
@@ -473,29 +516,41 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
     xcen = ndimage.measurements.center_of_mass(xdiff)[0]
     ycen = ndimage.measurements.center_of_mass(ydiff)[0]
 
-    # use the ratio of spacings to magnify the grid and the updated pupil center guess to offset it
-    refx = (xspacing / ref['xspacing']) * ref['apertures']['xcentroid'] + xcen
-    refy = (yspacing / ref['yspacing']) * ref['apertures']['ycentroid'] + ycen
+    # set up to do a fit of the reference apertures to the spot positions with the center, scaling, and position-dependent
+    # scaling (coma) as free parameters
+    xscale = xspacing / ref['xspacing']
+    yscale = yspacing / ref['yspacing']
+
+    args = (ref['apertures'], srcs)
+    pars = (xcen, ycen, 1.0, 1.0, 0.0, 0.0)
+    par_keys = ('xcen', 'ycen', 'xscale', 'yscale', 'xcoma', 'ycoma')
+    print(pars)
+    # scipy.optimize.minimize can do bounded minimization so leverage that to keep the solution within a reasonable range.
+    bounds = (
+        (xcen-75, xcen+75),  # hopefully we're not too far off from true center...
+        (ycen-75, ycen+75),
+        (0.5, 1.5),  # our guess for grid mag shouldn't be off by 20% i would hope...
+        (0.5, 1.5),
+        (-0.01, 0.01),  # this should be way more than enough to account for any reasonable amount of coma we'll encounter
+        (-0.01, 0.01)
+    )
+    min_results = optimize.minimize(fit_apertures, pars, args=args, bounds=bounds, options={'ftol': 1e-13})
+    print(min_results)
+
+    fit_results = {}
+    for i, k in enumerate(par_keys):
+        fit_results[k] = min_results['x'][i]
+
+    xcen, ycen = fit_results['xcen'], fit_results['ycen']
+    xscale, yscale = fit_results['xscale'], fit_results['yscale']
+    xcoma, ycoma = fit_results['xcoma'], fit_results['ycoma']
+
+    refx = ref['apertures']['xcentroid'] * (xscale + ref['apertures']['xcentroid'] * xcoma) + xcen
+    refy = ref['apertures']['ycentroid'] * (yscale + ref['apertures']['ycentroid'] * ycoma) + ycen
 
     # match reference apertures to spots
     spacing = np.mean([xspacing, yspacing])
-    ref_mask, src_mask = match_apertures(refx, refy, srcs['xcentroid'], srcs['ycentroid'], max_dist=spacing/2.)
-
-    # sometimes the initial center will be up to ~half aperture off so some apertures will go one way, while the rest go another.
-    # fix that by finding the mean offset from the first match, apply it to the reference coords, and then re-match.
-    xoff = np.mean(srcs['xcentroid'][src_mask] - refx[ref_mask])
-    yoff = np.mean(srcs['ycentroid'][src_mask] - refy[ref_mask])
-    refx += xoff
-    refy += yoff
-    xcen += xoff
-    ycen += yoff
-
-    # now do the re-matching with better center position...
-    ref_mask, src_mask = match_apertures(refx, refy, srcs['xcentroid'], srcs['ycentroid'], max_dist=spacing/2.)
-    xoff = np.mean(srcs['xcentroid'][src_mask] - refx[ref_mask])
-    yoff = np.mean(srcs['ycentroid'][src_mask] - refy[ref_mask])
-    xcen += xoff
-    ycen += yoff
+    ref_mask, src_mask = match_apertures(refx, refy, srcs['xcentroid'], srcs['ycentroid'], max_dist=spacing)
 
     # these are unscaled so that the slope includes defocus
     trim_refx = ref['apertures']['xcentroid'][ref_mask] + xcen
@@ -530,7 +585,19 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
     figures = {}
     figures['pupil_center'] = pupcen_fig
     figures['slopes'] = aps_fig
-    return np.ma.masked_invalid(slopes), pup_coords.transpose(), src_aps, (xspacing, yspacing), (xcen, ycen), ref_mask, src_mask, sigma, figures
+    results = {
+        "slopes": np.ma.masked_invalid(slopes),
+        "pup_coords": pup_coords.transpose(),
+        "src_aps": src_aps,
+        "spacing": (xspacing, yspacing),
+        "center": (xcen, ycen),
+        "ref_mask": ref_mask,
+        "src_mask": src_mask,
+        "spot_sigma": sigma,
+        "figures": figures,
+        "grid_fit": fit_results
+    }
+    return results
 
 
 def WFSFactory(wfs="f5", config={}, **kwargs):
@@ -734,7 +801,7 @@ class WFS(object):
         pup_mask = self.pupil_mask(rotator=rotator)
 
         try:
-            slopes, coords, aps, spacing, cen, ref_mask, src_mask, sigma, figures = get_slopes(
+            slope_results = get_slopes(
                 data,
                 self.modes[mode]['reference'],
                 pup_mask,
@@ -742,6 +809,12 @@ class WFS(object):
                 thresh=self.find_thresh,
                 plot=plot
             )
+            slopes = slope_results['slopes']
+            coords = slope_results['pup_coords']
+            aps = slope_results['src_aps']
+            ref_mask = slope_results['ref_mask']
+            src_mask = slope_results['src_mask']
+            figures = slope_results['figures']
         except WFSAnalysisFailed as e:
             print("Wavefront slope measurement failed: %s" % e.args[1])
             slope_fig = None
@@ -764,7 +837,7 @@ class WFS(object):
             airmass = hdr['AIRMASS']
         else:
             airmass = None
-        seeing, raw_seeing = self.seeing(mode=mode, sigma=sigma, airmass=airmass)
+        seeing, raw_seeing = self.seeing(mode=mode, sigma=slope_results['spot_sigma'], airmass=airmass)
 
         if plot:
             x = aps.positions.transpose()[0][src_mask]
@@ -782,7 +855,7 @@ class WFS(object):
             ul = [1.0/self.pix_size.value]
             vl = [0.0]
             ax.quiver(xl, yl, ul, vl, scale_units='xy', scale=0.2, pivot='tip', color='red')
-            ax.scatter([cen[0]], [cen[1]])
+            ax.scatter([slope_results['center'][0]], [slope_results['center'][1]])
             ax.text(60, data.shape[0]-30, "1\"", verticalalignment='center')
             ax.set_title("Seeing: %.2f\" (%.2f\" @ zenith)" % (raw_seeing.value, seeing.value))
 
@@ -792,10 +865,10 @@ class WFS(object):
         results['slopes'] = slopes
         results['pup_coords'] = coords
         results['apertures'] = aps
-        results['xspacing'] = spacing[0]
-        results['yspacing'] = spacing[1]
-        results['xcen'] = cen[0]
-        results['ycen'] = cen[1]
+        results['xspacing'] = slope_results['spacing'][0]
+        results['yspacing'] = slope_results['spacing'][1]
+        results['xcen'] = slope_results['center'][0]
+        results['ycen'] = slope_results['center'][1]
         results['pup_mask'] = pup_mask
         results['data'] = data
         results['header'] = hdr
@@ -803,7 +876,7 @@ class WFS(object):
         results['mode'] = mode
         results['ref_mask'] = ref_mask
         results['src_mask'] = src_mask
-        results['fwhm'] = stats.funcs.gaussian_sigma_to_fwhm * sigma
+        results['fwhm'] = stats.funcs.gaussian_sigma_to_fwhm * slope_results['spot_sigma']
         results['figures'] = figures
         return results
 
