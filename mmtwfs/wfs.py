@@ -71,7 +71,7 @@ def check_wfsdata(data):
         msg = "WFS image data in improper format, %s" % type(data)
         raise WFSConfigException(value=msg)
     if len(data.shape) != 2:
-        msg = "WFS image data has improper shape, %s. Must be 2D image." % data.shape
+        msg = "WFS image data has improper shape, %dD. Must be 2D image." % len(data.shape)
         raise WFSConfigException(value=msg)
     return data
 

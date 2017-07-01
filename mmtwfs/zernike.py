@@ -406,7 +406,7 @@ def noll_coefficient(l):
     norm_coeff: float
         Noll normalization coefficient
     """
-    if l < 0:
+    if l < 1:
         raise ZernikeException("Noll modes start at l=1. l=%d is not valid." % l)
 
     n, m = noll_to_zernike(l)

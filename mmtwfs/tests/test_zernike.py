@@ -5,9 +5,19 @@ import astropy.units as u
 
 from matplotlib.testing.decorators import cleanup
 
-from ..zernike import ZernikeVector
+from ..zernike import ZernikeVector, noll_normalization_vector, noll_coefficient
 from ..custom_exceptions import ZernikeException
 
+
+def test_bogus_coefficient():
+    try:
+        c = noll_coefficient(0)
+    except ZernikeException:
+        assert True
+    except Exception as e:
+        assert False
+    else:
+        assert False
 
 def test_bogus_setkeys():
     zv = ZernikeVector()
@@ -124,6 +134,14 @@ def test_bogus_key():
 def test_repr():
     zv = ZernikeVector(Z04=1000, Z05=500, modestart=2)
     assert(len(repr(zv)) > 0)
+    zv.normalize()
+    assert(len(repr(zv)) > 0)
+    zv['Z99'] = 1.0
+    assert(len(repr(zv)) > 0)
+
+def test_str():
+    zv = ZernikeVector(Z04=1000, Z05=500, modestart=2)
+    assert(len(str(zv)) > 0)
 
 def test_zernike_del():
     zv = ZernikeVector(Z04=1000, Z05=500, modestart=2)
@@ -217,6 +235,10 @@ def test_from_array():
     assert(len(zv) == 3)
     assert(zv['Z04'].value == 1000.0)
 
+def test_noll_vector():
+    arr = noll_normalization_vector(nmodes=20)
+    assert(len(arr) == 20)
+
 def test_ignore():
     zv = ZernikeVector(Z04=1000, Z05=500, modestart=2)
     assert(len(zv) == 4)
@@ -242,6 +264,14 @@ def test_loadsave():
     zv2 = ZernikeVector(coeffs="test.json")
     for c in zv2:
         assert(zv2[c] == zv[c])
+    try:
+        zv3 = ZernikeVector(coeffs="bogus.json")
+    except ZernikeException:
+        assert True
+    except Exception as e:
+        assert False
+    else:
+        assert False
 
 def test_labels():
     zv = ZernikeVector(Z04=100, Z05=200, Z06=-500)
