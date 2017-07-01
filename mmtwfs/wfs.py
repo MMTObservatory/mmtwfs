@@ -419,19 +419,18 @@ def fit_apertures(pars, ref, spots):
     Scale the reference positions by the fit parameters and calculate the total distance between the matches.
     The parameters are:
         xc, yc = center positions
-        xscale, yscale = magnification of the grid (focus)
+        scale = magnification of the grid (focus)
         xcoma, ycoma = linear change in magnification as a function of x/y (coma)
 
     'ref' and 'spots' are assumed to be dict-like and must have the keys 'xcentroid' and 'ycentroid'.
     """
     xc = pars[0]
     yc = pars[1]
-    xscale = pars[2]
-    yscale = pars[3]
-    xcoma = pars[4]
-    ycoma = pars[5]
-    refx = ref['xcentroid'] * (xscale + ref['xcentroid'] * xcoma) + xc
-    refy = ref['ycentroid'] * (yscale + ref['ycentroid'] * ycoma) + yc
+    scale = pars[2]
+    xcoma = pars[3]
+    ycoma = pars[4]
+    refx = ref['xcentroid'] * (scale + ref['xcentroid'] * xcoma) + xc
+    refy = ref['ycentroid'] * (scale + ref['ycentroid'] * ycoma) + yc
     spotx = spots['xcentroid']
     spoty = spots['ycentroid']
     dist = aperture_distance(refx, refy, spotx, spoty)
@@ -478,7 +477,6 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
     apsize = ref_spacing
 
     srcs, masks, snrs, sigma, wfsfind_fig = get_apertures(data, apsize, fwhm=fwhm, thresh=thresh)
-    xspacing, yspacing = grid_spacing(data, srcs)
 
     # if we don't detect spots in at least half of the reference apertures, we can't usually get a good wavefront measurement
     if len(srcs) < 0.5 * len(ref['apertures']['xcentroid']):
@@ -492,10 +490,10 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
 
     # the first step to fine-tuning the WFS pattern center is compare the marginal sums for the whole image to the ones
     # for the part centered on the initial guess for the center position.
-    xl = int(xcen - 2*xspacing)
-    xu = int(xcen + 2*xspacing)
-    yl = int(ycen - 2*yspacing)
-    yu = int(ycen + 2*yspacing)
+    xl = int(xcen - 2*ref['xspacing'])
+    xu = int(xcen + 2*ref['xspacing'])
+    yl = int(ycen - 2*ref['yspacing'])
+    yu = int(ycen + 2*ref['yspacing'])
 
     # normalize the sums to their maximums so they can be compared more directly
     xsum = np.sum(data[yl:yu, :], axis=0)
@@ -518,21 +516,17 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
 
     # set up to do a fit of the reference apertures to the spot positions with the center, scaling, and position-dependent
     # scaling (coma) as free parameters
-    xscale = xspacing / ref['xspacing']
-    yscale = yspacing / ref['yspacing']
-
     args = (ref['apertures'], srcs)
-    pars = (xcen, ycen, 1.0, 1.0, 0.0, 0.0)
-    par_keys = ('xcen', 'ycen', 'xscale', 'yscale', 'xcoma', 'ycoma')
+    par_keys = ('xcen', 'ycen', 'scale', 'xcoma', 'ycoma')
+    pars = (xcen, ycen, 1.0, 0.0, 0.0)
     print(pars)
     # scipy.optimize.minimize can do bounded minimization so leverage that to keep the solution within a reasonable range.
     bounds = (
         (xcen-75, xcen+75),  # hopefully we're not too far off from true center...
         (ycen-75, ycen+75),
-        (0.5, 1.5),  # our guess for grid mag shouldn't be off by 20% i would hope...
-        (0.5, 1.5),
-        (-0.01, 0.01),  # this should be way more than enough to account for any reasonable amount of coma we'll encounter
-        (-0.01, 0.01)
+        (0.75, 1.5),  # reasonable range of expected focus difference...
+        (-0.1, 0.1),  # this should be way more than enough to account for any reasonable amount of coma we'll encounter.
+        (-0.1, 0.1)   # however, the larger range range appears to help minimize avoid local minima
     )
     min_results = optimize.minimize(fit_apertures, pars, args=args, bounds=bounds, options={'ftol': 1e-13})
     print(min_results)
@@ -542,15 +536,17 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
         fit_results[k] = min_results['x'][i]
 
     xcen, ycen = fit_results['xcen'], fit_results['ycen']
-    xscale, yscale = fit_results['xscale'], fit_results['yscale']
+    scale = fit_results['scale']
     xcoma, ycoma = fit_results['xcoma'], fit_results['ycoma']
 
-    refx = ref['apertures']['xcentroid'] * (xscale + ref['apertures']['xcentroid'] * xcoma) + xcen
-    refy = ref['apertures']['ycentroid'] * (yscale + ref['apertures']['ycentroid'] * ycoma) + ycen
+    refx = ref['apertures']['xcentroid'] * (scale + ref['apertures']['xcentroid'] * xcoma) + xcen
+    refy = ref['apertures']['ycentroid'] * (scale + ref['apertures']['ycentroid'] * ycoma) + ycen
+    xspacing = scale * ref['xspacing']
+    yspacing = scale * ref['yspacing']
 
     # match reference apertures to spots
-    spacing = np.mean([xspacing, yspacing])
-    ref_mask, src_mask = match_apertures(refx, refy, srcs['xcentroid'], srcs['ycentroid'], max_dist=spacing)
+    spacing = np.max([xspacing, yspacing])
+    ref_mask, src_mask = match_apertures(refx, refy, srcs['xcentroid'], srcs['ycentroid'], max_dist=spacing/2.)
 
     # these are unscaled so that the slope includes defocus
     trim_refx = ref['apertures']['xcentroid'][ref_mask] + xcen
@@ -878,6 +874,8 @@ class WFS(object):
         results['src_mask'] = src_mask
         results['fwhm'] = stats.funcs.gaussian_sigma_to_fwhm * slope_results['spot_sigma']
         results['figures'] = figures
+        results['grid_fit'] = slope_results['grid_fit']
+
         return results
 
     def fit_wavefront(self, slope_results, plot=True):
