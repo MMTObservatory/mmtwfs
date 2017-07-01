@@ -1048,29 +1048,6 @@ class F9(WFS):
         # get host/port to use for topbox communication
         self.host, self.port = srvlookup(self.lampsrv)
 
-    def topbox_connect(self):
-        """
-        Set state to connected
-        """
-        self.telescope.connect()
-        self.secondary.connect()
-
-        if self.telescope.connected and self.secondary.connected:
-            self.connected = True
-        else:
-            self.connected = False
-
-        if self.host is not None:
-            try:
-                topbox_server = (self.host, self.port)
-                self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self.sock.connect(topbox_server)
-            except Exception as e:
-                print("Error connecting to topbox server. Remaining disconnected...: %s" % e)
-                self.connected = False
-        else:
-            self.connected = False
-
 
 class NewF9(F9):
     """
