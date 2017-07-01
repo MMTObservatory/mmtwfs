@@ -39,7 +39,7 @@ def test_mmirs_analysis():
     mmirs = WFSFactory(wfs='mmirs')
     results = mmirs.measure_slopes(test_file)
     zresults = mmirs.fit_wavefront(results)
-    assert(int(zresults['zernike']['Z10'].value) == -218)
+    assert(int(zresults['zernike']['Z10'].value) == -274)
 
 def test_f9_analysis():
     test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "TREX_p500_0000.fits"))
@@ -53,7 +53,7 @@ def test_f5_analysis():
     f5 = WFSFactory(wfs='f5')
     results = f5.measure_slopes(test_file)
     zresults = f5.fit_wavefront(results)
-    assert(int(zresults['zernike']['Z10'].value) == 67)
+    assert(int(zresults['zernike']['Z10'].value) == 66)
 
 def test_too_few_spots():
     test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "mmirs_bogus.fits"))
