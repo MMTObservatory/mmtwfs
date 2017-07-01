@@ -227,7 +227,7 @@ mmt_config = {
             "find_thresh": 7.0,
             "rotation": -225. * u.deg,
             "pix_size": 0.09639 * u.arcsec,  # SBIG STT-8300 with 5.4 um pixels binned 3x3
-            "pup_size": 550,  # pupil outer diameter in pixels
+            "pup_size": 530,  # pupil outer diameter in pixels
             "pup_inner": 65,  # inner obscuration radius in pixels
             "pup_offset": [0.0, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
