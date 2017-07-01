@@ -48,6 +48,13 @@ def test_f9_analysis():
     zresults = f9.fit_wavefront(results)
     assert(int(zresults['zernike']['Z09'].value) == 456)
 
+def test_newf9_analysis():
+    test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "test_newf9.fits"))
+    f9 = WFSFactory(wfs='newf9')
+    results = f9.measure_slopes(test_file)
+    zresults = f9.fit_wavefront(results)
+    assert(int(zresults['zernike']['Z09'].value) == 146)
+
 def test_f5_analysis():
     test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "auto_wfs_0037_ave.fits"))
     f5 = WFSFactory(wfs='f5')
