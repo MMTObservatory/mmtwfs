@@ -45,16 +45,18 @@ class Secondary(object):
 
         # use this boolean to determine if corrections are actually to be sent
         self.connected = False
-        self.sock = None
 
     def inc_offset(self, offset, axis, value):
         """
         Apply an incremental 'offset' of 'value' to 'axis'.
         """
-        cmd = "offset_inc %s %s %f" % (offset, axis, value)
+        cmd = "offset_inc %s %s %f\n" % (offset, axis, value)
         if self.connected:
-            self.sock.sendall(cmd)
-            self.sock.sendall("apply_offsets")
+            sock = self.hex_sock()
+            sock.sendall(cmd.encode("utf8"))
+            sock.sendall(b"apply_offsets\n")
+            result = sock.recv(4096)
+            sock.close()
         return cmd
 
     def connect(self):
@@ -62,26 +64,31 @@ class Secondary(object):
         Set state to connected so that calculated corrections will be sent to the relevant systems
         """
         if self.host is not None:
-            self.connected = True
-            try:
-                hex_server = (self.host, self.port)
-                self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self.sock.connect(hex_server)
-            except Exception as e:
-                print("Error connecting to hexapod server. Remaining disconnected...: %s" % e)
+            sock = self.hex_sock()
+            if sock is None:
                 self.connected = False
+            else:
+                self.connected = True
+                sock.close()
+
+    def hex_sock(self):
+        """
+        Set up socket for communicating with the hexapod
+        """
+        try:
+            hex_server = (self.host, self.port)
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.connect(hex_server)
+        except Exception as e:
+            print("Error connecting to hexapod server. Remaining disconnected...: %s" % e)
+            return None
+        return sock
 
     def disconnect(self):
         """
         Set state to disconnected so that corrections will be calculated, but not sent
         """
         self.connected = False
-        if self.sock:
-            try:
-                self.sock.close()
-                self.sock = None
-            except Exception as e:
-                print("Error closing connection to hexapod server: %s" % e)
 
     def focus(self, foc):
         """
@@ -118,10 +125,12 @@ class Secondary(object):
             tilt,
             axis)
         )
-        cmd = "offset_cc wfs tilt%s %f" % (axis, tilt)
+        cmd = "offset_cc wfs t%s %f\n" % (axis, tilt)
         if self.connected:
-            self.sock.sendall(cmd)
-            self.sock.sendall("apply_offsets")
+            sock = self.hex_sock()
+            sock.sendall(cmd.encode("utf8"))
+            sock.sendall(b"apply_offsets\n")
+            sock.close()
         return cmd
 
     def zc(self, axis, tilt):
@@ -140,11 +149,31 @@ class Secondary(object):
             tilt,
             axis)
         )
-        cmd = "offset_zc wfs tilt%s %f" % (axis, tilt)
+        cmd = "offset_zc wfs t%s %f\n" % (axis, tilt)
         if self.connected:
-            self.sock.sendall(cmd)
-            self.sock.sendall("apply_offsets")
+            sock = self.hex_sock()
+            sock.sendall(cmd.encode("utf8"))
+            sock.sendall(b"apply_offsets\n")
+            sock.close()
         return cmd
+
+    def correct_coma(self, cc_x_corr, cc_y_corr):
+        """
+        Apply calculated tilts to correct coma
+        """
+        if self.connected:
+            self.cc('x', cc_x_corr)
+            self.cc('y', cc_y_corr)
+        return cc_x_corr, cc_y_corr
+
+    def recenter(self, az, el):
+        """
+        Apply calculated az/el offsets using ZC tilts
+        """
+        if self.connected:
+            self.zc('x', el)
+            self.zc('y', az)
+        return az, el
 
     def clear_m1spherical(self):
         """
@@ -152,10 +181,12 @@ class Secondary(object):
         correct spherical aberration.
         """
         print("Resetting hexapod's spherical aberration offset to 0...")
-        cmd = "offset m1spherical z 0.0"
+        cmd = "offset m1spherical z 0.0\n"
         if self.connected:
-            self.sock.sendall(cmd)
-            self.sock.sendall("apply_offsets")
+            sock = self.hex_sock()
+            sock.sendall(cmd.encode("utf8"))
+            sock.sendall(b"apply_offsets\n")
+            sock.close()
         return cmd
 
     def clear_wfs(self):
@@ -166,11 +197,13 @@ class Secondary(object):
         axes = ['tx', 'ty', 'x', 'y', 'z']
         cmds = []
         if self.connected:
+            sock = self.hex_sock()
             for ax in axes:
-                cmd = "offset wfs %s 0.0" % ax
+                cmd = "offset wfs %s 0.0\n" % ax
                 cmds.append(cmd)
-                self.sock.sendall(cmd)
-            self.sock.sendall("apply_offsets")
+                sock.sendall(cmd.encode("utf8"))
+            sock.sendall(b"apply_offsets\n")
+            sock.close()
         return cmds
 
 class F5(Secondary):

@@ -406,7 +406,7 @@ def noll_coefficient(l):
     norm_coeff: float
         Noll normalization coefficient
     """
-    if l < 0:
+    if l < 1:
         raise ZernikeException("Noll modes start at l=1. l=%d is not valid." % l)
 
     n, m = noll_to_zernike(l)
@@ -1119,7 +1119,7 @@ class ZernikeVector(MutableMapping):
         cmap = cm.ScalarMappable(col.Normalize(0, max_c), cm.magma_r)
         cmap._A = []  # stupid matplotlib
         ind = np.arange(len(labels))
-        fig, ax = plt.subplots(figsize=(10, 6))
+        fig, ax = plt.subplots(figsize=(12, 5))
         fig.set_label("RMS Wavefront Error per Zernike Mode")
         rects = ax.bar(ind, coeffs, color=cmap.to_rgba(coeffs))
         ax.spines['top'].set_visible(False)
@@ -1128,6 +1128,7 @@ class ZernikeVector(MutableMapping):
         ax.set_axisbelow(True)
         ax.set_xticks(ind)
         ax.set_xticklabels(labels, rotation=45, ha='right', size='x-small')
+        ax.set_ylim(0, max_c)
         ax.set_ylabel("RMS Wavefront Error (%s)" % self.units)
         cb = fig.colorbar(cmap)
         cb.set_label("%s" % self.units)

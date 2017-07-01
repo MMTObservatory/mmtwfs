@@ -66,7 +66,8 @@ def test_force_file():
 def test_correct_primary():
     t = MMT()
     zv = ZernikeVector(Z05=1000, Z11=250)
-    force, focus = t.correct_primary(zv)
+    force, focus = t.calculate_primary_corrections(zv)
+    lforce, lfocus = t.correct_primary(force, focus)
     assert(np.abs(focus) > 0.0)
     uforce, ufocus = t.undo_last()
     assert(ufocus == -1 * focus)

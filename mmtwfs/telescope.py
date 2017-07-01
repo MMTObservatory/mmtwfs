@@ -111,13 +111,13 @@ class MMT(object):
         pup_im = pup_im / pup_im.max()
         return pup_im
 
-    def psf(self, zv=ZernikeVector(), wavelength=550.*u.nm, pixscale=0.01, fov=1.0, plot=True):
+    def psf(self, zv=ZernikeVector(), wavelength=550.*u.nm, pixscale=0.02, fov=1.0, plot=True):
         """
         Take a ZernikeVector and calculate resulting MMTO PSF at given wavelength.
         """
         # poppy wants the wavelength in meters
         try:
-            w = wavelength.to(u.m)
+            w = wavelength.to(u.m).value
         except AttributeError:
             w = wavelength  # if no unit provided, assumed meters
 
@@ -143,7 +143,7 @@ class MMT(object):
             im = psf[0].data
             psf_fig, ax = plt.subplots()
             psf_fig.set_label("PSF at {0:0.0f}".format(wavelength))
-            norm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.SqrtStretch())
+            norm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.LinearStretch())
             ims = ax.imshow(psf[0].data, extent=[-fov/2, fov/2, -fov/2, fov/2], cmap=cm.magma, norm=norm)
             ax.set_xlabel("arcsec")
             ax.set_ylabel("arcsec")
@@ -190,9 +190,9 @@ class MMT(object):
         """
         t.write(filename, format="ascii.no_header", delimiter="\t", formats={'force': ".1f"})
 
-    def correct_primary(self, zv, mask=[], filename="zfile", gain=0.5):
+    def calculate_primary_corrections(self, zv, mask=[], gain=0.5):
         """
-        Take ZernikeVector as input, determine corrections to apply to primary/secondary, and apply them.
+        Take ZernikeVector as input and determine corrections to apply to primary/secondary
         """
         # leave out tilts, focus, and coma from force calcs to start with
         def_mask = ['Z02', 'Z03', 'Z04', 'Z07', 'Z08']
@@ -220,16 +220,23 @@ class MMT(object):
 
         t = self.bending_forces(zv=zv_masked, gain=gain)
 
+        return t, m1focus_corr
+
+    def correct_primary(self, t, m1focus_corr, filename="zfile"):
+        """
+        Take force table and focus offset calculated by self.calculate_primary_corrections() and apply them, if connected.
+        """
         if self.connected:
             self.secondary.m1spherical(m1focus_corr)
             self.to_rcell(t, filename=filename)
+            print("Sending forces from %s..." % filename)
             os.system("/mmt/scripts/cell_send_forces %s" % filename)
 
         self.last_forces = t.copy(copy_data=True)
-        self.last_m1focus = m1focus_corr
+        self.last_m1focus = m1focus_corr.copy()
         self.total_forces['force'] += t['force']
         self.total_m1focus += m1focus_corr
-        return self.last_forces.copy(), self.last_m1focus.copy()
+        return t, m1focus_corr
 
     def undo_last(self, zfilename="zfile_undo"):
         """
@@ -303,13 +310,13 @@ class MMT(object):
 
         return coord
 
-    def plot_forces(self, t):
+    def plot_forces(self, t, m1focus=None, limit=100.):
         """
         Plot actuator forces given force table as output from self.bending_forces()
         """
         coords = self.actcoor
         r_fac = 0.5 * self.diameter / self.bcv_radius  # adjust for slight difference
-        cmap = cm.ScalarMappable(col.Normalize(-100, 100), cm.bwr)
+        cmap = cm.ScalarMappable(col.Normalize(-1*limit, limit), cm.bwr)
         cmap._A = []  # grr stupid matplotlib
         fig, ax = plt.subplots()
         fig.set_label("M1 Actuator Forces")
@@ -323,6 +330,8 @@ class MMT(object):
         circle2 = plt.Circle((0, 0), 0.9/6.5, fill=False, color='black', alpha=0.2)
         ax.add_artist(circle1)
         ax.add_artist(circle2)
+        if m1focus is not None:
+            ax.set_title("M1 Focus Offset: {0:0.1f}".format(m1focus))
         ax.set_axis_off()
         cb = fig.colorbar(cmap)
         cb.set_label("Actuator Force (N)")
