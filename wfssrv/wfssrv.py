@@ -321,10 +321,13 @@ class WFSServ(tornado.web.Application):
             try:
                 gain = float(self.get_argument(gain))
                 if self.application.wfs is not None:
-                    self.application.wfs.m1_gain = gain
+                    if gain >= 0.0 and gain <= 1.0:
+                        self.application.wfs.m1_gain = gain
+                    else:
+                        log.warn("Invalid M1 gain: %f" % gain)
                     log.info("Seeing M1 gain to %f" % gain)
             except:
-                log.info("no m1_gain specified")
+                log.info("No M1 gain specified")
 
     class M2GainHandler(tornado.web.RequestHandler):
         def get(self):
@@ -337,10 +340,13 @@ class WFSServ(tornado.web.Application):
             try:
                 gain = float(self.get_argument(gain))
                 if self.application.wfs is not None:
-                    self.application.wfs.m2_gain = gain
+                    if gain >= 0.0 and gain <= 1.0:
+                        self.application.wfs.m2_gain = gain
+                    else:
+                        log.warn("Invalid M2 gain: %f" % gain)
                     log.info("Seeing M2 gain to %f" % gain)
             except:
-                log.info("no m2_gain specified")
+                log.info("No M2 gain specified")
 
     class PendingHandler(tornado.web.RequestHandler):
         def get(self):
