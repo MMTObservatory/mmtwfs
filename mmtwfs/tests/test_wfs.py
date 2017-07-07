@@ -87,7 +87,7 @@ def test_newf9_analysis():
     f9 = WFSFactory(wfs='newf9')
     results = f9.measure_slopes(test_file)
     zresults = f9.fit_wavefront(results)
-    assert(int(zresults['zernike']['Z09'].value) == 147)
+    assert(int(zresults['zernike']['Z09'].value) == 146)
 
 @cleanup
 def test_f5_analysis():
