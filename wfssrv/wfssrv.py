@@ -123,7 +123,9 @@ class WFSServ(tornado.web.Application):
                         figures=figkeys,
                         datadir=self.application.datadir + "/",
                         modes=self.application.wfs.modes,
-                        default_mode=self.application.wfs.default_mode
+                        default_mode=self.application.wfs.default_mode,
+                        m1_gain=self.application.wfs.m1_gain,
+                        m2_gain=self.application.wfs.m2_gain
                     )
             except Exception as e:
                 log.warn("Must specify valid wfs: %s. %s" % (wfs, e))
@@ -193,9 +195,11 @@ class WFSServ(tornado.web.Application):
                     # check the RMS of the wavefront fit and only apply corrections if the fit is good enough.
                     # M2 can be more lenient to take care of large amounts of focus or coma.
                     if zresults['residual_rms'] < 800 * u.nm:
-                        self.application.has_pending_m2 = True
+                        self.application.has_pending_focus = True
                     if zresults['residual_rms'] < 400 * u.nm:
                         self.application.has_pending_m1 = True
+                        self.application.has_pending_coma = True
+
                     self.application.has_pending_recenter = True
 
                     self.application.wavefront_fit = zvec
@@ -242,23 +246,36 @@ class WFSServ(tornado.web.Application):
                 log.info("no M1 corrections sent")
                 self.write("No M1 corrections sent")
 
-    class M2CorrectHandler(tornado.web.RequestHandler):
+    class FocusCorrectHandler(tornado.web.RequestHandler):
         def get(self):
             log.info("M2 corrections")
-            if self.application.has_pending_m2 and self.application.wfs.connected:
+            if self.application.has_pending_focus and self.application.wfs.connected:
                 self.application.wfs.secondary.focus(self.application.pending_focus)
+                self.application.has_pending_focus = False
+                log_str = "Sending {0:0.1f} focus to secondary...".format(
+                    self.application.pending_focus
+                )
+                log.info(log_str)
+                self.write(log_str)
+            else:
+                log.info("no Focus corrections sent")
+                self.write("No Focus corrections sent")
+
+    class ComaCorrectHandler(tornado.web.RequestHandler):
+        def get(self):
+            log.info("M2 corrections")
+            if self.application.has_pending_coma and self.application.wfs.connected:
                 self.application.wfs.secondary.correct_coma(self.application.pending_cc_x, self.application.pending_cc_y)
-                self.application.has_pending_m2 = False
-                log_str = "Sending {0:0.1f} focus and {1:0.1f}/{2:0.1f} CC_X/CC_Y to secondary...".format(
-                    self.application.pending_focus,
+                self.application.has_pending_coma = False
+                log_str = "Sending {1:0.1f}/{2:0.1f} CC_X/CC_Y to secondary...".format(
                     self.application.pending_cc_x,
                     self.application.pending_cc_y
                 )
                 log.info(log_str)
                 self.write(log_str)
             else:
-                log.info("no M2 corrections sent")
-                self.write("No M2 corrections sent")
+                log.info("no Coma corrections sent")
+                self.write("No Coma corrections sent")
 
     class RecenterHandler(tornado.web.RequestHandler):
         def get(self):
@@ -303,13 +320,18 @@ class WFSServ(tornado.web.Application):
                 self.write("no WFS selected.")
 
         def post(self):
+            self.set_header("Content-Type", "text/plain")
             try:
-                gain = float(self.get_argument(gain))
+                gain = float(self.get_body_argument('gain'))
                 if self.application.wfs is not None:
-                    self.application.wfs.m1_gain = gain
-                    log.info("Seeing M1 gain to %f" % gain)
-            except:
-                log.info("no m1_gain specified")
+                    if gain >= 0.0 and gain <= 1.0:
+                        self.application.wfs.m1_gain = gain
+                    else:
+                        log.warn("Invalid M1 gain: %f" % gain)
+                    log.info("Setting M1 gain to %f" % gain)
+            except Exception as e:
+                log.warn("No M1 gain specified: %s" % e)
+                log.info("Body: %s" % self.request.body)
 
     class M2GainHandler(tornado.web.RequestHandler):
         def get(self):
@@ -319,13 +341,18 @@ class WFSServ(tornado.web.Application):
                 self.write("no WFS selected.")
 
         def post(self):
+            self.set_header("Content-Type", "text/plain")
             try:
-                gain = float(self.get_argument(gain))
+                gain = float(self.get_body_argument('gain'))
                 if self.application.wfs is not None:
-                    self.application.wfs.m2_gain = gain
-                    log.info("Seeing M2 gain to %f" % gain)
-            except:
-                log.info("no m2_gain specified")
+                    if gain >= 0.0 and gain <= 1.0:
+                        self.application.wfs.m2_gain = gain
+                    else:
+                        log.warn("Invalid M2 gain: %f" % gain)
+                    log.info("Setting M2 gain to %f" % gain)
+            except Exception as e:
+                log.warn("No M2 gain specified: %s" % e)
+                log.info("Body: %s" % self.request.body)
 
     class PendingHandler(tornado.web.RequestHandler):
         def get(self):
@@ -494,7 +521,8 @@ class WFSServ(tornado.web.Application):
             self.wfs_names[w] = self.wfs_systems[w].name
 
         self.has_pending_m1 = False
-        self.has_pending_m2 = False
+        self.has_pending_coma = False
+        self.has_pending_focus = False
         self.has_pending_recenter = False
 
         self.figures = None
@@ -511,7 +539,8 @@ class WFSServ(tornado.web.Application):
             (r"/disconnect", self.DisconnectHandler),
             (r"/analyze", self.AnalyzeHandler),
             (r"/m1correct", self.M1CorrectHandler),
-            (r"/m2correct", self.M2CorrectHandler),
+            (r"/focuscorrect", self.FocusCorrectHandler),
+            (r"/comacorrect", self.ComaCorrectHandler),
             (r"/recenter", self.RecenterHandler),
             (r"/restart", self.RestartHandler),
             (r"/setdatadir", self.DataDirHandler),

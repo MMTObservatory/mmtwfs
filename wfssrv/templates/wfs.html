@@ -106,9 +106,22 @@
             </div>
             <div class="row">
                 <div class='col-lg-6'>
-                    <button type="button" id='m2correct' data-loading-text="Running..." class="btn btn-primary">Correct M2</button>
+                    <form class="form-inline">
+                        <div class="form-group">
+                            <label for="m1gain">M1 Gain:</label>
+                            <input type="number" min=0.0 max=1.0 step=0.1 value="{{ m1_gain }}" id="m1gain">
+                            <label for="m2gain">M2 Gain:</label>
+                            <input type="number" min=0.0 max=1.0 step=0.1 value="{{ m2_gain }}" id="m2gain">
+                            <button type="button" id='setgains' data-loading-text="Running..." class="btn btn-primary">Set Gains</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <div class="row">
+                <div class='col-lg-6'>
+                    <button type="button" id='focuscorrect' data-loading-text="Running..." class="btn btn-primary">Correct Focus</button>
+                    <button type="button" id='comacorrect' data-loading-text="Running..." class="btn btn-primary">Correct Coma</button>
                     <button type="button" id='m1correct' data-loading-text="Running..." class="btn btn-primary">Correct M1</button>
-                    <button type="button" id='recenter' data-loading-text="Running..." class="btn btn-primary">Recenter</button>
                 </div>
             </div>
         </div>
@@ -153,6 +166,28 @@
             var $btn = $(this).button('loading');
             $.get("recenter", function(data, status) {
                 alert(data);
+            });
+            $btn.button('reset');
+        });
+        $('#setgains').on('click', function() {
+            var $btn = $(this).button('loading');
+            var m1g = $('#m1gain').val();
+            var m2g = $('#m2gain').val();
+            var m1url = "m1gain";
+            var m2url = "m2gain";
+            $.ajax({
+                url: m1url,
+                method: 'POST',
+                data: {
+                    'gain': m1g
+                }
+            });
+            $.ajax({
+                url: m2url,
+                method: 'POST',
+                data: {
+                    'gain': m2g
+                }
             });
             $btn.button('reset');
         });
