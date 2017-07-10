@@ -16,7 +16,7 @@ logger.setLevel(logging.INFO)
 try:
     import tornado
 except ImportError:
-    raise RuntimeError("This example requires tornado.")
+    raise RuntimeError("This server requires tornado.")
 import tornado.web
 import tornado.httpserver
 import tornado.ioloop
