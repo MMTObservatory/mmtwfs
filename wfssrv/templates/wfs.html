@@ -203,41 +203,78 @@
                 $btn.button('reset');
             });
         });
+        $('#plotttTabs a').click(function (e) {
+            e.preventDefault();
+            $(this).tab('show');
+        });
         </script>
 
-        <table class="table table-striped">
-            <tbody>
-                <tr>
-                    <td>
-                        <div id="slopes"></div>
-                    </td>
-                    <td>
-                        <div id="residuals"></div>
-                    </td>
-                </tr>
-                <tr>
-                    <td colspan="2">
-                        <div id="barchart"></div>
-                    </td>
-                </tr>
-                <tr>
-                    <td>
-                        <div id="wavefront"></div>
-                    </td>
-                    <td>
-                        <div id="psf"></div>
-                    </td>
-                </tr>
-                <tr>
-                    <td>
-                        <div id="forces"></div>
-                    </td>
-                    <td>
-                        <div id="totalforces"></div>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+        <p>
 
+            <div>
+                <ul class="nav nav-tabs" role="tablist">
+                    <li role="presentation" class="active"><a href="#slopes" aria-controls="slopes" role="tab" data-toggle="tab">Slopes</a></li>
+                    <li role="presentation"><a href="#zerns" aria-controls="zerns" role="tab" data-toggle="tab">Bar Chart</a></li>
+                    <li role="presentation"><a href="#wavefront" aria-controls="wavefront" role="tab" data-toggle="tab">Wavefront Map</a></li>
+                    <li role="presentation"><a href="#cell" aria-controls="cell" role="tab" data-toggle="tab">Cell Forces</a></li>
+                </ul>
+
+                <div class="tab-content">
+                    <div role="tabpanel" class="tab-pane active" id="slopes">
+                        <table class="table table-striped">
+                            <tbody>
+                                <tr>
+                                    <td>
+                                        <div id="slopes"></div>
+                                    </td>
+                                    <td>
+                                        <div id="residuals"></div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div role="tabpanel" class="tab-pane" id="zerns">
+                        <table class="table table-striped">
+                            <tbody>
+                                <tr>
+                                    <td colspan="2">
+                                        <div id="barchart"></div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div role="tabpanel" class="tab-pane" id="wavefront">
+                        <table class="table table-striped">
+                            <tbody>
+                                <tr>
+                                    <td>
+                                        <div id="wavefront"></div>
+                                    </td>
+                                    <td>
+                                        <div id="psf"></div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div role="tabpanel" class="tab-pane" id="cell">
+                        <table class="table table-striped">
+                            <tbody>
+                                <tr>
+                                    <td>
+                                        <div id="forces"></div>
+                                    </td>
+                                    <td>
+                                        <div id="totalforces"></div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </p>
     </body>
 </html>
