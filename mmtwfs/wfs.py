@@ -7,6 +7,12 @@ Classes and utilities for operating the wavefront sensors of the MMTO and analyz
 
 import warnings
 import socket
+
+import logging
+import logging.handlers
+log = logging.getLogger("")
+log.setLevel(logging.INFO)
+
 import numpy as np
 import photutils
 
@@ -810,7 +816,7 @@ class WFS(object):
             src_mask = slope_results['src_mask']
             figures = slope_results['figures']
         except WFSAnalysisFailed as e:
-            print("Wavefront slope measurement failed: %s" % e.args[1])
+            log.warn("Wavefront slope measurement failed: %s" % e.args[1])
             slope_fig = None
             if plot:
                 slope_fig, ax = plt.subplots()
@@ -1003,7 +1009,7 @@ class WFS(object):
         """
         Clear all applied WFS corrections
         """
-        print("Clearing WFS corrections from primary and secondary...")
+        log.info("Clearing WFS corrections from primary and secondary...")
         clear_forces, clear_m1focus = self.telescope.clear_forces()
         cmds = self.secondary.clear_wfs()
         return clear_forces, clear_m1focus
@@ -1032,7 +1038,7 @@ class WFS(object):
                 self.sock.close()
                 self.sock = None
             except Exception as e:
-                print("Error closing connection to topbox server: %s" % e)
+                log.error("Error closing connection to topbox server: %s" % e)
 
 
 class F9(WFS):
