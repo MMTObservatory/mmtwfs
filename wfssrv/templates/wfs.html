@@ -51,6 +51,9 @@
                             $('div#{{ figure }}')
                         );
                     {% end %}
+                    $.getJSON("zfit", {format: "json"}).done(function(data) {
+                        $('#zernikes').text(data);
+                    });
                 }
             );
         </script>
@@ -72,58 +75,66 @@
         </nav>
 
         <div class="container-fluid">
-            <div class="row">
-                <div class='col-lg-6'>
-                    <label for="datafile"><b>FITS file to analyze:</b></label>
-                    <div class="input-group">
-                        <span class="input-group-addon" id="datadir">{{ datadir }}</span>
-                        <input type="text" class="form-control" id="datafile" aria-describedby="datadir">
-                        <span class="input-group-btn">
-                            <button class="btn btn-primary" id='analyze' data-loading-text="Running..." type="button">Analyze</button>
-                        </span>
+            <p>
+                <div class="row">
+                    <div class='col-lg-5'>
+                        <label for="datafile"><b>FITS file to analyze:</b></label>
+                        <div class="input-group">
+                            <span class="input-group-addon" id="datadir">{{ datadir }}</span>
+                            <input type="text" class="form-control" id="datafile" aria-describedby="datadir">
+                            <span class="input-group-btn">
+                                <button class="btn btn-primary" id='analyze' data-loading-text="Running..." type="button">Analyze</button>
+                            </span>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="row">
-                <div class='col-lg-6'>
-                    <form class="form-inline">
-                        <div class="form-group">
-                            <label for="mode">Mode:</label>
-                            <select class="form-control" id="mode">
-                                {% for m in modes %}
-                                    {% if m == default_mode %}
-                                        <option selected value={{ m }}>{{ modes[m]['label'] }}</option>
-                                    {% else %}
-                                        <option value={{ m }}>{{ modes[m]['label'] }}</option>
+            </p>
+            <p>
+                <div class="row">
+                    <div class='col-lg-6'>
+                        <form class="form-inline">
+                            <div class="form-group">
+                                <label for="mode">Mode:</label>
+                                <select class="form-control" id="mode">
+                                    {% for m in modes %}
+                                        {% if m == default_mode %}
+                                            <option selected value={{ m }}>{{ modes[m]['label'] }}</option>
+                                        {% else %}
+                                            <option value={{ m }}>{{ modes[m]['label'] }}</option>
+                                        {% end %}
                                     {% end %}
-                                {% end %}
-                            </select>
-                            <label for="connect">Enable Corrections:</label>
-                            <input type="checkbox" id="connect" checked>
-                        </div>
-                    </form>
+                                </select>
+                                <label for="connect">Enable Corrections:</label>
+                                <input type="checkbox" id="connect" checked>
+                            </div>
+                        </form>
+                    </div>
                 </div>
-            </div>
-            <div class="row">
-                <div class='col-lg-6'>
-                    <form class="form-inline">
-                        <div class="form-group">
-                            <label for="m1gain">M1 Gain:</label>
-                            <input type="number" min=0.0 max=1.0 step=0.1 value="{{ m1_gain }}" id="m1gain">
-                            <label for="m2gain">M2 Gain:</label>
-                            <input type="number" min=0.0 max=1.0 step=0.1 value="{{ m2_gain }}" id="m2gain">
-                            <button type="button" id='setgains' data-loading-text="Running..." class="btn btn-primary">Set Gains</button>
-                        </div>
-                    </form>
+            </p>
+            <p>
+                <div class="row">
+                    <div class='col-lg-6'>
+                        <form class="form-inline">
+                            <div class="form-group">
+                                <label for="m1gain">M1 Gain:</label>
+                                <input type="number" min=0.0 max=1.0 step=0.1 value="{{ m1_gain }}" id="m1gain">
+                                <label for="m2gain">M2 Gain:</label>
+                                <input type="number" min=0.0 max=1.0 step=0.1 value="{{ m2_gain }}" id="m2gain">
+                                <button type="button" id='setgains' data-loading-text="Running..." class="btn btn-primary">Set Gains</button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
-            </div>
-            <div class="row">
-                <div class='col-lg-6'>
-                    <button type="button" id='focuscorrect' data-loading-text="Running..." class="btn btn-primary">Correct Focus</button>
-                    <button type="button" id='comacorrect' data-loading-text="Running..." class="btn btn-primary">Correct Coma</button>
-                    <button type="button" id='m1correct' data-loading-text="Running..." class="btn btn-primary">Correct M1</button>
+            </p>
+            <p>
+                <div class="row">
+                    <div class='col-lg-6'>
+                        <button type="button" id='focuscorrect' data-loading-text="Running..." class="btn btn-primary">Correct Focus</button>
+                        <button type="button" id='comacorrect' data-loading-text="Running..." class="btn btn-primary">Correct Coma</button>
+                        <button type="button" id='m1correct' data-loading-text="Running..." class="btn btn-primary">Correct M1</button>
+                    </div>
                 </div>
-            </div>
+            </p>
         </div>
 
         <script>
@@ -202,10 +213,9 @@
                 var logstuff = data + status;
                 $btn.button('reset');
             });
-        });
-        $('#plotttTabs a').click(function (e) {
-            e.preventDefault();
-            $(this).tab('show');
+            $.getJSON("zfit", {format: "json"}).done(function(data) {
+                $('#zernikes').text(data);
+            });
         });
         </script>
 
@@ -213,9 +223,10 @@
 
             <div>
                 <ul class="nav nav-tabs" role="tablist">
-                    <li role="presentation" class="active"><a href="#slopes" aria-controls="slopes" role="tab" data-toggle="tab">Slopes</a></li>
-                    <li role="presentation"><a href="#zerns" aria-controls="zerns" role="tab" data-toggle="tab">Bar Chart</a></li>
-                    <li role="presentation"><a href="#wavefront" aria-controls="wavefront" role="tab" data-toggle="tab">Wavefront Map</a></li>
+                    <li role="presentation" class="active"><a href="#slopes" aria-controls="slopes" role="tab" data-toggle="tab">Slopes/Residuals</a></li>
+                    <li role="presentation"><a href="#zernfit" aria-controls="zernfit" role="tab" data-toggle="tab">Wavefront Fit</a></li>
+                    <li role="presentation"><a href="#zerns" aria-controls="zerns" role="tab" data-toggle="tab">RMS Wavefront Errors</a></li>
+                    <li role="presentation"><a href="#wavefront" aria-controls="wavefront" role="tab" data-toggle="tab">Wavefront Map/PSF</a></li>
                     <li role="presentation"><a href="#cell" aria-controls="cell" role="tab" data-toggle="tab">Cell Forces</a></li>
                 </ul>
 
@@ -233,6 +244,11 @@
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+                    <div role="tabpanel" class="tab-pane" id="zernfit">
+                        <pre>
+                            <div id="zernikes"></div>
+                        </pre>
                     </div>
                     <div role="tabpanel" class="tab-pane" id="zerns">
                         <table class="table table-striped">

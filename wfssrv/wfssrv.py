@@ -191,6 +191,7 @@ class WFSServ(tornado.web.Application):
                     log.info(zvec)
                     zvec_file = os.path.join(self.application.datadir, filename + ".zernike")
                     zvec.save(filename=zvec_file)
+                    self.application.wavefront_fit = zvec
 
                     # check the RMS of the wavefront fit and only apply corrections if the fit is good enough.
                     # M2 can be more lenient to take care of large amounts of focus or coma.
@@ -375,6 +376,11 @@ class WFSServ(tornado.web.Application):
             files.reverse()
             self.write(json.dumps(files))
 
+    class ZernikeFitHandler(tornado.web.RequestHandler):
+        def get(self):
+            self.application.wavefront_fit.denormalize()
+            self.write(json.dumps(repr(self.application.wavefront_fit)))
+
     class Download(tornado.web.RequestHandler):
         """
         Handles downloading of the figure in various file formats.
@@ -548,6 +554,7 @@ class WFSServ(tornado.web.Application):
             (r"/m2gain", self.M2GainHandler),
             (r"/clearpending", self.PendingHandler),
             (r"/files", self.FilesHandler),
+            (r"/zfit", self.ZernikeFitHandler),
             (r'/download_([a-z]+).([a-z0-9.]+)', self.Download),
             (r'/([a-z0-9.]+)/ws', self.WebSocket)
         ]
