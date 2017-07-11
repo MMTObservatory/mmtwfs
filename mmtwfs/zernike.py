@@ -645,9 +645,10 @@ class ZernikeVector(MutableMapping):
         """
         s = ""
         if self.normalized:
-            print("Normalized (Noll) Coefficients")
+            s += "Normalized (Noll) Coefficients\n"
         else:
-            print("Fringe Coefficients")
+            s += "Fringe Coefficients\n"
+
         for k in sorted(self.coeffs.keys()):
             if k in self.__zernikelabels:
                 s += "%4s: %12s \t %s" % (k, "{0:0.03g}".format(self.coeffs[k]), self.label(k))
