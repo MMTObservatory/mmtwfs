@@ -549,6 +549,7 @@ class WFSServ(tornado.web.Application):
 
         handlers = [
             (r"/", self.HomeHandler),
+            (r"/mpl\.js", tornado.web.RedirectHandler, dict(url="static/js/mpl.js")),
             (r"/select", self.SelectHandler),
             (r"/wfspage", self.WFSPageHandler),
             (r"/connect", self.ConnectHandler),
