@@ -69,7 +69,8 @@ def check_wfsdata(data):
     if isinstance(data, str):
         # we're a fits file (hopefully)
         try:
-            data = fits.open(data)[0].data
+            with fits.open(data) as h:
+                data = h[0].data
         except Exception as e:
             msg = "Error reading FITS file, %s (%s)" % (data, repr(e))
             raise WFSConfigException(value=msg)
@@ -755,12 +756,13 @@ class WFS(object):
         """
         # we're a fits file (hopefully)
         try:
-            fitsdata = fits.open(fitsfile)[0]
-            rawdata = fitsdata.data
-            hdr = fitsdata.header
+            with fits.open(fitsfile) as h:
+                rawdata = h[0].data
+                hdr = h[0].header
         except Exception as e:
             msg = "Error reading FITS file, %s (%s)" % (fitsfile, repr(e))
             raise WFSConfigException(value=msg)
+
         rawdata = check_wfsdata(rawdata)
 
         # MMIRS gets a lot of hot pixels/CRs so make a quick pass to nuke them
@@ -816,7 +818,7 @@ class WFS(object):
             src_mask = slope_results['src_mask']
             figures = slope_results['figures']
         except WFSAnalysisFailed as e:
-            log.warn("Wavefront slope measurement failed: %s" % e.args[1])
+            log.warning("Wavefront slope measurement failed: %s" % e.args[1])
             slope_fig = None
             if plot:
                 slope_fig, ax = plt.subplots()
