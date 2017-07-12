@@ -61,6 +61,7 @@ class Secondary(object):
             sock.sendall(cmd.encode("utf8"))
             sock.sendall(b"apply_offsets\n")
             result = sock.recv(4096)
+            sock.shutdown(socket.SHUT_RDWR)
             sock.close()
         return cmd
 
@@ -74,6 +75,7 @@ class Secondary(object):
                 self.connected = False
             else:
                 self.connected = True
+                sock.shutdown(socket.SHUT_RDWR)
                 sock.close()
 
     def hex_sock(self):
@@ -135,6 +137,7 @@ class Secondary(object):
             sock = self.hex_sock()
             sock.sendall(cmd.encode("utf8"))
             sock.sendall(b"apply_offsets\n")
+            sock.shutdown(socket.SHUT_RDWR)
             sock.close()
         return cmd
 
@@ -159,6 +162,7 @@ class Secondary(object):
             sock = self.hex_sock()
             sock.sendall(cmd.encode("utf8"))
             sock.sendall(b"apply_offsets\n")
+            sock.shutdown(socket.SHUT_RDWR)
             sock.close()
         return cmd
 
@@ -191,6 +195,7 @@ class Secondary(object):
             sock = self.hex_sock()
             sock.sendall(cmd.encode("utf8"))
             sock.sendall(b"apply_offsets\n")
+            sock.shutdown(socket.SHUT_RDWR)
             sock.close()
         return cmd
 
@@ -208,6 +213,7 @@ class Secondary(object):
                 cmds.append(cmd)
                 sock.sendall(cmd.encode("utf8"))
             sock.sendall(b"apply_offsets\n")
+            sock.shutdown(socket.SHUT_RDWR)
             sock.close()
         return cmds
 
