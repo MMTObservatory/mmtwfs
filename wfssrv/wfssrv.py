@@ -96,7 +96,7 @@ class WFSServ(tornado.web.Application):
                     log.info("setting %s" % wfs)
                     self.application.wfs = self.application.wfs_systems[wfs]
             except:
-                log.warn("Must specify valid wfs: %s." % wfs)
+                log.warning("Must specify valid wfs: %s." % wfs)
 
     class WFSPageHandler(tornado.web.RequestHandler):
         def get(self):
@@ -128,7 +128,7 @@ class WFSServ(tornado.web.Application):
                         m2_gain=self.application.wfs.m2_gain
                     )
             except Exception as e:
-                log.warn("Must specify valid wfs: %s. %s" % (wfs, e))
+                log.warning("Must specify valid wfs: %s. %s" % (wfs, e))
 
     class ConnectHandler(tornado.web.RequestHandler):
         def get(self):
@@ -138,7 +138,7 @@ class WFSServ(tornado.web.Application):
                     if self.application.wfs.connected:
                         log.info("%s is connected." % self.application.wfs.name)
                     else:
-                        log.warn("Couldn't connect to %s. Offline?" % self.application.wfs.name)
+                        log.warning("Couldn't connect to %s. Offline?" % self.application.wfs.name)
                 else:
                     log.info("%s already connected" % self.application.wfs.name)
 
@@ -158,7 +158,7 @@ class WFSServ(tornado.web.Application):
                 filename = self.get_argument("fitsfile")
                 log.info("Analyzing %s..." % filename)
             except:
-                log.warn("no wfs or file specified.")
+                log.warning("no wfs or file specified.")
 
             mode = self.get_argument("mode", default=None)
             connect = self.get_argument("connect", default=True)
@@ -224,7 +224,7 @@ class WFSServ(tornado.web.Application):
                         )
                     )
                 else:
-                    log.warn("Wavefront measurement failed: %s" % filename)
+                    log.warning("Wavefront measurement failed: %s" % filename)
                     figures = create_default_figures()
                     figures['slopes'] = results['figures']['slopes']
 
@@ -328,10 +328,10 @@ class WFSServ(tornado.web.Application):
                     if gain >= 0.0 and gain <= 1.0:
                         self.application.wfs.m1_gain = gain
                     else:
-                        log.warn("Invalid M1 gain: %f" % gain)
+                        log.warning("Invalid M1 gain: %f" % gain)
                     log.info("Setting M1 gain to %f" % gain)
             except Exception as e:
-                log.warn("No M1 gain specified: %s" % e)
+                log.warning("No M1 gain specified: %s" % e)
                 log.info("Body: %s" % self.request.body)
 
     class M2GainHandler(tornado.web.RequestHandler):
@@ -349,10 +349,10 @@ class WFSServ(tornado.web.Application):
                     if gain >= 0.0 and gain <= 1.0:
                         self.application.wfs.m2_gain = gain
                     else:
-                        log.warn("Invalid M2 gain: %f" % gain)
+                        log.warning("Invalid M2 gain: %f" % gain)
                     log.info("Setting M2 gain to %f" % gain)
             except Exception as e:
-                log.warn("No M2 gain specified: %s" % e)
+                log.warning("No M2 gain specified: %s" % e)
                 log.info("Body: %s" % self.request.body)
 
     class PendingHandler(tornado.web.RequestHandler):
@@ -380,6 +380,16 @@ class WFSServ(tornado.web.Application):
         def get(self):
             self.application.wavefront_fit.denormalize()
             self.write(json.dumps(repr(self.application.wavefront_fit)))
+
+    class ClearHandler(tornado.web.RequestHandler):
+        def get(self):
+            self.application.close_figures()
+            self.application.wfs.clear_corrections()
+            figures = create_default_figures()
+            self.application.refresh_figures(figures=figures)
+            log_str = "Cleared M1 forces and M2 WFS offsets...."
+            log.info(log_str)
+            self.write(log_str)
 
     class Download(tornado.web.RequestHandler):
         """
@@ -502,7 +512,7 @@ class WFSServ(tornado.web.Application):
             sock.close()
             log.info(cmd)
         except Exception as e:
-            log.warn("Error connecting to hacksaw... : %s" % e)
+            log.warning("Error connecting to hacksaw... : %s" % e)
 
     def __init__(self):
         if 'WFSROOT' in os.environ:
@@ -555,6 +565,7 @@ class WFSServ(tornado.web.Application):
             (r"/clearpending", self.PendingHandler),
             (r"/files", self.FilesHandler),
             (r"/zfit", self.ZernikeFitHandler),
+            (r"/clear", self.ClearHandler),
             (r'/download_([a-z]+).([a-z0-9.]+)', self.Download),
             (r'/([a-z0-9.]+)/ws', self.WebSocket)
         ]
