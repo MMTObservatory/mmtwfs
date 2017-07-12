@@ -27,8 +27,8 @@ def test_connect():
         s.connect()
     except:
         assert(not s.connected)
-
-    s.disconnect()
+    finally:
+        s.disconnect()
     assert(not s.connected)
 
 def test_focus():
