@@ -83,7 +83,7 @@
                             <span class="input-group-addon" id="datadir">{{ datadir }}</span>
                             <input type="text" class="form-control" id="datafile" aria-describedby="datadir">
                             <span class="input-group-btn">
-                                <button class="btn btn-primary" id='analyze' data-loading-text="Running..." type="button">Analyze</button>
+                                <button class="btn btn-primary" data-loading-text="Running..." id='analyze' type="button">Analyze</button>
                             </span>
                         </div>
                     </div>
@@ -122,7 +122,7 @@
                                 <input type="number" min=0.0 max=1.0 step=0.1 value="{{ m1_gain }}" id="m1gain">
                                 <label for="m2gain">M2 Gain:</label>
                                 <input type="number" min=0.0 max=1.0 step=0.1 value="{{ m2_gain }}" id="m2gain">
-                                <button type="button" id='setgains' data-loading-text="Running..." class="btn btn-primary">Set Gains</button>
+                                <button type="button" id='setgains' class="btn btn-primary">Set Gains</button>
                             </div>
                         </form>
                     </div>
@@ -132,16 +132,16 @@
                 <div class="row">
                     <div class='col-lg-6'>
                         <div class='col-lg-3'>
-                            <button type="button" id='focuscorrect' data-loading-text="Running..." class="btn btn-primary">Correct Focus</button>
+                            <button type="button" id='focuscorrect' disabled="disabled" class="btn btn-primary">Correct Focus</button>
                         </div>
                         <div class='col-lg-3'>
-                            <button type="button" id='comacorrect' data-loading-text="Running..." class="btn btn-primary">Correct Coma</button>
+                            <button type="button" id='comacorrect' disabled="disabled" class="btn btn-primary">Correct Coma</button>
                         </div>
                         <div class='col-lg-3'>
-                            <button type="button" id='m1correct' data-loading-text="Running..." class="btn btn-primary">Correct M1</button>
+                            <button type="button" id='m1correct' disabled="disabled" class="btn btn-primary">Correct M1</button>
                         </div>
                         <div class='col-lg-3'>
-                            <button type="button" id='clear' data-loading-text="Running..." class="btn btn-danger">Clear Corrections</button>
+                            <button type="button" id='clear' class="btn btn-danger">Clear Corrections</button>
                         </div>
                     </div>
                 </div>
@@ -149,7 +149,7 @@
         </div>
 
         <script>
-        $(function () {
+        $(function() {
             var getData = function(request, response) {
                 $.getJSON(
                     "files",
@@ -170,37 +170,31 @@
                 minLength: 1
             });
         });
-        $('#m2correct').on('click', function() {
-            var $btn = $(this).button('loading');
-            $.get("m2correct", function(data, status) {
+        $('#focuscorrect').on('click', function() {
+            $.get("focuscorrect", function(data, status) {
+                $('#focuscorrect').prop("disabled", true)
                 alert(data);
             });
-            $btn.button('reset');
+        });
+        $('#comacorrect').on('click', function() {
+            $.get("comacorrect", function(data, status) {
+                $('#comacorrect').prop("disabled", true)
+                alert(data);
+            });
         });
         $('#m1correct').on('click', function() {
-            var $btn = $(this).button('loading');
             $.get("m1correct", function(data, status) {
+                $('#m1correct').prop("disabled", true)
                 alert(data);
             });
-            $btn.button('reset');
-        });
-        $('#recenter').on('click', function() {
-            var $btn = $(this).button('loading');
-            $.get("recenter", function(data, status) {
-                alert(data);
-            });
-            $btn.button('reset');
         });
         $('#clear').on('click', function() {
-            var $btn = $(this).button('loading');
             $.get("clear", function(data, status) {
                 alert(data);
             });
             $('#zernikes').text("");
-            $btn.button('reset');
         });
         $('#setgains').on('click', function() {
-            var $btn = $(this).button('loading');
             var m1g = $('#m1gain').val();
             var m2g = $('#m2gain').val();
             var m1url = "m1gain";
@@ -219,8 +213,8 @@
                     'gain': m2g
                 }
             });
-            $btn.button('reset');
         });
+        var controlButtons = ["m1correct", "focuscorrect", "comacorrect"];
         $('#analyze').on('click', function() {
             var $btn = $(this).button('loading');
             var file = $('#datafile').val();
@@ -234,6 +228,9 @@
             }
             $.get(url, function(data, status) {
                 var logstuff = data + status;
+                $.each(controlButtons, function(i, v) {
+                    $('#' + v).prop("disabled", false);
+                })
                 $btn.button('reset');
             });
             $.getJSON("zfit", {format: "json"}).done(function(data) {

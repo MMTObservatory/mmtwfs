@@ -197,7 +197,7 @@ class WFSServ(tornado.web.Application):
                     # M2 can be more lenient to take care of large amounts of focus or coma.
                     if zresults['residual_rms'] < 800 * u.nm:
                         self.application.has_pending_focus = True
-                    if zresults['residual_rms'] < 400 * u.nm:
+                    if zresults['residual_rms'] < 500 * u.nm:
                         self.application.has_pending_m1 = True
                         self.application.has_pending_coma = True
 
