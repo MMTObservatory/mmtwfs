@@ -172,6 +172,8 @@ class WFSServ(tornado.web.Application):
                 results = self.application.wfs.measure_slopes(filename, mode=mode, plot=True)
                 if results['slopes'] is not None:
                     if 'seeing' in results and self.application.wfs.connected:
+                        log.info("Seeing (zenith): %.2f" % results['seeing'])
+                        log.info("Seeing (raw): %.2f" % results['raw_seeing'])
                         self.application.update_seeing(results['seeing'])
                     zresults = self.application.wfs.fit_wavefront(results, plot=True)
                     zvec = zresults['zernike']
@@ -189,6 +191,7 @@ class WFSServ(tornado.web.Application):
                     figures['totalforces'].set_label("Total M1 Actuator Forces")
                     psf, figures['psf'] = tel.psf(zv=zvec.copy())
                     log.info(zvec)
+                    log.info("Residual RMS: %.2f" % results['residual_rms'])
                     zvec_file = os.path.join(self.application.datadir, filename + ".zernike")
                     zvec.save(filename=zvec_file)
                     self.application.wavefront_fit = zvec
