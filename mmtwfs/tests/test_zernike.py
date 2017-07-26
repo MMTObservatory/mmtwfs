@@ -288,3 +288,11 @@ def test_plots():
     assert(f2 is not None)
     f3 = zv.plot_surface()
     assert(f3 is not None)
+    zv.normalize()
+    zv['Z99'] = 100.0 * u.nm
+    f1 = zv.bar_chart()
+    assert(f1 is not None)
+    f2 = zv.plot_map()
+    assert(f2 is not None)
+    f3 = zv.plot_surface()
+    assert(f3 is not None)

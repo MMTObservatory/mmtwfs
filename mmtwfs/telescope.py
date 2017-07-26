@@ -4,6 +4,11 @@
 import os
 import warnings
 
+import logging
+import logging.handlers
+log = logging.getLogger("")
+log.setLevel(logging.INFO)
+
 import numpy as np
 from scipy.misc import imrotate
 
@@ -229,7 +234,7 @@ class MMT(object):
         if self.connected:
             self.secondary.m1spherical(m1focus_corr)
             self.to_rcell(t, filename=filename)
-            print("Sending forces from %s..." % filename)
+            log.info("Sending forces from %s..." % filename)
             os.system("/mmt/scripts/cell_send_forces %s" % filename)
 
         self.last_forces = t.copy(copy_data=True)
@@ -242,7 +247,7 @@ class MMT(object):
         """
         Undo the last set of corrections.
         """
-        print("Undoing last set of primary mirror corrections...")
+        log.info("Undoing last set of primary mirror corrections...")
         self.last_forces['force'] *= -1
         self.last_m1focus *= -1
         if self.connected:
@@ -258,7 +263,7 @@ class MMT(object):
         """
         Clear applied forces from primary mirror and clear any m1spherical offsets from secondary hexapod
         """
-        print("Clearing forces and spherical aberration focus offsets...")
+        log.info("Clearing forces and spherical aberration focus offsets...")
         if self.connected:
             self.secondary.clear_m1spherical()
             os.system("/mmt/scripts/cell_clear_forces")

@@ -7,6 +7,11 @@ Classes and utilities for optical modeling and controlling the position of the s
 import socket
 import sys
 
+import logging
+import logging.handlers
+log = logging.getLogger("")
+log.setLevel(logging.INFO)
+
 import astropy.units as u
 
 from .utils import srvlookup
@@ -56,6 +61,7 @@ class Secondary(object):
             sock.sendall(cmd.encode("utf8"))
             sock.sendall(b"apply_offsets\n")
             result = sock.recv(4096)
+            sock.shutdown(socket.SHUT_RDWR)
             sock.close()
         return cmd
 
@@ -69,6 +75,7 @@ class Secondary(object):
                 self.connected = False
             else:
                 self.connected = True
+                sock.shutdown(socket.SHUT_RDWR)
                 sock.close()
 
     def hex_sock(self):
@@ -80,7 +87,7 @@ class Secondary(object):
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.connect(hex_server)
         except Exception as e:
-            print("Error connecting to hexapod server. Remaining disconnected...: %s" % e)
+            log.error("Error connecting to hexapod server. Remaining disconnected...: %s" % e)
             return None
         return sock
 
@@ -95,7 +102,7 @@ class Secondary(object):
         Move hexapod by 'foc' microns in Z to correct focus
         """
         foc_um = u.Quantity(foc, u.um).value  # focus command must be in microsn
-        print("Moving %s hexapod %s in Z..." % (self.__class__.__name__.lower(), foc))
+        log.info("Moving %s hexapod %s in Z..." % (self.__class__.__name__.lower(), foc))
         cmd = self.inc_offset("wfs", "z", foc_um)
         return cmd
 
@@ -105,7 +112,7 @@ class Secondary(object):
         commands that help correct spherical aberration from normal focus commands.
         """
         foc_um = u.Quantity(foc, u.um).value  # focus command must be in microsn
-        print("Moving %s hexapod %s in Z to correct spherical aberration..." % (self.__class__.__name__.lower(), foc))
+        log.info("Moving %s hexapod %s in Z to correct spherical aberration..." % (self.__class__.__name__.lower(), foc))
         cmd = self.inc_offset("m1spherical", "z", foc_um)
         return cmd
 
@@ -120,7 +127,7 @@ class Secondary(object):
             msg = "Invalid axis %s send to hexapod. Only 'x' and 'y' are valid for center-of-curvature offsets." % axis
             raise WFSCommandException(value=msg)
 
-        print("Moving %s hexapod %.3f arcsec about the center of curvature along the %s axis..." % (
+        log.info("Moving %s hexapod %.3f arcsec about the center of curvature along the %s axis..." % (
             self.__class__.__name__.lower(),
             tilt,
             axis)
@@ -130,6 +137,7 @@ class Secondary(object):
             sock = self.hex_sock()
             sock.sendall(cmd.encode("utf8"))
             sock.sendall(b"apply_offsets\n")
+            sock.shutdown(socket.SHUT_RDWR)
             sock.close()
         return cmd
 
@@ -144,7 +152,7 @@ class Secondary(object):
             msg = "Invalid axis %s send to hexapod. Only 'x' and 'y' are valid for zero-coma offsets." % axis
             raise WFSCommandException(value=msg)
 
-        print("Moving %s hexapod %.3f arcsec about the zero-coma point along the %s axis..." % (
+        log.info("Moving %s hexapod %.3f arcsec about the zero-coma point along the %s axis..." % (
             self.__class__.__name__.lower(),
             tilt,
             axis)
@@ -154,6 +162,7 @@ class Secondary(object):
             sock = self.hex_sock()
             sock.sendall(cmd.encode("utf8"))
             sock.sendall(b"apply_offsets\n")
+            sock.shutdown(socket.SHUT_RDWR)
             sock.close()
         return cmd
 
@@ -180,12 +189,13 @@ class Secondary(object):
         When clearing forces from the primary mirror, also need to clear any focus offsets applied to secondary to help
         correct spherical aberration.
         """
-        print("Resetting hexapod's spherical aberration offset to 0...")
+        log.info("Resetting hexapod's spherical aberration offset to 0...")
         cmd = "offset m1spherical z 0.0\n"
         if self.connected:
             sock = self.hex_sock()
             sock.sendall(cmd.encode("utf8"))
             sock.sendall(b"apply_offsets\n")
+            sock.shutdown(socket.SHUT_RDWR)
             sock.close()
         return cmd
 
@@ -193,7 +203,7 @@ class Secondary(object):
         """
         Clear the 'wfs' offsets that get populated by WFS corrections.
         """
-        print("Resetting hexapod's WFS offsets to 0...")
+        log.info("Resetting hexapod's WFS offsets to 0...")
         axes = ['tx', 'ty', 'x', 'y', 'z']
         cmds = []
         if self.connected:
@@ -203,6 +213,7 @@ class Secondary(object):
                 cmds.append(cmd)
                 sock.sendall(cmd.encode("utf8"))
             sock.sendall(b"apply_offsets\n")
+            sock.shutdown(socket.SHUT_RDWR)
             sock.close()
         return cmds
 

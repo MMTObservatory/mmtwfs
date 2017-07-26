@@ -7,6 +7,12 @@ Classes and utilities for operating the wavefront sensors of the MMTO and analyz
 
 import warnings
 import socket
+
+import logging
+import logging.handlers
+log = logging.getLogger("")
+log.setLevel(logging.INFO)
+
 import numpy as np
 import photutils
 
@@ -63,7 +69,8 @@ def check_wfsdata(data):
     if isinstance(data, str):
         # we're a fits file (hopefully)
         try:
-            data = fits.open(data)[0].data
+            with fits.open(data) as h:
+                data = h[0].data
         except Exception as e:
             msg = "Error reading FITS file, %s (%s)" % (data, repr(e))
             raise WFSConfigException(value=msg)
@@ -749,12 +756,13 @@ class WFS(object):
         """
         # we're a fits file (hopefully)
         try:
-            fitsdata = fits.open(fitsfile)[0]
-            rawdata = fitsdata.data
-            hdr = fitsdata.header
+            with fits.open(fitsfile) as h:
+                rawdata = h[0].data
+                hdr = h[0].header
         except Exception as e:
             msg = "Error reading FITS file, %s (%s)" % (fitsfile, repr(e))
             raise WFSConfigException(value=msg)
+
         rawdata = check_wfsdata(rawdata)
 
         # MMIRS gets a lot of hot pixels/CRs so make a quick pass to nuke them
@@ -810,7 +818,7 @@ class WFS(object):
             src_mask = slope_results['src_mask']
             figures = slope_results['figures']
         except WFSAnalysisFailed as e:
-            print("Wavefront slope measurement failed: %s" % e.args[1])
+            log.warning("Wavefront slope measurement failed: %s" % e.args[1])
             slope_fig = None
             if plot:
                 slope_fig, ax = plt.subplots()
@@ -1003,7 +1011,7 @@ class WFS(object):
         """
         Clear all applied WFS corrections
         """
-        print("Clearing WFS corrections from primary and secondary...")
+        log.info("Clearing WFS corrections from primary and secondary...")
         clear_forces, clear_m1focus = self.telescope.clear_forces()
         cmds = self.secondary.clear_wfs()
         return clear_forces, clear_m1focus
@@ -1032,7 +1040,7 @@ class WFS(object):
                 self.sock.close()
                 self.sock = None
             except Exception as e:
-                print("Error closing connection to topbox server: %s" % e)
+                log.error("Error closing connection to topbox server: %s" % e)
 
 
 class F9(WFS):
