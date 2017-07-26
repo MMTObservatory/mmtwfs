@@ -191,7 +191,7 @@ class WFSServ(tornado.web.Application):
                     figures['totalforces'].set_label("Total M1 Actuator Forces")
                     psf, figures['psf'] = tel.psf(zv=zvec.copy())
                     log.info(zvec)
-                    log.info("Residual RMS: %.2f" % results['residual_rms'])
+                    log.info("Residual RMS: %.2f nm" % zresults['residual_rms'].value)
                     zvec_file = os.path.join(self.application.datadir, filename + ".zernike")
                     zvec.save(filename=zvec_file)
                     self.application.wavefront_fit = zvec
