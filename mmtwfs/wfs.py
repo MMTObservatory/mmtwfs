@@ -52,7 +52,7 @@ def wfs_norm(data, interval=visualization.ZScaleInterval(contrast=0.05), stretch
     return norm
 
 
-def check_wfsdata(data):
+def check_wfsdata(data, header=False):
     """
     Utility to validate WFS data
 
@@ -66,11 +66,14 @@ def check_wfsdata(data):
     data: 2D np.ndarray
         Validated 2D WFS image
     """
+    hdr = None
     if isinstance(data, str):
         # we're a fits file (hopefully)
         try:
             with fits.open(data) as h:
-                data = h[0].data
+                data = h[-1].data  # binospec images put the image data into separate extension so always grab last available.
+                if header:
+                    hdr = h[-1].header
         except Exception as e:
             msg = "Error reading FITS file, %s (%s)" % (data, repr(e))
             raise WFSConfigException(value=msg)
@@ -80,7 +83,11 @@ def check_wfsdata(data):
     if len(data.shape) != 2:
         msg = "WFS image data has improper shape, %dD. Must be 2D image." % len(data.shape)
         raise WFSConfigException(value=msg)
-    return data
+
+    if header and hdr is not None:
+        return data, hdr
+    else:
+        return data
 
 
 def wfsfind(data, fwhm=7.0, threshold=5.0, plot=True, ap_radius=5.0, std=None):
@@ -754,16 +761,7 @@ class WFS(object):
         Process the image to make it suitable for accurate wavefront analysis.  Steps include nuking cosmic rays,
         subtracting background, handling overscan regions, etc.
         """
-        # we're a fits file (hopefully)
-        try:
-            with fits.open(fitsfile) as h:
-                rawdata = h[0].data
-                hdr = h[0].header
-        except Exception as e:
-            msg = "Error reading FITS file, %s (%s)" % (fitsfile, repr(e))
-            raise WFSConfigException(value=msg)
-
-        rawdata = check_wfsdata(rawdata)
+        rawdata, hdr = check_wfsdata(fitsfile, header=True)
 
         # MMIRS gets a lot of hot pixels/CRs so make a quick pass to nuke them
         cr_mask, data = detect_cosmics(rawdata, sigclip=5., niter=5, cleantype='medmask', psffwhm=5.)
@@ -1066,15 +1064,7 @@ class NewF9(F9):
         Process the image to make it suitable for accurate wavefront analysis.  Steps include nuking cosmic rays,
         subtracting background, handling overscan regions, etc.
         """
-        # we're a fits file (hopefully)
-        try:
-            fitsdata = fits.open(fitsfile)[0]
-            rawdata = fitsdata.data
-            hdr = fitsdata.header
-        except Exception as e:
-            msg = "Error reading FITS file, %s (%s)" % (fitsfile, repr(e))
-            raise WFSConfigException(value=msg)
-        rawdata = check_wfsdata(rawdata)
+        rawdata, hdr = check_wfsdata(fitsfile, header=True)
 
         cr_mask, data = detect_cosmics(rawdata, sigclip=5., niter=5, cleantype='medmask', psffwhm=10.)
 
@@ -1098,6 +1088,14 @@ class F5(WFS):
 
         # load lookup table for off-axis aberrations
         self.aberr_table = ascii.read(self.aberr_table_file)
+
+
+class Binospec(F5):
+    """
+    Defines configuration and methods specific to the Binospec WFS system. Binospec uses the same aberration table
+    as the F5 system so we inherit from that.
+    """
+    pass
 
 
 class MMIRS(WFS):
