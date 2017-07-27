@@ -294,6 +294,35 @@ mmt_config = {
                     ),
                 }
             }
+        },
+        "binospec": {
+            "name": "Binospec WFS",
+            "secondary": "f5",
+            "default_mode": None,
+            "cor_coords": [255.0, 255.0],
+            "find_fwhm": 7.0,
+            "find_thresh": 5.0,
+            "rotation": 0. * u.deg,  # assume 0 deg to start
+            "pix_size": 0.156 * u.arcsec,
+            "pup_size": 335,  # pixels
+            "pup_inner": 50,
+            "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
+            "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
+            "nzern": 36,  # number of zernike modes to fit
+            "aberr_table_file": pkg_resources.resource_filename(__name__, os.path.join("data", "f5zernfield.tab")),
+            "modes": {
+                "binospec": {
+                    "label": "Binospec",
+                    "pup_offset": [0.0, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
+                    "ref_zern": {
+                        "Z04": 0.0 * u.nm
+                    },
+                    "reference_file": pkg_resources.resource_filename(
+                        __name__,
+                        os.path.join("data", "ref_images", "binospec_ref.fits")
+                    )
+                }
+            }
         }
     }
 }
