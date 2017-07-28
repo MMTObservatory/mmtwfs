@@ -71,7 +71,7 @@ def test_mmirs_analysis():
     mmirs = WFSFactory(wfs='mmirs')
     results = mmirs.measure_slopes(test_file)
     zresults = mmirs.fit_wavefront(results)
-    testval = int(zresults['zernike']['Z09'].value)
+    testval = int(zresults['zernike']['Z10'].value)
     assert((testval > -280) & (testval < -270))
 
 @cleanup
