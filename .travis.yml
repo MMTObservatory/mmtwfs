@@ -32,7 +32,8 @@ env:
         - ASTROPY_VERSION=stable
         - MAIN_CMD='python setup.py'
         - SETUP_CMD='test'
-        - PIP_DEPENDENCIES='git+https://github.com/mperrin/poppy#egg=poppy'
+        #- PIP_DEPENDENCIES='git+https://github.com/mperrin/poppy#egg=poppy'
+        - PIP_DEPENDENCIES='poppy'
         - EVENT_TYPE='pull_request push'
 
         # For this package-template, we include examples of Cython modules,
