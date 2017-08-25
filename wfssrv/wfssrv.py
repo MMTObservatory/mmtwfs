@@ -172,8 +172,8 @@ class WFSServ(tornado.web.Application):
                 results = self.application.wfs.measure_slopes(filename, mode=mode, plot=True)
                 if results['slopes'] is not None:
                     if 'seeing' in results and self.application.wfs.connected:
-                        log.info("Seeing (zenith): %.2f" % results['seeing'])
-                        log.info("Seeing (raw): %.2f" % results['raw_seeing'])
+                        log.info("Seeing (zenith): %.2f\"" % results['seeing'].value)
+                        log.info("Seeing (raw): %.2f\"" % results['raw_seeing'].value)
                         self.application.update_seeing(results['seeing'])
                     zresults = self.application.wfs.fit_wavefront(results, plot=True)
                     zvec = zresults['zernike']
