@@ -83,13 +83,14 @@
         <div class="container-fluid">
             <p>
                 <div class="row">
-                    <div class='col-lg-5'>
+                    <div class='col-lg-6'>
                         <label for="datafile"><b>FITS file to analyze:</b></label>
                         <div class="input-group">
                             <span class="input-group-addon" id="datadir">{{ datadir }}</span>
                             <input type="text" class="form-control" id="datafile" aria-describedby="datadir">
                             <span class="input-group-btn">
                                 <button class="btn btn-primary" id='analyze' type="button">Analyze</button>
+                                <button class="btn btn-primary" id='latest' type="button">Analyse Latest</button>
                             </span>
                         </div>
                     </div>
@@ -245,7 +246,7 @@
                 }
             });
         });
-        var controlButtons = ["m1correct", "focuscorrect", "comacorrect", "clear", "analyze"];
+        var controlButtons = ["m1correct", "focuscorrect", "comacorrect", "clear", "analyze", "latest"];
         function enable() {
             $.each(controlButtons, function(i, v) {
                 $('#' + v).prop("disabled", false);
@@ -277,6 +278,15 @@
             });
             $.getJSON("zfit", {format: "json"}).done(function(data) {
                 $('#zernikes').text(data);
+            });
+        });
+        $('#latest').on('click', function() {
+            $.getJSON("files", {format: "json"}).done(function(data) {
+                if (data.length > 0) {
+                    latest_file = data[0];
+                    $('#datafile').val(latest_file);
+                    $('#analyze').trigger('click');
+                };
             });
         });
         function doNextFile() {
