@@ -12,6 +12,12 @@
         <link rel="stylesheet" href="{{ static_url("jquery-ui/themes/smoothness/jquery-ui.min.css") }}" >
         <link rel="stylesheet" href="{{ static_url("css/bootstrap.min.css") }}" type="text/css">
         <link rel="stylesheet" href="{{ static_url("css/bootstrap-theme.min.css") }}" type="text/css" />
+        <style type="text/css">
+            .form-inline label {
+              margin-left: 15px;
+              margin-right: 5px;
+            }
+        </style>
         <script src="{{ static_url("js/jquery-1.11.3.min.js") }}"></script>
         <script src="{{ static_url("js/jquery-ui.min.js") }}"></script>
         <script src="{{ static_url("js/bootstrap.min.js") }}"></script>
@@ -62,7 +68,7 @@
     </head>
 
     <body>
-        <div class="page-header">
+        <div class="page-header" align="center">
             <h1>{{ wfsname }}</h1>
         </div>
 
@@ -83,7 +89,7 @@
                             <span class="input-group-addon" id="datadir">{{ datadir }}</span>
                             <input type="text" class="form-control" id="datafile" aria-describedby="datadir">
                             <span class="input-group-btn">
-                                <button class="btn btn-primary" data-loading-text="Running..." id='analyze' type="button">Analyze</button>
+                                <button class="btn btn-primary" id='analyze' type="button">Analyze</button>
                             </span>
                         </div>
                     </div>
@@ -146,9 +152,34 @@
                     </div>
                 </div>
             </p>
+                {% if wfsname == "MMIRS WFS" %}
+                    <p>
+                        <div class="row">
+                            <div class='col-lg-6 align-self-center'>
+                                <div class='col-lg-4'>
+                                    <button type="button" id='continuous' class="btn btn-primary">Start Continuous WFS</button>
+                                </div>
+                                <div class='col-lg-8'>
+                                    <form class="form-inline">
+                                        <div class="form-group">
+                                            <label class="form-check-label" for="turbo">Turbo Mode:</label>
+                                            <input type="checkbox" id="turbo">
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </p>
+                {% end %}
         </div>
 
         <script>
+        var continuous = false;
+        var orig_m1g = 0.5;
+        var orig_m2g = 1.0;
+        var timer = undefined;
+        var ready = false;
+        var latest_file = "";
         $(function() {
             var getData = function(request, response) {
                 $.getJSON(
@@ -214,9 +245,19 @@
                 }
             });
         });
-        var controlButtons = ["m1correct", "focuscorrect", "comacorrect"];
+        var controlButtons = ["m1correct", "focuscorrect", "comacorrect", "clear", "analyze"];
+        function enable() {
+            $.each(controlButtons, function(i, v) {
+                $('#' + v).prop("disabled", false);
+            });
+        };
+        function disable() {
+            $.each(controlButtons, function(i, v) {
+                $('#' + v).prop("disabled", true);
+            });
+        };
         $('#analyze').on('click', function() {
-            var $btn = $(this).button('loading');
+            $(this).text("Running...");
             var file = $('#datafile').val();
             var dir = $('#datadir').html();
             var mode = $('#mode').val();
@@ -225,18 +266,65 @@
                 var url = "analyze?connect=" + connect + "&fitsfile=" + dir + file;
             } else {
                 var url = "analyze?connect=" + connect + "&mode=" + mode + "&fitsfile=" + dir + file;
-            }
+            };
+            disable();
             $.get(url, function(data, status) {
                 var logstuff = data + status;
-                $.each(controlButtons, function(i, v) {
-                    $('#' + v).prop("disabled", false);
-                })
-                $btn.button('reset');
+                if (continuous == false) {
+                    enable();
+                };
+                $('#analyze').text("Analyze");
             });
             $.getJSON("zfit", {format: "json"}).done(function(data) {
                 $('#zernikes').text(data);
             });
         });
+        function doNextFile() {
+            $.getJSON("files", {format: "json"}).done(function(data) {
+                if (data.length > 0) {
+                    if (data[0] != latest_file) {
+                        latest_file = data[0];
+                        $('#datafile').val(latest_file);
+                        $('#analyze').trigger('click');
+                    };
+                };
+                timer = setTimeout(doNextFile, 1000);
+            });
+        };
+        $('#continuous').on('click', function() {
+            var turbo = $('#turbo').prop("checked");
+            latest_file = $('#datafile').val();
+            if (continuous == false) {
+                $.getJSON("files", {format: "json"}).done(function(data) {
+                    if (data.length > 0) {
+                        if (data[0] != latest_file) {
+                            latest_file = data[0];
+                        };
+                    };
+                });
+                timer = setTimeout(doNextFile, 1000);
+                $(this).text("Stop Continous WFS");
+                disable();
+                continuous = true;
+                if (turbo != true) {
+                    $('#m1gain').val(0.1);
+                    $('#m2gain').val(0.1);
+                    $('#setgains').trigger('click');
+                };
+            } else {
+                $(this).text("Start Continuous WFS");
+                enable();
+                continuous = false;
+                if (timer != undefined) {
+                    clearTimeout(timer);
+                    timer = undefined;
+                }
+                $('#m1gain').val(orig_m1g);
+                $('#m2gain').val(orig_m2g);
+                $('#setgains').trigger('click');
+            };
+        });
+
         </script>
 
         <p>
