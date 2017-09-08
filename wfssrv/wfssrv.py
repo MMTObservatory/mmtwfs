@@ -525,7 +525,7 @@ class WFSServ(tornado.web.Application):
 
         if os.path.isdir(self.datadir):
             logfile = os.path.join(self.datadir, "wfs.log")
-            formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+            formatter = logging.Formatter("%(color)s%(asctime)s - %(name)s - %(levelname)s - %(message)s%(end_color)s")
             handler = logging.handlers.WatchedFileHandler(logfile)
             handler.setFormatter(formatter)
             logger.addHandler(handler)
