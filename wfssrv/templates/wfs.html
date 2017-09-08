@@ -273,6 +273,12 @@
                 var logstuff = data + status;
                 if (continuous == false) {
                     enable();
+                } else {
+                    if ($('#connect').prop("checked")) {
+                        $('#focuscorrect').trigger('click');
+                        $('#comacorrect').trigger('click');
+                        $('#m1correct').trigger('click');
+                    };
                 };
                 $('#analyze').text("Analyze");
             });
