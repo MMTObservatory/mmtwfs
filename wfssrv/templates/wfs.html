@@ -65,16 +65,16 @@
                     var $log = $('#log');
                     var log_ws = new WebSocket('{{ log_uri }}');
                     log_ws.onopen = function() {
-                        $log.append("Logging started...<br/>");
+                        $log.append("<span class='text-primary'>Logging started...</span><br/>");
                     };
                     log_ws.onmessage = function(ev) {
                         $log.append(ev.data);
                     };
                     log_ws.onclose = function(ev) {
-                        $log.append("Logging closed...<br/>");
+                        $log.append("<span class='text-primary'>Logging closed...</span><br/>");
                     };
                     log_ws.onerror = function(ev) {
-                        $log.append("Logging error!!!<br/>");
+                        $log.append("<b><span class='text-danger'>Logging error!!!</span><br/>");
                     };
                 }
             );
