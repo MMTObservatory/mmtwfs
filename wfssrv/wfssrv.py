@@ -21,6 +21,7 @@ import tornado.web
 import tornado.httpserver
 import tornado.ioloop
 import tornado.websocket
+from tornado.process import Subprocess
 from tornado.log import enable_pretty_logging
 enable_pretty_logging()
 
@@ -108,6 +109,7 @@ class WFSServ(tornado.web.Application):
                     figkeys = []
                     ws_uris = []
                     fig_ids = []
+                    log_uri = "ws://{req.host}/log".format(req=self.request)
                     for k, f in self.application.figures.items():
                         manager = self.application.managers[k]
                         fig_ids.append(manager.num)
@@ -125,7 +127,8 @@ class WFSServ(tornado.web.Application):
                         modes=self.application.wfs.modes,
                         default_mode=self.application.wfs.default_mode,
                         m1_gain=self.application.wfs.m1_gain,
-                        m2_gain=self.application.wfs.m2_gain
+                        m2_gain=self.application.wfs.m2_gain,
+                        log_uri=log_uri
                     )
             except Exception as e:
                 log.warning("Must specify valid wfs: %s. %s" % (wfs, e))
@@ -418,6 +421,40 @@ class WFSServ(tornado.web.Application):
             managers[fig].canvas.print_figure(buff, format=fmt)
             self.write(buff.getvalue())
 
+    class LogStreamer(tornado.websocket.WebSocketHandler):
+        """
+        A websocket for streaming log messages from log file to the browser.
+        """
+        def open(self):
+            filename = self.application.logfile
+            self.proc = Subprocess(["tail", "-f", "-n", "0", filename],
+                                   stdout=Subprocess.STREAM,
+                                   bufsize=1)
+            self.proc.set_exit_callback(self._close)
+            self.proc.stdout.read_until(b"\n", self.write_line)
+
+        def _close(self, *args, **kwargs):
+            self.close()
+
+        def on_close(self, *args, **kwargs):
+            logging.info("Trying to kill log streaming process...")
+            self.proc.proc.terminate()
+            self.proc.proc.wait()
+
+        def write_line(self, data):
+            html = data.decode()
+            if "WARNING" in html:
+                color = "text-warning"
+            elif "ERROR" in html:
+                color = "text-danger"
+            else:
+                color = "text-success"
+            if "tornado.access" not in html:
+                html = "<samp><span class=%s>%s</span></samp>" % (color, html)
+                html += "<script>$(\"#log\").scrollTop($(\"#log\")[0].scrollHeight);</script>"
+                self.write_message(html.encode())
+            self.proc.stdout.read_until(b"\n", self.write_line)
+
     class WebSocket(tornado.websocket.WebSocketHandler):
         """
         A websocket for interactive communication between the plot in
@@ -524,12 +561,14 @@ class WFSServ(tornado.web.Application):
             self.datadir = "/mmt/shwfs/datadir"
 
         if os.path.isdir(self.datadir):
-            logfile = os.path.join(self.datadir, "wfs.log")
-            formatter = logging.Formatter("%(color)s%(asctime)s - %(name)s - %(levelname)s - %(message)s%(end_color)s")
-            handler = logging.handlers.WatchedFileHandler(logfile)
+            self.logfile = os.path.join(self.datadir, "wfs.log")
+            formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+            handler = logging.handlers.WatchedFileHandler(self.logfile)
             handler.setFormatter(formatter)
             logger.addHandler(handler)
             enable_pretty_logging()
+        else:
+            self.logfile = "/dev/null"
 
         self.wfs = None
         self.wfs_systems = {}
@@ -571,6 +610,7 @@ class WFSServ(tornado.web.Application):
             (r"/zfit", self.ZernikeFitHandler),
             (r"/clear", self.ClearHandler),
             (r'/download_([a-z]+).([a-z0-9.]+)', self.Download),
+            (r'/log', self.LogStreamer),
             (r'/([a-z0-9.]+)/ws', self.WebSocket)
         ]
 
