@@ -200,11 +200,15 @@ class WFSServ(tornado.web.Application):
 
                     # check the RMS of the wavefront fit and only apply corrections if the fit is good enough.
                     # M2 can be more lenient to take care of large amounts of focus or coma.
-                    if zresults['residual_rms'] < 800 * u.nm:
-                        self.application.has_pending_focus = True
-                    if zresults['residual_rms'] < 500 * u.nm:
+                    if zresults['residual_rms'] < 600 * u.nm:
                         self.application.has_pending_m1 = True
                         self.application.has_pending_coma = True
+                        log.info("%s: all corrections valid." % filename)
+                    elif zresults['residual_rms'] <= 1000 * u.nm:
+                        self.application.has_pending_focus = True
+                        log.warning("%s: only focus corrections valid." % filename)
+                    elif zresults['residual_rms'] > 1000 * u.nm:
+                        log.error("%s: wavefront fit too poor; no valid corrections" % filename)
 
                     self.application.has_pending_recenter = True
 
@@ -234,6 +238,8 @@ class WFSServ(tornado.web.Application):
                     figures['slopes'] = results['figures']['slopes']
 
                 self.application.refresh_figures(figures=figures)
+            else:
+                log.error("No such file: %s" % filename)
 
     class M1CorrectHandler(tornado.web.RequestHandler):
         def get(self):
