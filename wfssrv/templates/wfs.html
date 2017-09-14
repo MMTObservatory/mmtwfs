@@ -33,7 +33,11 @@
                     window.open('download_{{ figure }}.' + format, '_blank');
                 };
             {% end %}
-
+            function getZerns() {
+                $.getJSON("zfit", {format: "json"}).done(function(data) {
+                     $('#zernikes').text(data);
+                 });
+            };
             $(document).ready(
                 function() {
                     /* It is up to the application to provide a websocket that the figure
@@ -57,9 +61,8 @@
                             $('div#{{ figure }}')
                         );
                     {% end %}
-                    $.getJSON("zfit", {format: "json"}).done(function(data) {
-                        $('#zernikes').text(data);
-                    });
+
+                    getZerns();
 
                     /* set up websocket for log streaming */
                     var $log = $('#log');
@@ -284,8 +287,7 @@
                 var url = "analyze?connect=" + connect + "&mode=" + mode + "&fitsfile=" + dir + file;
             };
             disable();
-            $.get(url, function(data, status) {
-                var logstuff = data + status;
+            $.getJSON(url, {format: "json"}).done(function(data, status) {
                 if (continuous == false) {
                     enable();
                 } else {
@@ -296,8 +298,6 @@
                     };
                 };
                 $('#analyze').text("Analyze");
-            });
-            $.getJSON("zfit", {format: "json"}).done(function(data) {
                 $('#zernikes').text(data);
             });
         });
@@ -355,7 +355,6 @@
                 $('#setgains').trigger('click');
             };
         });
-
         </script>
 
         <p>
@@ -363,7 +362,7 @@
             <div>
                 <ul class="nav nav-tabs" role="tablist">
                     <li role="presentation" class="active"><a href="#slopes" aria-controls="slopes" role="tab" data-toggle="tab">Slopes/Residuals</a></li>
-                    <li role="presentation"><a href="#zernfit" aria-controls="zernfit" role="tab" data-toggle="tab">Wavefront Fit</a></li>
+                    <li role="presentation"><a href="#zernfit" aria-controls="zernfit" role="tab" data-toggle="tab" onClick="getZerns()">Wavefront Fit</a></li>
                     <li role="presentation"><a href="#zerns" aria-controls="zerns" role="tab" data-toggle="tab">RMS Wavefront Errors</a></li>
                     <li role="presentation"><a href="#wavefront" aria-controls="wavefront" role="tab" data-toggle="tab">Wavefront Map/PSF</a></li>
                     <li role="presentation"><a href="#cell" aria-controls="cell" role="tab" data-toggle="tab">Cell Forces</a></li>

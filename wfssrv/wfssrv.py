@@ -203,7 +203,7 @@ class WFSServ(tornado.web.Application):
                     if zresults['residual_rms'] < 600 * u.nm:
                         self.application.has_pending_m1 = True
                         self.application.has_pending_coma = True
-                        log.info("%s: all corrections valid." % filename)
+                        log.info("%s: all proposed corrections valid." % filename)
                     elif zresults['residual_rms'] <= 1000 * u.nm:
                         self.application.has_pending_focus = True
                         log.warning("%s: only focus corrections valid." % filename)
@@ -233,13 +233,16 @@ class WFSServ(tornado.web.Application):
                         )
                     )
                 else:
-                    log.warning("Wavefront measurement failed: %s" % filename)
+                    log.error("Wavefront measurement failed: %s" % filename)
                     figures = create_default_figures()
                     figures['slopes'] = results['figures']['slopes']
 
                 self.application.refresh_figures(figures=figures)
             else:
                 log.error("No such file: %s" % filename)
+
+            self.application.wavefront_fit.denormalize()
+            self.write(json.dumps(repr(self.application.wavefront_fit)))
 
     class M1CorrectHandler(tornado.web.RequestHandler):
         def get(self):
