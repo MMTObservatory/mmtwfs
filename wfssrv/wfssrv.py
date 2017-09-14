@@ -7,6 +7,7 @@ import os
 import socket
 import glob
 import json
+import pathlib
 
 import logging
 import logging.handlers
@@ -382,11 +383,11 @@ class WFSServ(tornado.web.Application):
 
     class FilesHandler(tornado.web.RequestHandler):
         def get(self):
-            fullfiles = glob.glob(os.path.join(self.application.datadir, "*.fits"))
+            p = pathlib.Path(self.application.datadir)
+            fullfiles = sorted(p.glob("*_*.fits"), key=lambda x: x.stat().st_mtime)
             files = []
             for f in fullfiles:
-                files.append(os.path.split(f)[1])
-            files.sort()
+                files.append(f.name)
             files.reverse()
             self.write(json.dumps(files))
 
