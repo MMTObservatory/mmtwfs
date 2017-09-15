@@ -72,7 +72,7 @@ def test_mmirs_analysis():
     results = mmirs.measure_slopes(test_file)
     zresults = mmirs.fit_wavefront(results)
     testval = int(zresults['zernike']['Z10'].value)
-    assert((testval > -280) & (testval < -270))
+    assert((testval > -260) & (testval < -250))
 
 @cleanup
 def test_f9_analysis():

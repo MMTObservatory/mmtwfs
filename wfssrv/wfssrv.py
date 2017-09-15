@@ -7,6 +7,7 @@ import os
 import socket
 import glob
 import json
+import pathlib
 
 import logging
 import logging.handlers
@@ -21,6 +22,7 @@ import tornado.web
 import tornado.httpserver
 import tornado.ioloop
 import tornado.websocket
+from tornado.process import Subprocess
 from tornado.log import enable_pretty_logging
 enable_pretty_logging()
 
@@ -108,6 +110,7 @@ class WFSServ(tornado.web.Application):
                     figkeys = []
                     ws_uris = []
                     fig_ids = []
+                    log_uri = "ws://{req.host}/log".format(req=self.request)
                     for k, f in self.application.figures.items():
                         manager = self.application.managers[k]
                         fig_ids.append(manager.num)
@@ -125,7 +128,8 @@ class WFSServ(tornado.web.Application):
                         modes=self.application.wfs.modes,
                         default_mode=self.application.wfs.default_mode,
                         m1_gain=self.application.wfs.m1_gain,
-                        m2_gain=self.application.wfs.m2_gain
+                        m2_gain=self.application.wfs.m2_gain,
+                        log_uri=log_uri
                     )
             except Exception as e:
                 log.warning("Must specify valid wfs: %s. %s" % (wfs, e))
@@ -190,7 +194,6 @@ class WFSServ(tornado.web.Application):
                     figures['totalforces'] = tel.plot_forces(totforces, totm1focus)
                     figures['totalforces'].set_label("Total M1 Actuator Forces")
                     psf, figures['psf'] = tel.psf(zv=zvec.copy())
-                    log.info(zvec)
                     log.info("Residual RMS: %.2f nm" % zresults['residual_rms'].value)
                     zvec_file = os.path.join(self.application.datadir, filename + ".zernike")
                     zvec.save(filename=zvec_file)
@@ -198,11 +201,15 @@ class WFSServ(tornado.web.Application):
 
                     # check the RMS of the wavefront fit and only apply corrections if the fit is good enough.
                     # M2 can be more lenient to take care of large amounts of focus or coma.
-                    if zresults['residual_rms'] < 800 * u.nm:
-                        self.application.has_pending_focus = True
-                    if zresults['residual_rms'] < 500 * u.nm:
+                    if zresults['residual_rms'] < 600 * u.nm:
                         self.application.has_pending_m1 = True
                         self.application.has_pending_coma = True
+                        log.info("%s: all proposed corrections valid." % filename)
+                    elif zresults['residual_rms'] <= 1000 * u.nm:
+                        self.application.has_pending_focus = True
+                        log.warning("%s: only focus corrections valid." % filename)
+                    elif zresults['residual_rms'] > 1000 * u.nm:
+                        log.error("%s: wavefront fit too poor; no valid corrections" % filename)
 
                     self.application.has_pending_recenter = True
 
@@ -227,11 +234,16 @@ class WFSServ(tornado.web.Application):
                         )
                     )
                 else:
-                    log.warning("Wavefront measurement failed: %s" % filename)
+                    log.error("Wavefront measurement failed: %s" % filename)
                     figures = create_default_figures()
                     figures['slopes'] = results['figures']['slopes']
 
                 self.application.refresh_figures(figures=figures)
+            else:
+                log.error("No such file: %s" % filename)
+
+            self.application.wavefront_fit.denormalize()
+            self.write(json.dumps(repr(self.application.wavefront_fit)))
 
     class M1CorrectHandler(tornado.web.RequestHandler):
         def get(self):
@@ -371,11 +383,11 @@ class WFSServ(tornado.web.Application):
 
     class FilesHandler(tornado.web.RequestHandler):
         def get(self):
-            fullfiles = glob.glob(os.path.join(self.application.datadir, "*.fits"))
+            p = pathlib.Path(self.application.datadir)
+            fullfiles = sorted(p.glob("*_*.fits"), key=lambda x: x.stat().st_mtime)
             files = []
             for f in fullfiles:
-                files.append(os.path.split(f)[1])
-            files.sort()
+                files.append(f.name)
             files.reverse()
             self.write(json.dumps(files))
 
@@ -417,6 +429,40 @@ class WFSServ(tornado.web.Application):
             buff = io.BytesIO()
             managers[fig].canvas.print_figure(buff, format=fmt)
             self.write(buff.getvalue())
+
+    class LogStreamer(tornado.websocket.WebSocketHandler):
+        """
+        A websocket for streaming log messages from log file to the browser.
+        """
+        def open(self):
+            filename = self.application.logfile
+            self.proc = Subprocess(["tail", "-f", "-n", "0", filename],
+                                   stdout=Subprocess.STREAM,
+                                   bufsize=1)
+            self.proc.set_exit_callback(self._close)
+            self.proc.stdout.read_until(b"\n", self.write_line)
+
+        def _close(self, *args, **kwargs):
+            self.close()
+
+        def on_close(self, *args, **kwargs):
+            logging.info("Trying to kill log streaming process...")
+            self.proc.proc.terminate()
+            self.proc.proc.wait()
+
+        def write_line(self, data):
+            html = data.decode()
+            if "WARNING" in html:
+                color = "text-warning"
+            elif "ERROR" in html:
+                color = "text-danger"
+            else:
+                color = "text-success"
+            if "tornado.access" not in html:
+                html = "<samp><span class=%s>%s</span></samp>" % (color, html)
+                html += "<script>$(\"#log\").scrollTop($(\"#log\")[0].scrollHeight);</script>"
+                self.write_message(html.encode())
+            self.proc.stdout.read_until(b"\n", self.write_line)
 
     class WebSocket(tornado.websocket.WebSocketHandler):
         """
@@ -524,12 +570,14 @@ class WFSServ(tornado.web.Application):
             self.datadir = "/mmt/shwfs/datadir"
 
         if os.path.isdir(self.datadir):
-            logfile = os.path.join(self.datadir, "wfs.log")
+            self.logfile = os.path.join(self.datadir, "wfs.log")
             formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-            handler = logging.handlers.WatchedFileHandler(logfile)
+            handler = logging.handlers.WatchedFileHandler(self.logfile)
             handler.setFormatter(formatter)
             logger.addHandler(handler)
             enable_pretty_logging()
+        else:
+            self.logfile = "/dev/null"
 
         self.wfs = None
         self.wfs_systems = {}
@@ -571,6 +619,7 @@ class WFSServ(tornado.web.Application):
             (r"/zfit", self.ZernikeFitHandler),
             (r"/clear", self.ClearHandler),
             (r'/download_([a-z]+).([a-z0-9.]+)', self.Download),
+            (r'/log', self.LogStreamer),
             (r'/([a-z0-9.]+)/ws', self.WebSocket)
         ]
 
