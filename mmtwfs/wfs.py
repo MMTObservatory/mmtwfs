@@ -1097,7 +1097,7 @@ class NewF9(F9):
 
 class F5(WFS):
     """
-    Defines configuration and methods specific to the F/5 WFS system
+    Defines configuration and methods specific to the F/5 WFS systems
     """
     def __init__(self, config={}):
         super(F5, self).__init__(config=config)
@@ -1108,28 +1108,81 @@ class F5(WFS):
         # load lookup table for off-axis aberrations
         self.aberr_table = ascii.read(self.aberr_table_file)
 
+    def focal_plane_position(self, hdr):
+        """
+        Need to fill this in for the hecto f/5 WFS system. For now will assume it's always on-axis.
+        """
+        return 0.0 * u.deg, 0.0 * u.deg
+
+    def reference_aberrations(self, mode, hdr=None):
+        """
+        Create reference ZernikeVector for 'mode'.  Pass 'hdr' to self.focal_plane_position() to get position of
+        the WFS when the data was acquired.
+        """
+        # for most cases, this gets the reference focus
+        z_default = ZernikeVector(**self.modes[mode]['ref_zern'])
+
+        # now get the off-axis aberrations
+        z_offaxis = ZernikeVector()
+        if hdr is None:
+            log.warning("Missing WFS header. Assuming data is acquired on-axis.")
+            field_r = 0.0 * u.deg
+            field_phi = 0.0 * u.deg
+        else:
+            field_r, field_phi = self.focal_plane_position(hdr)
+
+        # ignore piston and x/y tilts
+        for i in range(4, 12):
+            k = "Z%02d" % i
+            z_offaxis[k] = np.interp(field_r.to(u.deg).value, self.aberr_table['field_r'], self.aberr_table[k]) * u.um
+
+        # now rotate the off-axis aberrations
+        z_offaxis.rotate(angle=field_phi)
+
+        z = z_default + z_offaxis
+
+        return z
 
 class Binospec(F5):
     """
     Defines configuration and methods specific to the Binospec WFS system. Binospec uses the same aberration table
     as the F5 system so we inherit from that.
     """
-    pass
+    def focal_plane_position(self, hdr):
+        """
+        Transform from the Binospec guider coordinate system to MMTO focal plane coordinates.
+        """
+        for k in ['ROT', 'STARXMM', 'STARYMM']:
+            if k not in hdr:
+                # we'll be lenient for now with missing header info. if not provided, assume we're on-axis.
+                msg = "Missing value, %s, that is required to transform Binospec guider coordinates. Defaulting to 0.0."
+                log.warning(msg)
+                hdr[k] = 0.0
+
+        guide_x = hdr['STARXMM']
+        guide_y = hdr['STARYMM']
+        rot = hdr['ROT']
+
+        guide_r = np.sqrt(guide_x**2 + guide_y**2)
+        rot = u.Quantity(rot, u.deg)  # make sure rotation is cast to degrees
+
+        # the MMTO focal plane coordinate convention has phi=0 aligned with +Y instead of +X
+        if guide_y != 0.0:
+            guide_phi = np.arctan2(guide_x, guide_y) * u.rad
+        else:
+            guide_phi = 90. * u.deg
+
+        # transform radius in guider coords to degrees in focal plane
+        focal_r = (guide_r / self.secondary.plate_scale).to(u.deg)
+        focal_phi = guide_phi + rot
+
+        return focal_r, focal_phi
 
 
-class MMIRS(WFS):
+class MMIRS(F5):
     """
     Defines configuration and methods specific to the MMIRS WFS system
     """
-    def __init__(self, config={}):
-        super(MMIRS, self).__init__(config=config)
-
-        self.connected = False
-        self.sock = None
-
-        # load lookup table for off-axis aberrations
-        self.aberr_table = ascii.read(self.aberr_table_file)
-
     def get_mode(self, hdr):
         """
         For MMIRS we figure out the mode from which camera the image is taken with.
@@ -1144,43 +1197,19 @@ class MMIRS(WFS):
         """
         return data[5:, 12:]
 
-    def reference_aberrations(self, mode, hdr=None):
+    def focal_plane_position(self, hdr):
         """
-        Create reference ZernikeVector for 'mode'.  For MMIRS, also need to get the WFS probe positions from 'hdr' to
-        get the known off-axis aberrations at that position.
+        Transform from the MMIRS guider coordinate system to MMTO focal plane coordinates.
         """
-        if hdr is None:
-            msg = "MMIRS requires valid FITS header to determine off-axis aberrations."
-            raise WFSConfigException(value=msg)
-
         for k in ['ROT', 'GUIDERX', 'GUIDERY']:
             if k not in hdr:
                 msg = "Missing value, %s, that is required to transform MMIRS guider coordinates."
                 raise WFSConfigException(value=msg)
 
-        # for MMIRS, this gets the reference focus
-        z_default = ZernikeVector(**self.modes[mode]['ref_zern'])
+        guide_x = hdr['GUIDERX']
+        guide_y = hdr['GUIDERY']
+        rot = hdr['ROT']
 
-        # now get the off-axis aberrations
-        z_offaxis = ZernikeVector()
-        field_r, field_phi = self.guider_to_focal_plane(hdr['GUIDERX'], hdr['GUIDERY'], hdr['ROT'])
-
-        # ignore piston and x/y tilts
-        for i in range(4, 12):
-            k = "Z%02d" % i
-            z_offaxis[k] = np.interp(field_r.to(u.deg).value, self.aberr_table['field_r'], self.aberr_table[k]) * u.um
-
-        # now rotate the off-axis aberrations
-        z_offaxis.rotate(angle=field_phi)
-
-        z = z_default + z_offaxis
-
-        return z
-
-    def guider_to_focal_plane(self, guide_x, guide_y, rot):
-        """
-        Transform from the MMIRS guider coordinate system to MMTO focal plane coordinates.
-        """
         guide_r = np.sqrt(guide_x**2 + guide_y**2)
         rot = u.Quantity(rot, u.deg)  # make sure rotation is cast to degrees
 
