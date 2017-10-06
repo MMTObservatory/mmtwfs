@@ -116,6 +116,7 @@ mmt_config = {
         "f5": {
             "hexserv": "_hexapod._tcp.mmto.arizona.edu",
             "diameter": 1688.0 * u.mm,  # clear aperture of secondary
+            "plate_scale": 0.167 * u.mm / u.arcsec, # plate scale of the focal plane (this is for spectroscopic mode)
             "theta_cc": 79.0 * u.nm / u.arcsec,  # nm of coma per arcsec of center-of-curvature tilt.
             "cc_trans": 24.97 * u.um / u.arcsec,  # um of hexapod translation per arcsec of center-of-curvature tilt.
             "zc_trans": 9.453 * u.um / u.arcsec,  # um of hexapod translation per arcsec of zero-coma tilt.
@@ -124,6 +125,7 @@ mmt_config = {
         "f9": {
             "hexserv": "_hexapod._tcp.mmto.arizona.edu",
             "diameter": 1006.7 * u.mm,
+            "plate_scale": 0.284 * u.mm / u.arcsec,
             "theta_cc": 44.4 * u.nm / u.arcsec,
             "cc_trans": 13.6 * u.um / u.arcsec,
             "zc_trans": 5.86 * u.um / u.arcsec,
