@@ -534,7 +534,7 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
     # scaling (coma) as free parameters
     args = (ref['apertures'], srcs)
     par_keys = ('xcen', 'ycen', 'scale', 'xcoma', 'ycoma')
-    pars = (xcen, ycen, 1.0, 0.0, 0.0)
+    pars = (xcen, ycen, 0.95, 0.0, 0.0)
     # scipy.optimize.minimize can do bounded minimization so leverage that to keep the solution within a reasonable range.
     bounds = (
         (xcen-75, xcen+75),  # hopefully we're not too far off from true center...
