@@ -1085,7 +1085,7 @@ class NewF9(F9):
         """
         rawdata, hdr = check_wfsdata(fitsfile, header=True)
 
-        cr_mask, data = detect_cosmics(rawdata, sigclip=5., niter=5, cleantype='medmask', psffwhm=10.)
+        cr_mask, data = detect_cosmics(rawdata, sigclip=15., niter=5, cleantype='medmask', psffwhm=10.)
 
         # calculate the background and subtract it
         bkg_estimator = photutils.MedianBackground()

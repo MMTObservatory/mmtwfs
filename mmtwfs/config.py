@@ -225,7 +225,7 @@ mmt_config = {
             "default_mode": "blue",
             "lampsrv": "_lampbox._tcp.mmto.arizona.edu",
             "cor_coords": [415.0, 425.0],
-            "find_fwhm": 15.0,
+            "find_fwhm": 10.0,
             "find_thresh": 7.0,
             "rotation": -225. * u.deg,
             "pix_size": 0.09639 * u.arcsec,  # SBIG STT-8300 with 5.4 um pixels binned 3x3
