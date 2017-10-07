@@ -136,7 +136,7 @@ def wfsfind(data, fwhm=7.0, threshold=5.0, plot=True, ap_radius=5.0, std=None):
     return sources, fig
 
 
-def mk_reference(data, xoffset=0, yoffset=0, pup_inner=45., pup_outer=175., fwhm=4.0, threshold=30.0, plot=True):
+def mk_reference(data, xoffset=0, yoffset=0, pup_inner=45., pup_outer=175., fwhm=4.0, threshold=30.0, init_scale=1.0, plot=True):
     """
     Read WFS reference image and generate reference magnifications (i.e. grid spacing) and
     aperture positions.
@@ -156,6 +156,8 @@ def mk_reference(data, xoffset=0, yoffset=0, pup_inner=45., pup_outer=175., fwhm
         FWHM in pixels of DAOfind convolution kernel
     threshold: float
         DAOfind threshold in units of the standard deviation of the image
+    init_scale: float
+        Initial guess for scale factor between reference aperture grid and an observed one
     plot: bool
         Toggle plotting of the reference image and overlayed apertures
 
@@ -171,6 +173,8 @@ def mk_reference(data, xoffset=0, yoffset=0, pup_inner=45., pup_outer=175., fwhm
                 Reference apertures within pup_inner and pup_outer
             pup_coords: tuple (1D ndarray, 1D ndarray)
                 X and Y positions of apertures in pupil coordinates
+            init_scale: float
+                Initial guess for scale factor between reference aperture grid and an observed one
     """
     data = check_wfsdata(data)
     spots, wfsfind_fig = wfsfind(data, fwhm=fwhm, threshold=threshold, plot=plot)
@@ -221,6 +225,7 @@ def mk_reference(data, xoffset=0, yoffset=0, pup_inner=45., pup_outer=175., fwhm
     ref['xcen'] = xcen
     ref['ycen'] = ycen
     ref['figure'] = wfsfind_fig
+    ref['init_scale'] = init_scale
 
     # set up 2D gaussian model plus constant background to fit to the coadded spot.  tested this compared to fitting each
     # spot individually and they give the same result with this method being faster.
@@ -534,7 +539,7 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
     # scaling (coma) as free parameters
     args = (ref['apertures'], srcs)
     par_keys = ('xcen', 'ycen', 'scale', 'xcoma', 'ycoma')
-    pars = (xcen, ycen, 0.95, 0.0, 0.0)
+    pars = (xcen, ycen, ref['init_scale'], 0.0, 0.0)
     # scipy.optimize.minimize can do bounded minimization so leverage that to keep the solution within a reasonable range.
     bounds = (
         (xcen-75, xcen+75),  # hopefully we're not too far off from true center...
@@ -653,6 +658,7 @@ class WFS(object):
                 yoffset=self.pup_offset[1],
                 pup_inner=self.pup_inner,
                 pup_outer=self.pup_size / 2.,
+                init_scale=self.init_scale,
                 plot=True
             )
 
@@ -672,6 +678,7 @@ class WFS(object):
                     yoffset=pup_off[1],
                     pup_inner=self.pup_inner,
                     pup_outer=self.pup_size / 2.,
+                    init_scale=self.init_scale,
                     plot=True
                 )
             else:
