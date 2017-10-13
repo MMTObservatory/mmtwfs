@@ -924,7 +924,7 @@ class WFS(object):
             results['raw_zernike'] = ZernikeVector(coeffs=zfit)
 
             # derotate the zernike solution to match the primary mirror coordinate system
-            total_rotation = slope_results['rotator'] + self.rotation
+            total_rotation = self.rotation - slope_results['rotator']
             zv_rot = ZernikeVector(coeffs=zfit)
             zv_rot.rotate(angle=-total_rotation)
             results['rot_zernike'] = zv_rot
