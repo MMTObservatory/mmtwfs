@@ -279,7 +279,7 @@ mmt_config = {
             "modes": {
                 "mmirs1": {
                     "label": "Camera 1",
-                    "pup_offset": [0.0, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
+                    "pup_offset": [0.0, 0.75],  # [x, y] pupil offset from center of reference aperture pattern
                     "ref_zern": {
                         "Z04": -1325. * u.nm
                     },
