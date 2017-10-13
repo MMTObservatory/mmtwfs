@@ -548,7 +548,7 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
         (-0.1, 0.1),  # this should be way more than enough to account for any reasonable amount of coma we'll encounter.
         (-0.1, 0.1)   # however, the larger range range appears to help minimize avoid local minima
     )
-    min_results = optimize.minimize(fit_apertures, pars, args=args, bounds=bounds, options={'ftol': 1e-13})
+    min_results = optimize.minimize(fit_apertures, pars, args=args, bounds=bounds, options={'ftol': 1e-13, 'gtol': 1e-7})
 
     fit_results = {}
     for i, k in enumerate(par_keys):
