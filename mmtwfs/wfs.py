@@ -1162,7 +1162,7 @@ class Binospec(F5):
         for k in ['ROT', 'STARXMM', 'STARYMM']:
             if k not in hdr:
                 # we'll be lenient for now with missing header info. if not provided, assume we're on-axis.
-                msg = "Missing value, %s, that is required to transform Binospec guider coordinates. Defaulting to 0.0."
+                msg = "Missing value, %s, that is required to transform Binospec guider coordinates. Defaulting to 0.0." % k
                 log.warning(msg)
                 hdr[k] = 0.0
 
@@ -1210,7 +1210,7 @@ class MMIRS(F5):
         """
         for k in ['ROT', 'GUIDERX', 'GUIDERY']:
             if k not in hdr:
-                msg = "Missing value, %s, that is required to transform MMIRS guider coordinates."
+                msg = "Missing value, %s, that is required to transform MMIRS guider coordinates." % k
                 raise WFSConfigException(value=msg)
 
         guide_x = hdr['GUIDERX']
