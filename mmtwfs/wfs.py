@@ -540,13 +540,14 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
     args = (ref['apertures'], srcs)
     par_keys = ('xcen', 'ycen', 'scale', 'xcoma', 'ycoma')
     pars = (xcen, ycen, ref['init_scale'], 0.0, 0.0)
+    coma_bound = 1e-7
     # scipy.optimize.minimize can do bounded minimization so leverage that to keep the solution within a reasonable range.
     bounds = (
         (xcen-75, xcen+75),  # hopefully we're not too far off from true center...
         (ycen-75, ycen+75),
-        (0.75, 1.5),  # reasonable range of expected focus difference...
-        (-0.1, 0.1),  # this should be way more than enough to account for any reasonable amount of coma we'll encounter.
-        (-0.1, 0.1)   # however, the larger range range appears to help minimize avoid local minima
+        (ref['init_scale']-0.01, ref['init_scale']+0.01),  # reasonable range of expected focus difference...
+        (-coma_bound, coma_bound),  # this should be way more than enough to account for any reasonable amount of coma we'll encounter.
+        (-coma_bound, coma_bound)   # however, the larger range range appears to help minimize avoid local minima
     )
     min_results = optimize.minimize(fit_apertures, pars, args=args, bounds=bounds, options={'ftol': 1e-13, 'gtol': 1e-7})
 

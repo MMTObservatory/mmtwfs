@@ -72,7 +72,7 @@ def test_mmirs_analysis():
     results = mmirs.measure_slopes(test_file)
     zresults = mmirs.fit_wavefront(results)
     testval = int(zresults['zernike']['Z10'].value)
-    assert((testval > 195) & (testval < 205))
+    assert((testval > 188) & (testval < 198))
 
 @cleanup
 def test_f9_analysis():
@@ -89,7 +89,7 @@ def test_newf9_analysis():
     results = f9.measure_slopes(test_file)
     zresults = f9.fit_wavefront(results)
     testval = int(zresults['zernike']['Z09'].value)
-    assert((testval > 153) & (testval < 159))
+    assert((testval > 150) & (testval < 156))
 
 @cleanup
 def test_f5_analysis():
@@ -98,7 +98,7 @@ def test_f5_analysis():
     results = f5.measure_slopes(test_file)
     zresults = f5.fit_wavefront(results)
     testval = int(zresults['zernike']['Z10'].value)
-    assert((testval > 70) & (testval < 85))
+    assert((testval > 50) & (testval < 70))
 
 @cleanup
 def test_too_few_spots():
