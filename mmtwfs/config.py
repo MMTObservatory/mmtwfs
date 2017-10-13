@@ -269,7 +269,7 @@ mmt_config = {
             "find_thresh": 5.0,
             "rotation": 180. * u.deg,  # this is referenced to camera2. camera1 is camera2+180, but is flipped by image acq
             "pix_size": 0.156 * u.arcsec,
-            "pup_size": 315,  # pixels
+            "pup_size": 310,  # pixels
             "pup_inner": 50,
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
@@ -279,7 +279,7 @@ mmt_config = {
             "modes": {
                 "mmirs1": {
                     "label": "Camera 1",
-                    "pup_offset": [0.0, 0.75],  # [x, y] pupil offset from center of reference aperture pattern
+                    "pup_offset": [0.75, 0.5],  # [x, y] pupil offset from center of reference aperture pattern
                     "ref_zern": {
                         "Z04": -1325. * u.nm
                     },
