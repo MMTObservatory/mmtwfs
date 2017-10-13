@@ -97,7 +97,8 @@ def test_f5_analysis():
     f5 = WFSFactory(wfs='f5')
     results = f5.measure_slopes(test_file)
     zresults = f5.fit_wavefront(results)
-    assert(int(zresults['zernike']['Z10'].value) == 75)
+    testval = int(zresults['zernike']['Z10'].value)
+    assert((testval > 70) & (testval < 85))
 
 @cleanup
 def test_too_few_spots():
