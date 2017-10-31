@@ -31,7 +31,7 @@ def SecondaryFactory(secondary="f5", config={}, **kwargs):
     sec_map = dict(list(zip(secondaries, types)))
 
     if secondary not in secondaries:
-        raise WFSConfigException(value="Specified secondary, %s, not valid or not implemented." % secondary)
+        raise WFSConfigException(value=f"Specified secondary, {secondary}, not valid or not implemented.")
 
     sec_cls = sec_map[secondary](config=config)
     return sec_cls
@@ -55,7 +55,7 @@ class Secondary(object):
         """
         Apply an incremental 'offset' of 'value' to 'axis'.
         """
-        cmd = "offset_inc %s %s %f\n" % (offset, axis, value)
+        cmd = f"offset_inc {offset} {axis} {value}\n"
         if self.connected:
             sock = self.hex_sock()
             sock.sendall(cmd.encode("utf8"))
@@ -87,7 +87,7 @@ class Secondary(object):
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.connect(hex_server)
         except Exception as e:
-            log.error("Error connecting to hexapod server. Remaining disconnected...: %s" % e)
+            log.error(f"Error connecting to hexapod server. Remaining disconnected...: {e}")
             return None
         return sock
 
@@ -102,7 +102,7 @@ class Secondary(object):
         Move hexapod by 'foc' microns in Z to correct focus
         """
         foc_um = u.Quantity(foc, u.um).value  # focus command must be in microsn
-        log.info("Moving %s hexapod %s in Z..." % (self.__class__.__name__.lower(), foc))
+        log.info(f"Moving {self.__class__.__name__.lower()} hexapod {foc} in Z...")
         cmd = self.inc_offset("wfs", "z", foc_um)
         return cmd
 
@@ -112,7 +112,7 @@ class Secondary(object):
         commands that help correct spherical aberration from normal focus commands.
         """
         foc_um = u.Quantity(foc, u.um).value  # focus command must be in microsn
-        log.info("Moving %s hexapod %s in Z to correct spherical aberration..." % (self.__class__.__name__.lower(), foc))
+        log.info(f"Moving {self.__class__.__name__.lower()} hexapod {foc} in Z to correct spherical aberration...")
         cmd = self.inc_offset("m1spherical", "z", foc_um)
         return cmd
 
@@ -124,15 +124,12 @@ class Secondary(object):
         tilt = u.Quantity(tilt, u.arcsec).value
         axis = axis.lower()
         if axis not in ['x', 'y']:
-            msg = "Invalid axis %s send to hexapod. Only 'x' and 'y' are valid for center-of-curvature offsets." % axis
+            msg = f"Invalid axis {axis} send to hexapod. Only 'x' and 'y' are valid for center-of-curvature offsets."
             raise WFSCommandException(value=msg)
 
-        log.info("Moving %s hexapod %.3f arcsec about the center of curvature along the %s axis..." % (
-            self.__class__.__name__.lower(),
-            tilt,
-            axis)
-        )
-        cmd = "offset_cc wfs t%s %f\n" % (axis, tilt)
+        hexname = self.__class__.__name__.lower()
+        log.info(f"Moving {hexname} hexapod {tilt} arcsec about the center of curvature along the {axis} axis...")
+        cmd = f"offset_cc wfs t{axis} {tilt}\n"
         if self.connected:
             sock = self.hex_sock()
             sock.sendall(cmd.encode("utf8"))
@@ -149,15 +146,12 @@ class Secondary(object):
         tilt = u.Quantity(tilt, u.arcsec).value
         axis = axis.lower()
         if axis not in ['x', 'y']:
-            msg = "Invalid axis %s send to hexapod. Only 'x' and 'y' are valid for zero-coma offsets." % axis
+            msg = f"Invalid axis {axis} send to hexapod. Only 'x' and 'y' are valid for zero-coma offsets."
             raise WFSCommandException(value=msg)
 
-        log.info("Moving %s hexapod %.3f arcsec about the zero-coma point along the %s axis..." % (
-            self.__class__.__name__.lower(),
-            tilt,
-            axis)
-        )
-        cmd = "offset_zc wfs t%s %f\n" % (axis, tilt)
+        hexname = self.__class__.__name__.lower()
+        log.info(f"Moving {hexname} hexapod {tilt} arcsec about the zero-coma point along the {axis} axis...")
+        cmd = f"offset_zc wfs t{axis} {tilt}\n"
         if self.connected:
             sock = self.hex_sock()
             sock.sendall(cmd.encode("utf8"))
@@ -209,7 +203,7 @@ class Secondary(object):
         if self.connected:
             sock = self.hex_sock()
             for ax in axes:
-                cmd = "offset wfs %s 0.0\n" % ax
+                cmd = f"offset wfs {ax} 0.0\n"
                 cmds.append(cmd)
                 sock.sendall(cmd.encode("utf8"))
             sock.sendall(b"apply_offsets\n")
