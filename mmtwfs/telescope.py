@@ -234,8 +234,8 @@ class MMT(object):
         if self.connected:
             self.secondary.m1spherical(m1focus_corr)
             self.to_rcell(t, filename=filename)
-            log.info("Sending forces from %s..." % filename)
-            os.system("/mmt/scripts/cell_send_forces %s" % filename)
+            log.info(f"Sending forces from {filename}...")
+            os.system(f"/mmt/scripts/cell_send_forces {filename}")
 
         self.last_forces = t.copy(copy_data=True)
         self.last_m1focus = m1focus_corr.copy()
@@ -253,7 +253,7 @@ class MMT(object):
         if self.connected:
             self.secondary.m1spherical(self.last_m1focus)
             self.to_rcell(self.last_forces, filename=zfilename)
-            os.system("/mmt/scripts/cell_send_forces %s" % zfilename)
+            os.system(f"/mmt/scripts/cell_send_forces {zfilename}")
 
         self.total_m1focus += self.last_m1focus
         self.total_forces['force'] += self.last_forces['force']

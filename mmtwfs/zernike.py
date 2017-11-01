@@ -407,7 +407,7 @@ def noll_coefficient(l):
         Noll normalization coefficient
     """
     if l < 1:
-        raise ZernikeException("Noll modes start at l=1. l=%d is not valid." % l)
+        raise ZernikeException(f"Noll modes start at l=1. l={l} is not valid.")
 
     n, m = noll_to_zernike(l)
     norm_coeff = norm_coefficient(m, n)
@@ -618,7 +618,7 @@ class ZernikeVector(MutableMapping):
             if self._valid_key(key):
                 return 0.0 * self.units
             else:
-                raise KeyError("Invalid Zernike term, %s" % key)
+                raise KeyError(f"Invalid Zernike term, {key}")
 
     def __setitem__(self, key, item):
         """
@@ -630,7 +630,7 @@ class ZernikeVector(MutableMapping):
             key = self._l_to_key(l)
             self.coeffs[key] = u.Quantity(item, self.units)
         else:
-            raise KeyError("Malformed Zernike mode key, %s" % key)
+            raise KeyError(f"Malformed Zernike mode key, {key}")
 
     def __delitem__(self, key):
         """
@@ -651,15 +651,12 @@ class ZernikeVector(MutableMapping):
 
         for k in sorted(self.coeffs.keys()):
             if k in self.__zernikelabels:
-                s += "%4s: %12s \t %s" % (k, "{0:0.03g}".format(self.coeffs[k]), self.label(k))
+                s += "{0:>4s}: {1:>12s} \t {2:s}".format(k, "{0:0.03g}".format(self.coeffs[k]), self.label(k))
             else:
-                s += "%4s: %12s" % (k, "{0:0.03g}".format(self.coeffs[k]))
+                s += "{0:>4s}: {1:>12s}".format(k, "{0:0.03g}".format(self.coeffs[k]))
             s += "\n"
 
-        if sys.version_info.major < 3:
-            return s.encode(sys.stdout.encoding or 'utf-8')
-        else:
-            return s
+        return s
 
     def __str__(self):
         """
@@ -682,7 +679,7 @@ class ZernikeVector(MutableMapping):
                 for k in self.coeffs:
                     d[k] = self.__getitem__(k) + float(zv) * self.units
             except:
-                raise ZernikeException("Invalid data-type, %s, for ZernikeVector + operation: zv = %s" % (type(zv), zv))
+                raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector + operation: zv = {zv}")
         return ZernikeVector(**d)
 
     def __radd__(self, zv):
@@ -705,7 +702,7 @@ class ZernikeVector(MutableMapping):
                 for k in self.coeffs:
                     d[k] = self.__getitem__(k) - float(zv) * self.units
             except:
-                raise ZernikeException("Invalid data-type, %s, for ZernikeVector - operation: zv = %s" % (type(zv), zv))
+                raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector - operation: zv = {zv}")
         return ZernikeVector(**d)
 
     def __rsub__(self, zv):
@@ -722,7 +719,7 @@ class ZernikeVector(MutableMapping):
                 for k in self.coeffs:
                     d[k] = float(zv) * self.units - self.__getitem__(k)
             except:
-                raise ZernikeException("Invalid data-type, %s, for ZernikeVector - operation: zv = %s" % (type(zv), zv))
+                raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector - operation: zv = {zv}")
         return ZernikeVector(**d)
 
     def __mul__(self, zv):
@@ -742,7 +739,7 @@ class ZernikeVector(MutableMapping):
                     d[k] = self.__getitem__(k) * float(zv)
                 outunits = self.units
             except:
-                raise ZernikeException("Invalid data-type, %s, for ZernikeVector * operation: zv = %s" % (type(zv), zv))
+                raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector * operation: zv = {zv}")
         d['units'] = outunits
         return ZernikeVector(**d)
 
@@ -776,7 +773,7 @@ class ZernikeVector(MutableMapping):
                     d[k] = self.__getitem__(k) / float(zv)
                 outunits = self.units
             except:
-                raise ZernikeException("Invalid data-type, %s, for ZernikeVector / operation: zv = %s" % (type(zv), zv))
+                raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector / operation: zv = {zv}")
         d['units'] = outunits
         return ZernikeVector(**d)
 
@@ -803,7 +800,7 @@ class ZernikeVector(MutableMapping):
                     d[k] = float(zv) / self.__getitem__(k)
                 outunits = 1.0 / self.units
             except:
-                raise ZernikeException("Invalid data-type, %s, for ZernikeVector / operation: zv = %s" % (type(zv), zv))
+                raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector / operation: zv = {zv}")
         d['units'] = outunits
         return ZernikeVector(**d)
 
@@ -823,14 +820,14 @@ class ZernikeVector(MutableMapping):
         try:
             l = int(key.replace("Z", ""))
         except:
-            raise ZernikeException("Malformed Zernike mode key, %s" % key)
+            raise ZernikeException(f"Malformed Zernike mode key, {key}")
         return l
 
     def _l_to_key(self, l):
         """
         Take Noll mode number and generate valid coefficient key.
         """
-        key = "Z%02d" % l
+        key = "Z{0:02d}".format(l)
         return key
 
     @property
@@ -1130,7 +1127,7 @@ class ZernikeVector(MutableMapping):
         ax.set_xticks(ind)
         ax.set_xticklabels(labels, rotation=45, ha='right', size='x-small')
         ax.set_ylim(0, max_c)
-        ax.set_ylabel("RMS Wavefront Error (%s)" % self.units)
+        ax.set_ylabel(f"RMS Wavefront Error ({self.units})")
         cb = fig.colorbar(cmap)
         cb.set_label("%s" % self.units)
         return fig

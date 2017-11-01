@@ -843,7 +843,7 @@ class WFS(object):
             src_mask = slope_results['src_mask']
             figures = slope_results['figures']
         except WFSAnalysisFailed as e:
-            log.warning("Wavefront slope measurement failed: %s" % e.args[1])
+            log.warning(f"Wavefront slope measurement failed: {e}")
             slope_fig = None
             if plot:
                 slope_fig, ax = plt.subplots()
@@ -992,7 +992,7 @@ class WFS(object):
         z_denorm.denormalize()  # need to assure we're using fringe coeffs
         foc_corr = -self.m2_gain * z_denorm['Z04'] / self.secondary.focus_trans
 
-        return foc_corr
+        return foc_corr.round(2)
 
     def calculate_cc(self, zv):
         """
@@ -1005,7 +1005,7 @@ class WFS(object):
         cc_y_corr = -self.m2_gain * z_denorm['Z07'] / self.secondary.theta_cc
         cc_x_corr = -self.m2_gain * z_denorm['Z08'] / self.secondary.theta_cc
 
-        return cc_x_corr, cc_y_corr
+        return cc_x_corr.round(3), cc_y_corr.round(3)
 
     def calculate_recenter(self, fit_results):
         """
@@ -1030,7 +1030,7 @@ class WFS(object):
         az *= self.pix_size
         el *= -1 * self.pix_size  # cassegrain image flip
 
-        return az, el
+        return az.round(3), el.round(3)
 
     def clear_corrections(self):
         """
@@ -1065,7 +1065,7 @@ class WFS(object):
                 self.sock.close()
                 self.sock = None
             except Exception as e:
-                log.error("Error closing connection to topbox server: %s" % e)
+                log.error(f"Error closing connection to topbox server: {e}")
 
 
 class F9(WFS):
@@ -1163,7 +1163,7 @@ class Binospec(F5):
         for k in ['ROT', 'STARXMM', 'STARYMM']:
             if k not in hdr:
                 # we'll be lenient for now with missing header info. if not provided, assume we're on-axis.
-                msg = "Missing value, %s, that is required to transform Binospec guider coordinates. Defaulting to 0.0." % k
+                msg = f"Missing value, {k}, that is required to transform Binospec guider coordinates. Defaulting to 0.0."
                 log.warning(msg)
                 hdr[k] = 0.0
 
@@ -1196,7 +1196,7 @@ class MMIRS(F5):
         For MMIRS we figure out the mode from which camera the image is taken with.
         """
         cam = hdr['CAMERA']
-        mode = "mmirs%d" % cam
+        mode = f"mmirs{cam}"
         return mode
 
     def trim_overscan(self, data, hdr=None):
@@ -1211,7 +1211,7 @@ class MMIRS(F5):
         """
         for k in ['ROT', 'GUIDERX', 'GUIDERY']:
             if k not in hdr:
-                msg = "Missing value, %s, that is required to transform MMIRS guider coordinates." % k
+                msg = f"Missing value, {k}, that is required to transform MMIRS guider coordinates."
                 raise WFSConfigException(value=msg)
 
         guide_x = hdr['GUIDERX']

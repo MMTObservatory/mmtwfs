@@ -80,7 +80,8 @@ def test_f9_analysis():
     f9 = WFSFactory(wfs='f9')
     results = f9.measure_slopes(test_file)
     zresults = f9.fit_wavefront(results)
-    assert(int(zresults['zernike']['Z09'].value) == 456)
+    testval = int(zresults['zernike']['Z09'].value)
+    assert((testval > 452) & (testval < 464))
 
 @cleanup
 def test_newf9_analysis():
