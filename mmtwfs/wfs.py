@@ -824,6 +824,10 @@ class WFS(object):
         else:
             rotator = 0.0 * u.deg
 
+        # if there's a ROTOFF in the image header, grab it and adjust the rotator angle accordingly
+        if 'ROTOFF' in hdr:
+            rotator -= hdr['ROTOFF'] * u.deg
+
         # make rotated pupil mask
         pup_mask = self.pupil_mask(rotator=rotator)
 
