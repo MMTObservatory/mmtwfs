@@ -1,7 +1,7 @@
 # Licensed under GPL3
 # coding=utf-8
 
-import os
+import subprocess
 import warnings
 
 import logging
@@ -227,46 +227,84 @@ class MMT(object):
 
         return t, m1focus_corr
 
+    def bend_mirror(self, filename="zfile"):
+        """
+        Take a force file and send it to the cell to apply bending forces. Return fraction of requested
+        forces that the cell reports were applied.
+        """
+        frac = 1.0
+        pipe = subprocess.Popen(['/mmt/scripts/cell_send_forces', f"{filename}"], stdout=subprocess.PIPE)
+        outstr = pipe.stdout.read()
+
+        # had to dig into the cell code at /mmt/vxsource/mmt/cell/src/cell_inf.c to get the messages that are produces
+        if "Able to Apply" in outstr:
+            log.info("...forces successfully applied in full.")
+
+        if "Forces Rejected" in outstr:
+            log.error("...forces rejected!")
+            frac = 0.0
+
+        if "Unable to apply forces" in outstr:
+            log.error("...unable to apply forces!")
+            frac = 0.0
+
+        if "Applying partial forces" in outstr:
+            percent = float(outstr.split()[3])
+            frac = percent / 100.0
+            log.warn(f"...applied {percent}% of requested forces.")
+        return frac
+
     def correct_primary(self, t, m1focus_corr, filename="zfile"):
         """
         Take force table and focus offset calculated by self.calculate_primary_corrections() and apply them, if connected.
         """
+        frac = 1.0
         if self.connected:
             self.secondary.m1spherical(m1focus_corr)
             self.to_rcell(t, filename=filename)
             log.info(f"Sending forces from {filename}...")
-            os.system(f"/mmt/scripts/cell_send_forces {filename}")
+            frac = self.bend_mirror(filename=filename)
+        else:
+            log.info("Not connected; no commands sent to cell or hexapod.")
 
         self.last_forces = t.copy(copy_data=True)
-        self.last_m1focus = m1focus_corr.copy()
-        self.total_forces['force'] += t['force']
-        self.total_m1focus += m1focus_corr
+        self.last_forces['force'] *= frac
+        self.last_m1focus = frac * m1focus_corr.copy()
+        self.total_forces['force'] += frac * t['force']
+        self.total_m1focus += frac * m1focus_corr
         return t, m1focus_corr
 
     def undo_last(self, zfilename="zfile_undo"):
         """
         Undo the last set of corrections.
         """
-        log.info("Undoing last set of primary mirror corrections...")
         self.last_forces['force'] *= -1
         self.last_m1focus *= -1
+        frac = 1.0
         if self.connected:
-            self.secondary.m1spherical(self.last_m1focus)
+            log.info("Undoing last set of primary mirror corrections...")
             self.to_rcell(self.last_forces, filename=zfilename)
-            os.system(f"/mmt/scripts/cell_send_forces {zfilename}")
+            frac = self.bend_mirror(filename=filename)
+            self.secondary.m1spherical(frac * self.last_m1focus)
+        else:
+            log.info("Not connected; no undo commands sent.")
 
-        self.total_m1focus += self.last_m1focus
-        self.total_forces['force'] += self.last_forces['force']
+        self.total_m1focus += frac * self.last_m1focus
+        self.total_forces['force'] += frac * self.last_forces['force']
         return self.last_forces.copy(), self.last_m1focus.copy()
 
     def clear_forces(self):
         """
         Clear applied forces from primary mirror and clear any m1spherical offsets from secondary hexapod
         """
-        log.info("Clearing forces and spherical aberration focus offsets...")
         if self.connected:
+            log.info("Clearing forces and spherical aberration focus offsets...")
             self.secondary.clear_m1spherical()
-            os.system("/mmt/scripts/cell_clear_forces")
+            pipe = subprocess.Popen(['/mmt/scripts/cell_clear_forces'], stdout=subprocess.PIPE)
+            outstr = pipe.stdout.read()
+            log.info(f"...{outstr}")
+        else:
+            log.info("Not connected; no clearing commands sent.")
 
         # the 'last' corrections are negations of the current total. reset the totals to 0.
         self.last_forces = self.total_forces.copy(copy_data=True)
