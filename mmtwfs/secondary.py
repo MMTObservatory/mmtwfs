@@ -188,6 +188,7 @@ class Secondary(object):
         if self.connected:
             sock = self.hex_sock()
             sock.sendall(cmd.encode("utf8"))
+            sock.sendall(b"apply_offsets\n")
             sock.shutdown(socket.SHUT_RDWR)
             sock.close()
         return cmd
@@ -205,6 +206,7 @@ class Secondary(object):
                 cmd = f"offset wfs {ax} 0.0\n"
                 cmds.append(cmd)
                 sock.sendall(cmd.encode("utf8"))
+                sock.sendall(b"apply_offsets\n")
             sock.shutdown(socket.SHUT_RDWR)
             sock.close()
         return cmds
