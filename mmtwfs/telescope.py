@@ -260,10 +260,10 @@ class MMT(object):
         """
         frac = 1.0
         if self.connected:
-            self.secondary.m1spherical(m1focus_corr)
             self.to_rcell(t, filename=filename)
             log.info(f"Sending forces from {filename}...")
             frac = self.bend_mirror(filename=filename)
+            self.secondary.m1spherical(frac * m1focus_corr)
         else:
             log.info("Not connected; no commands sent to cell or hexapod.")
 
