@@ -33,7 +33,7 @@ env:
         - MAIN_CMD='python setup.py'
         - SETUP_CMD='test'
         #- PIP_DEPENDENCIES='git+https://github.com/mperrin/poppy#egg=poppy'
-        - PIP_DEPENDENCIES='poppy pytest-astropy'
+        - PIP_DEPENDENCIES='poppy'
         - EVENT_TYPE='pull_request push'
 
         # For this package-template, we include examples of Cython modules,
@@ -81,6 +81,7 @@ matrix:
         # Now try Astropy dev latest 3.x...
         - os: linux
           env: ASTROPY_VERSION=development
+               PIP_DEPENDENCIES='poppy pytest-astropy'
                EVENT_TYPE='pull_request push cron'
 
         # Astropy LTS can no longer be supported because we need the astropy implementation of Lomb-Scargle.
