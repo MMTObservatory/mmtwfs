@@ -10,7 +10,7 @@ log = logging.getLogger("")
 log.setLevel(logging.INFO)
 
 import numpy as np
-from scipy.misc import imrotate
+from skimage.transform import rotate as imrotate
 
 import astropy.units as u
 from astropy.io import ascii

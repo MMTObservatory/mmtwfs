@@ -21,8 +21,8 @@ import matplotlib.cm as cm
 
 from skimage import feature
 from skimage.morphology import reconstruction
+from skimage.transform import rotate as imrotate
 from scipy import stats, ndimage, optimize
-from scipy.misc import imrotate
 
 import astropy.units as u
 from astropy.io import fits

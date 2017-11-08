@@ -24,7 +24,7 @@ import numpy as np
 import astropy.units as u
 
 from collections import MutableMapping
-from scipy.misc import factorial as fac
+from scipy.special import factorial as fac
 
 from .custom_exceptions import ZernikeException
 
