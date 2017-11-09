@@ -302,7 +302,7 @@ class MMT(object):
             self.secondary.clear_m1spherical()
             pipe = subprocess.Popen(['/mmt/scripts/cell_clear_forces'], stdout=subprocess.PIPE)
             outstr = pipe.stdout.read().decode('utf8')
-            log.info(f"...{outstr}")
+            log.info(f"...{outstr.strip()}")
         else:
             log.info("Not connected; no clearing commands sent.")
 
