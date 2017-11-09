@@ -9,7 +9,7 @@ import sys
 
 import logging
 import logging.handlers
-log = logging.getLogger("")
+log = logging.getLogger("Secondary")
 log.setLevel(logging.INFO)
 
 import astropy.units as u

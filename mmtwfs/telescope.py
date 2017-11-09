@@ -6,7 +6,7 @@ import warnings
 
 import logging
 import logging.handlers
-log = logging.getLogger("")
+log = logging.getLogger("Telescope")
 log.setLevel(logging.INFO)
 
 import numpy as np

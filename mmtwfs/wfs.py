@@ -10,7 +10,7 @@ import socket
 
 import logging
 import logging.handlers
-log = logging.getLogger("")
+log = logging.getLogger("WFS")
 log.setLevel(logging.INFO)
 
 import numpy as np
