@@ -937,6 +937,7 @@ class WFS(object):
             # subtract the reference aberrations
             zref = self.reference_aberrations(mode, hdr=slope_results['header'])
             zsub = zv_rot - zref
+            results['ref_zernike'] = zref
             results['zernike'] = zsub
 
             pred = np.dot(zfit, inverse_infmat)
