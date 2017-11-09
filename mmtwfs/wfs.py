@@ -1175,7 +1175,7 @@ class Binospec(F5):
         guide_y = hdr['STARYMM']
         rot = hdr['ROT']
 
-        guide_r = np.sqrt(guide_x**2 + guide_y**2)
+        guide_r = np.sqrt(guide_x**2 + guide_y**2) * u.mm
         rot = u.Quantity(rot, u.deg)  # make sure rotation is cast to degrees
 
         # the MMTO focal plane coordinate convention has phi=0 aligned with +Y instead of +X
