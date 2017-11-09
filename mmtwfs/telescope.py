@@ -234,7 +234,7 @@ class MMT(object):
         """
         frac = 1.0
         pipe = subprocess.Popen(['/mmt/scripts/cell_send_forces', f"{filename}"], stdout=subprocess.PIPE)
-        outstr = pipe.stdout.read()
+        outstr = pipe.stdout.read().decode('utf8')
 
         # had to dig into the cell code at /mmt/vxsource/mmt/cell/src/cell_inf.c to get the messages that are produces
         if "Able to Apply" in outstr:
@@ -301,7 +301,7 @@ class MMT(object):
             log.info("Clearing forces and spherical aberration focus offsets...")
             self.secondary.clear_m1spherical()
             pipe = subprocess.Popen(['/mmt/scripts/cell_clear_forces'], stdout=subprocess.PIPE)
-            outstr = pipe.stdout.read()
+            outstr = pipe.stdout.read().decode('utf8')
             log.info(f"...{outstr}")
         else:
             log.info("Not connected; no clearing commands sent.")
