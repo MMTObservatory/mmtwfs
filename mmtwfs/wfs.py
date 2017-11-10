@@ -543,8 +543,8 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
     coma_bound = 1e-7
     # scipy.optimize.minimize can do bounded minimization so leverage that to keep the solution within a reasonable range.
     bounds = (
-        (xcen-75, xcen+75),  # hopefully we're not too far off from true center...
-        (ycen-75, ycen+75),
+        (xcen-35, xcen+35),  # hopefully we're not too far off from true center...
+        (ycen-35, ycen+35),
         (ref['init_scale']-0.01, ref['init_scale']+0.01),  # reasonable range of expected focus difference...
         (-coma_bound, coma_bound),  # this should be way more than enough to account for any reasonable amount of coma we'll encounter.
         (-coma_bound, coma_bound)   # however, the larger range range appears to help minimize avoid local minima
