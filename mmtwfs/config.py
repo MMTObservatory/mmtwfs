@@ -308,7 +308,7 @@ mmt_config = {
             "cor_coords": [255.0, 255.0],
             "find_fwhm": 7.0,
             "find_thresh": 5.0,
-            "rotation": -90. * u.deg,  # per j. kansky 9/26/2017
+            "rotation": 90. * u.deg,  # per j. kansky 9/26/2017
             "pix_size": 0.156 * u.arcsec,
             "pup_size": 320,  # pixels
             "pup_inner": 40,
