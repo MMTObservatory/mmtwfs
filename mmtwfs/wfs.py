@@ -944,6 +944,7 @@ class WFS(object):
             pred_slopes = -(1. / self.tiltfactor) * pred.reshape(2, slopes.shape[1])
             diff = slopes - pred_slopes
             rms = self.pix_size * np.sqrt((diff[0]**2 + diff[1]**2).mean())
+            results['residual_rms_asec'] = rms.to(u.arcsec)
             results['residual_rms'] = rms.to(u.arcsec).value * self.tiltfactor * zsub.units
             results['zernike_rms'] = zsub.rms
             results['zernike_p2v'] = zsub.peak2valley
@@ -966,7 +967,7 @@ class WFS(object):
                 vl = [0.0]
                 ax.quiver(xl, yl, ul, vl, scale_units='xy', scale=0.05, pivot='tip', color='red')
                 ax.text(60, im.shape[0]-30, "0.2\"", verticalalignment='center')
-                ax.set_title("Residual RMS: {0:0.4g}".format(results['residual_rms']))
+                ax.set_title("Residual RMS: {0:0.4g} ({1:0.2f})".format(results['residual_rms'], results['residual_rms_asec']))
 
             results['resid_plot'] = fig
         else:
