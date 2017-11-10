@@ -986,9 +986,9 @@ class WFS(object):
             if abs(zv[z]) >= threshold:
                 zv_masked[z] = zv[z]
         zv_masked.denormalize()  # need to assure we're using fringe coeffs
-        forces, m1focus = self.telescope.calculate_primary_corrections(zv=zv_masked, mask=mask, gain=self.m1_gain)
+        forces, m1focus, zv_allmasked = self.telescope.calculate_primary_corrections(zv=zv_masked, mask=mask, gain=self.m1_gain)
 
-        return forces, m1focus
+        return forces, m1focus, zv_allmasked
 
     def calculate_focus(self, zv):
         """

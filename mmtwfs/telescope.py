@@ -225,7 +225,7 @@ class MMT(object):
 
         t = self.bending_forces(zv=zv_masked, gain=gain)
 
-        return t, m1focus_corr
+        return t, m1focus_corr, zv_masked
 
     def bend_mirror(self, filename="zfile"):
         """
