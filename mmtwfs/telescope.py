@@ -313,7 +313,7 @@ class MMT(object):
         self.total_forces = self.bending_forces(zv=ZernikeVector())
         self.total_m1focus = 0.0
 
-        return self.last_forces.copy(), self.last_m1focus.copy()
+        return self.last_forces, self.last_m1focus
 
     def load_influence_matrix(self):
         """
