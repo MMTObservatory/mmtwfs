@@ -310,7 +310,7 @@ mmt_config = {
             "find_thresh": 5.0,
             "rotation": 180. * u.deg,  # per j. kansky 9/26/2017
             "pix_size": 0.156 * u.arcsec,
-            "pup_size": 320,  # pixels
+            "pup_size": 300,  # pixels
             "pup_inner": 40,
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
@@ -320,7 +320,7 @@ mmt_config = {
             "modes": {
                 "binospec": {
                     "label": "Binospec",
-                    "pup_offset": [-0.5, 0.5],  # [x, y] pupil offset from center of reference aperture pattern in subap units
+                    "pup_offset": [0.0, 0.5],  # [x, y] pupil offset from center of reference aperture pattern in subap units
                     "ref_zern": {
                         "Z04": 0.0 * u.nm
                     },
