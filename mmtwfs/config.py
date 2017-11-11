@@ -311,7 +311,7 @@ mmt_config = {
             "rotation": 180. * u.deg,  # per j. kansky 9/26/2017
             "pix_size": 0.156 * u.arcsec,
             "pup_size": 300,  # pixels
-            "pup_inner": 40,
+            "pup_inner": 50,
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 36,  # number of zernike modes to fit
