@@ -221,7 +221,7 @@ class MMT(object):
         #
         zv_masked['Z04'] = 6.0 * zv_masked['Z11'] - 12.0 * zv_masked['Z22'] + 20.0 * zv_masked['Z37']
 
-        m1focus_corr = -gain * 0.5 * zv_masked['Z04'] / self.secondary.focus_trans
+        m1focus_corr = gain * zv_masked['Z04'] / self.secondary.focus_trans
 
         t = self.bending_forces(zv=zv_masked, gain=gain)
 
