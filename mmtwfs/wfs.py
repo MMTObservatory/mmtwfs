@@ -1152,8 +1152,8 @@ class F5(WFS):
 
         # kinda nasty binospec hack. needed to flip sign to explain astig behavior we saw, but think
         # we need to leave other terms unmolested (TEP 20171110)
-        z_offaxis['Z05'] *= -1
-        z_offaxis['Z06'] *= -1
+        #z_offaxis['Z05'] *= -1
+        #z_offaxis['Z06'] *= -1
 
         # now rotate the off-axis aberrations
         z_offaxis.rotate(angle=field_phi)
@@ -1190,6 +1190,8 @@ class Binospec(F5):
             guide_phi = np.arctan2(guide_x, guide_y) * u.rad
         else:
             guide_phi = 90. * u.deg
+
+        guide_phi += 90. * u.deg
 
         # transform radius in guider coords to degrees in focal plane
         focal_r = (guide_r / self.secondary.plate_scale).to(u.deg)
