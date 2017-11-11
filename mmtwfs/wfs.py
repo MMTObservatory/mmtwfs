@@ -1153,7 +1153,7 @@ class F5(WFS):
         # now rotate the off-axis aberrations
         z_offaxis.rotate(angle=field_phi)
 
-        z = z_default + z_offaxis
+        z = z_default - z_offaxis  # change the sign here per binospec 20171110
 
         return z
 
