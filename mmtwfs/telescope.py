@@ -219,7 +219,7 @@ class MMT(object):
         #   Z22 ~ 20r**6 - 30r**4 + 12r**2 - 1
         #   Z37 ~ 70r**8 - 140r**6 + 90r**4 - 20r**2 + 1
         #
-        zv_masked['Z04'] = 0.5*(6.0 * zv_masked['Z11'] - 12.0 * zv_masked['Z22'] + 20.0 * zv_masked['Z37'])
+        zv_masked['Z04'] = 6.0 * zv_masked['Z11'] - 12.0 * zv_masked['Z22'] + 20.0 * zv_masked['Z37']
 
         m1focus_corr = -gain * zv_masked['Z04'] / self.secondary.focus_trans
 
