@@ -118,7 +118,7 @@ def test_no_spots():
 def test_correct_primary():
     wfs = WFSFactory(wfs='f5')
     zv = ZernikeVector()
-    f, m1f = wfs.calculate_primary(zv)
+    f, m1f, zv_masked = wfs.calculate_primary(zv)
     assert(m1f == 0.0)
     assert(np.allclose(f['force'], 0.0))
 
