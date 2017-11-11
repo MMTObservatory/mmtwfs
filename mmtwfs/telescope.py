@@ -203,7 +203,7 @@ class MMT(object):
         def_mask = ['Z02', 'Z03', 'Z04', 'Z07', 'Z08']
         def_mask.extend(mask)
         mask = list(set(def_mask))
-        zv_masked = gain * zv.copy()
+        zv_masked = zv.copy()
         for k in mask:
             zv_masked.ignore(k)
 
@@ -221,7 +221,7 @@ class MMT(object):
         #
         zv_masked['Z04'] = 0.5*(6.0 * zv_masked['Z11'] - 12.0 * zv_masked['Z22'] + 20.0 * zv_masked['Z37'])
 
-        m1focus_corr = -zv_masked['Z04'] / self.secondary.focus_trans
+        m1focus_corr = -gain * zv_masked['Z04'] / self.secondary.focus_trans
 
         t = self.bending_forces(zv=zv_masked, gain=gain)
 
