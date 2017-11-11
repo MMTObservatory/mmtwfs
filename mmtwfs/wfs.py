@@ -1150,10 +1150,15 @@ class F5(WFS):
             k = "Z%02d" % i
             z_offaxis[k] = np.interp(field_r.to(u.deg).value, self.aberr_table['field_r'], self.aberr_table[k]) * u.um
 
+        # kinda nasty binospec hack. needed to flip sign to explain astig behavior we saw, but think
+        # we need to leave other terms unmolested (TEP 20171110)
+        z_offaxis['Z05'] *= -1
+        z_offaxis['Z06'] *= -1
+
         # now rotate the off-axis aberrations
         z_offaxis.rotate(angle=field_phi)
 
-        z = z_default - z_offaxis  # change the sign here per binospec 20171110
+        z = z_default + z_offaxis
 
         return z
 
