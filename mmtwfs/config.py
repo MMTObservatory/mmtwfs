@@ -150,7 +150,7 @@ mmt_config = {
             "nzern": 36,  # number of zernike modes to fit
             "init_scale": 1.0,  # initial guess for scale of aperture grid w.r.t. reference
             "reference_file": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "f5_hecto_ref.fits")),
-            "aberr_table_file": pkg_resources.resource_filename(__name__, os.path.join("data", "f5zernfield.tab")),
+            "aberr_table_file": pkg_resources.resource_filename(__name__, os.path.join("data", "f5zernfield_std_curvedsurface.TXT")),
             "modes": {
                 "megacam": {
                     "label": "Megacam",
@@ -316,7 +316,7 @@ mmt_config = {
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 36,  # number of zernike modes to fit
             "init_scale": 1.0,
-            "aberr_table_file": pkg_resources.resource_filename(__name__, os.path.join("data", "f5zernfield.tab")),
+            "aberr_table_file": pkg_resources.resource_filename(__name__, os.path.join("data", "null.TXT")),
             "modes": {
                 "binospec": {
                     "label": "Binospec",
