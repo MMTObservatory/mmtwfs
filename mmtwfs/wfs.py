@@ -753,7 +753,7 @@ class WFS(object):
         Wrap the Telescope.pupil_mask() method to include both WFS and instrument rotator rotation angles
         """
         rotator = u.Quantity(rotator, u.deg)
-        pup = self.telescope.pupil_mask(rotation=self.rotation+rotator)
+        pup = self.telescope.pupil_mask(rotation=self.rotation+rotator, size=self.pup_size)
         return pup
 
     def reference_aberrations(self, mode, **kwargs):
