@@ -490,8 +490,9 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
     pup_mask = check_wfsdata(pup_mask)
 
     # input data should be background subtracted for best results. this initial guess of the center positions
-    # will be good enough to get the central obscuration, but will need to be fine-tuned.
+    # will be good enough to get the central obscuration, but will need to be fine-tuned for aperture association.
     xcen, ycen, pupcen_fig = center_pupil(data, pup_mask, plot=plot)
+    pup_center = [xcen, ycen]
 
     # using the mean spacing is straightforward for square apertures and a reasonable underestimate for hexagonal ones (e.g. f/9)
     ref_spacing = np.mean([ref['xspacing'], ref['yspacing']])
@@ -509,43 +510,23 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
         r=apsize/2.
     )
 
-    # the first step to fine-tuning the WFS pattern center is compare the marginal sums for the whole image to the ones
-    # for the part centered on the initial guess for the center position.
-    xl = int(xcen - 2*ref['xspacing'])
-    xu = int(xcen + 2*ref['xspacing'])
-    yl = int(ycen - 2*ref['yspacing'])
-    yu = int(ycen + 2*ref['yspacing'])
+    # get grid spacing of the data
+    xspacing, yspacing = grid_spacing(data, srcs)
 
-    # normalize the sums to their maximums so they can be compared more directly
-    xsum = np.sum(data[yl:yu, :], axis=0)
-    xsum /= xsum.max()
-    xtot = np.sum(data, axis=0)
-    xtot /= xtot.max()
-    ysum = np.sum(data[:, xl:xu], axis=1)
-    ysum /= ysum.max()
-    ytot = np.sum(data, axis=1)
-    ytot /= ytot.max()
-    xdiff = xtot - xsum
-
-    # set high enough to discriminate where the obscuration is, but low enough to get better centroid
-    xdiff[xdiff < 0.25] = 0.0
-    ydiff = ytot - ysum
-    ydiff[ydiff < 0.25] = 0.0
-
-    xcen = ndimage.measurements.center_of_mass(xdiff)[0]
-    ycen = ndimage.measurements.center_of_mass(ydiff)[0]
+    # find the scale difference between data and ref and use as init
+    init_scale = (xspacing/ref['xspacing'] + yspacing/ref['yspacing']) / 2.
 
     # set up to do a fit of the reference apertures to the spot positions with the center, scaling, and position-dependent
     # scaling (coma) as free parameters
     args = (ref['apertures'], srcs)
     par_keys = ('xcen', 'ycen', 'scale', 'xcoma', 'ycoma')
-    pars = (xcen, ycen, ref['init_scale'], 0.0, 0.0)
+    pars = (xcen, ycen, init_scale, 0.0, 0.0)
     coma_bound = 1e-7
     # scipy.optimize.minimize can do bounded minimization so leverage that to keep the solution within a reasonable range.
     bounds = (
-        (xcen-25, xcen+25),  # hopefully we're not too far off from true center...
-        (ycen-25, ycen+25),
-        (ref['init_scale']-0.01, ref['init_scale']+0.01),  # reasonable range of expected focus difference...
+        (xcen-20, xcen+20),  # hopefully we're not too far off from true center...
+        (ycen-20, ycen+20),
+        (init_scale-0.05, init_scale+0.05),  # reasonable range of expected focus difference...
         (-coma_bound, coma_bound),  # this should be way more than enough to account for any reasonable amount of coma we'll encounter.
         (-coma_bound, coma_bound)   # however, the larger range range appears to help minimize avoid local minima
     )
@@ -559,8 +540,8 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
     scale = fit_results['scale']
     xcoma, ycoma = fit_results['xcoma'], fit_results['ycoma']
 
-    refx = ref['apertures']['xcentroid'] * (scale + ref['apertures']['xcentroid'] * xcoma) + xcen
-    refy = ref['apertures']['ycentroid'] * (scale + ref['apertures']['ycentroid'] * ycoma) + ycen
+    refx = ref['apertures']['xcentroid'] * (scale + ref['apertures']['xcentroid'] * xcoma) + fit_results['xcen']
+    refy = ref['apertures']['ycentroid'] * (scale + ref['apertures']['ycentroid'] * ycoma) + fit_results['ycen']
     xspacing = scale * ref['xspacing']
     yspacing = scale * ref['yspacing']
 
@@ -579,8 +560,10 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
     slope_x = srcs['xcentroid'][src_mask] - trim_refx
     slope_y = srcs['ycentroid'][src_mask] - trim_refy
 
+    # use the pupil center found by correlation because the pupil can shift around on the lenslet array so
+    # using that center can affect determination of pupil coordinates
     pup_size = ref['pup_outer']
-    pup_coords = (ref_aps.positions - [xcen, ycen]) / [pup_size, pup_size]
+    pup_coords = (ref_aps.positions - pup_center) / [pup_size, pup_size]
 
     aps_fig = None
     if plot:
@@ -589,7 +572,7 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
         aps_fig.set_label("Aperture Positions")
         ax.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
         #apers.plot(color='red')
-        ax.scatter(xcen, ycen)
+        ax.scatter(pup_center[0], pup_center[1])
         src_aps.plot(color='blue', ax=ax)
 
     # need full slopes array the size of the complete set of reference apertures and pre-filled with np.nan for masking
@@ -606,7 +589,7 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
         "pup_coords": pup_coords.transpose(),
         "src_aps": src_aps,
         "spacing": (xspacing, yspacing),
-        "center": (xcen, ycen),
+        "center": pup_center,
         "ref_mask": ref_mask,
         "src_mask": src_mask,
         "spot_sigma": sigma,
@@ -804,12 +787,15 @@ class WFS(object):
         datasec = slice_from_string(hdr['DATASEC'], fits_convention=True)
         return data[datasec]
 
-    def measure_slopes(self, fitsfile, mode=None, plot=True):
+    def measure_slopes(self, fitsfile, mode=None, plot=True, flipud=False):
         """
         Take a WFS image in FITS format, perform background subtration, pupil centration, and then use get_slopes()
         to perform the aperture placement and spot centroiding.
         """
         data, hdr = self.process_image(fitsfile)
+
+        if flipud:
+            data = np.flipud(data)
 
         if mode is None:
             mode = self.get_mode(hdr)

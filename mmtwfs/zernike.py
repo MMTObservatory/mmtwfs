@@ -1081,7 +1081,55 @@ class ZernikeVector(MutableMapping):
         ph = self.total_phase(r, p)
         return x, y, r, p, ph
 
-    def bar_chart(self, residual=None, total=True, max_c=500*u.nm):
+    def fringe_bar_chart(self, total=True, max_c=2000*u.nm, title=None):
+        """
+        Plot a bar chart of the fringe amplitudes of the coefficients
+        """
+        # we want to plot bars for each of the modes we usually use and thus label.
+        label_keys = sorted(self.__zernikelabels.keys())
+        last_label = self._key_to_l(label_keys[-1])
+        last_coeff = self._key_to_l(sorted(self.coeffs.keys())[-1])
+        modes = label_keys[3:]  # ignore piston and tilts in bar plot
+        labels = [self.shortlabel(m) for m in modes]
+        if self.normalized:
+            coeffs = [self.__getitem__(m).value * noll_coefficient(self._key_to_l(m)) for m in modes]
+        else:
+            coeffs = [self.__getitem__(m).value for m in modes]
+
+        # lump higher order terms into one RMS bin.
+        if last_coeff > last_label:
+            hi_orders = ZernikeVector(modestart=last_label+1, normalized=self.normalized, units=self.units, **self.coeffs)
+            labels.append("High Orders RMS")
+            coeffs.append(hi_orders.rms.value)
+
+        # add total RMS
+        if total:
+            labels.append("Total RMS")
+            coeffs.append(self.rms.value)
+
+        max_c = u.Quantity(max_c, self.units).value
+        cmap = cm.ScalarMappable(col.Normalize(-max_c, max_c), cm.coolwarm)
+        cmap._A = []  # stupid matplotlib
+        ind = np.arange(len(labels))
+        fig, ax = plt.subplots(figsize=(11, 5))
+        fig.set_label("Fringe Wavefront Amplitude per Zernike Mode")
+        rects = ax.bar(ind, coeffs, color=cmap.to_rgba(coeffs))
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.yaxis.grid(color='gray', linestyle='dotted')
+        ax.xaxis.grid(color='gray', linestyle='dotted', lw=1)
+        ax.set_axisbelow(True)
+        ax.set_xticks(ind)
+        ax.set_xticklabels(labels, rotation=45, ha='right', size='x-small')
+        ax.set_ylim(-max_c, max_c)
+        ax.set_ylabel(f"RMS Wavefront Error ({self.units})")
+        if title is not None:
+            ax.set_title(title)
+        cb = fig.colorbar(cmap)
+        cb.set_label("%s" % self.units)
+        return fig
+
+    def bar_chart(self, residual=None, total=True, max_c=500*u.nm, title=None):
         """
         Plot a bar chart of the coefficients and, optionally, a residual amount not included in the coefficients.
         """
@@ -1128,6 +1176,8 @@ class ZernikeVector(MutableMapping):
         ax.set_xticklabels(labels, rotation=45, ha='right', size='x-small')
         ax.set_ylim(0, max_c)
         ax.set_ylabel(f"RMS Wavefront Error ({self.units})")
+        if title is not None:
+            ax.set_title(title)
         cb = fig.colorbar(cmap)
         cb.set_label("%s" % self.units)
         return fig
