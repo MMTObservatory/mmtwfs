@@ -316,7 +316,7 @@ mmt_config = {
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 36,  # number of zernike modes to fit
             "init_scale": 1.0,
-            "aberr_table_file": pkg_resources.resource_filename(__name__, os.path.join("data", "null.TXT")),
+            "aberr_table_file": pkg_resources.resource_filename(__name__, os.path.join("data", "f5zernfield_flatsurface.tab")),
             "modes": {
                 "binospec": {
                     "label": "Binospec",
