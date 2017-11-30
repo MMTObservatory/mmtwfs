@@ -120,6 +120,17 @@ def test_bogus_mul():
     else:
         assert False
 
+def test_bogus_pow():
+    z1 = ZernikeVector(Z04=1000)
+    try:
+        z2 = z1 ** 2
+    except ZernikeVector:
+        assert True
+    except Exception as e:
+        assert False
+    else:
+        assert False
+
 def test_bogus_key():
     zv = ZernikeVector()
     try:
@@ -219,6 +230,12 @@ def test_zernike_div_nan():
     a1 = z1 / z2
     a2 = z2 / z1
     assert(a1 == 1. / a2)
+
+def test_zernike_pow():
+    amp = 1000
+    z1 = ZernikeVector(Z04=amp)
+    z2 = z1 ** 2
+    assert(amp**2 == z2['Z04'].value)
 
 def test_p2v():
     zv = ZernikeVector(Z04=1000)

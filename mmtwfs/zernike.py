@@ -804,6 +804,18 @@ class ZernikeVector(MutableMapping):
         d['units'] = outunits
         return ZernikeVector(**d)
 
+    def __pow__(self, n):
+        """
+        Implement the pow() method and ** operator.
+        """
+        d = {}
+        try:
+            for k in self.coeffs:
+                d[k] = self.__getitem__(k).value ** float(n) * self.units
+        except:
+            raise ZernikeException(f"Invalid data-type, {type(n)}, for ZernikeVector ** operation: zv = {zv}")
+        return ZernikeVector(**d)
+
     def _valid_key(self, key):
         """
         Define valid format for coefficient keys.
