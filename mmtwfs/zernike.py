@@ -678,8 +678,8 @@ class ZernikeVector(MutableMapping):
             try:
                 for k in self.coeffs:
                     d[k] = self.__getitem__(k) + float(zv) * self.units
-            except:
-                raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector + operation: zv = {zv}")
+            except Exception as e:
+                raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector + operation: zv = {zv} ({e})")
         return ZernikeVector(**d)
 
     def __radd__(self, zv):
@@ -701,8 +701,8 @@ class ZernikeVector(MutableMapping):
             try:
                 for k in self.coeffs:
                     d[k] = self.__getitem__(k) - float(zv) * self.units
-            except:
-                raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector - operation: zv = {zv}")
+            except Exception as e:
+                raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector - operation: zv = {zv} ({e})")
         return ZernikeVector(**d)
 
     def __rsub__(self, zv):
@@ -718,8 +718,8 @@ class ZernikeVector(MutableMapping):
             try:
                 for k in self.coeffs:
                     d[k] = float(zv) * self.units - self.__getitem__(k)
-            except:
-                raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector - operation: zv = {zv}")
+            except Exception as e:
+                raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector - operation: zv = {zv} ({e})")
         return ZernikeVector(**d)
 
     def __mul__(self, zv):
@@ -738,8 +738,8 @@ class ZernikeVector(MutableMapping):
                 for k in self.coeffs:
                     d[k] = self.__getitem__(k) * float(zv)
                 outunits = self.units
-            except:
-                raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector * operation: zv = {zv}")
+            except Exception as e:
+                raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector * operation: zv = {zv} ({e})")
         d['units'] = outunits
         return ZernikeVector(**d)
 
@@ -772,8 +772,8 @@ class ZernikeVector(MutableMapping):
                 for k in self.coeffs:
                     d[k] = self.__getitem__(k) / float(zv)
                 outunits = self.units
-            except:
-                raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector / operation: zv = {zv}")
+            except Exception as e:
+                raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector / operation: zv = {zv} ({e})")
         d['units'] = outunits
         return ZernikeVector(**d)
 
@@ -799,8 +799,8 @@ class ZernikeVector(MutableMapping):
                 for k in self.coeffs:
                     d[k] = float(zv) / self.__getitem__(k)
                 outunits = 1.0 / self.units
-            except:
-                raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector / operation: zv = {zv}")
+            except Exception as e:
+                raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector / operation: zv = {zv} ({e})")
         d['units'] = outunits
         return ZernikeVector(**d)
 
@@ -812,8 +812,8 @@ class ZernikeVector(MutableMapping):
         try:
             for k in self.coeffs:
                 d[k] = self.__getitem__(k).value ** float(n) * self.units
-        except:
-            raise ZernikeException(f"Invalid data-type, {type(n)}, for ZernikeVector ** operation: zv = {zv}")
+        except Exception as e:
+            raise ZernikeException(f"Invalid data-type, {type(n)}, for ZernikeVector ** operation: n = {n} ({e})")
         return ZernikeVector(**d)
 
     def _valid_key(self, key):
@@ -831,8 +831,8 @@ class ZernikeVector(MutableMapping):
         """
         try:
             l = int(key.replace("Z", ""))
-        except:
-            raise ZernikeException(f"Malformed Zernike mode key, {key}")
+        except Exception as e:
+            raise ZernikeException(f"Malformed Zernike mode key, {key} ({e})")
         return l
 
     def _l_to_key(self, l):

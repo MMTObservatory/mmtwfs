@@ -124,7 +124,7 @@ def test_bogus_pow():
     z1 = ZernikeVector(Z04=1000)
     try:
         z2 = z1 ** "bazz"
-    except ZernikeVector:
+    except ZernikeException:
         assert True
     except Exception as e:
         assert False
