@@ -1108,7 +1108,7 @@ class ZernikeVector(MutableMapping):
             coeffs.append(self.rms.value)
 
         max_c = u.Quantity(max_c, self.units).value
-        cmap = cm.ScalarMappable(col.Normalize(-max_c, max_c), cm.coolwarm)
+        cmap = cm.ScalarMappable(col.Normalize(-max_c, max_c), cm.coolwarm_r)
         cmap._A = []  # stupid matplotlib
         ind = np.arange(len(labels))
         fig, ax = plt.subplots(figsize=(11, 5))
