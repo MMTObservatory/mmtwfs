@@ -36,7 +36,7 @@ def test_bogus_pupil_mask():
     for s in mmt_config['secondary']:
         t = MMT(secondary=s)
         try:
-            mask = t.pupil_mask(size=600)
+            mask = t.pupil_mask(size=900)
         except WFSConfigException:
             assert True
         except Exception as e:

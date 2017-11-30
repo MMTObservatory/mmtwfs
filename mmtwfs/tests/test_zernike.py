@@ -123,7 +123,7 @@ def test_bogus_mul():
 def test_bogus_pow():
     z1 = ZernikeVector(Z04=1000)
     try:
-        z2 = z1 ** 2
+        z2 = z1 ** "bazz"
     except ZernikeVector:
         assert True
     except Exception as e:
