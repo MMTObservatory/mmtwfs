@@ -304,7 +304,7 @@ mmt_config = {
         "binospec": {
             "name": "Binospec WFS",
             "secondary": "f5",
-            "default_mode": None,
+            "default_mode": "binospec",
             "cor_coords": [255.0, 255.0],
             "find_fwhm": 7.0,
             "find_thresh": 5.0,

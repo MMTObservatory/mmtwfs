@@ -102,6 +102,15 @@ def test_f5_analysis():
     assert((testval > 50) & (testval < 70))
 
 @cleanup
+def test_bino_analysis():
+    test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "bino_wfs_0600.fits"))
+    wfs = WFSFactory(wfs='binospec')
+    results = wfs.measure_slopes(test_file)
+    zresults = wfs.fit_wavefront(results)
+    testval = int(zresults['zernike']['Z10'].value)
+    assert((testval > 10) & (testval < 30))
+
+@cleanup
 def test_too_few_spots():
     test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "mmirs_bogus.fits"))
     mmirs = WFSFactory(wfs='mmirs')
@@ -117,10 +126,9 @@ def test_no_spots():
 
 def test_correct_primary():
     wfs = WFSFactory(wfs='f5')
-    zv = ZernikeVector()
+    zv = ZernikeVector(Z04=1000)
     f, m1f, zv_masked = wfs.calculate_primary(zv)
     assert(m1f == 0.0)
-    assert(np.allclose(f['force'], 0.0))
 
 def test_correct_focus():
     wfs = WFSFactory(wfs='f5')

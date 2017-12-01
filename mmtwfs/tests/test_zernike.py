@@ -305,6 +305,8 @@ def test_plots():
     assert(f2 is not None)
     f3 = zv.plot_surface()
     assert(f3 is not None)
+    f4 = zv.fringe_bar_chart()
+    assert(f4 is not None)
     zv.normalize()
     zv['Z99'] = 100.0 * u.nm
     f1 = zv.bar_chart()
@@ -313,3 +315,5 @@ def test_plots():
     assert(f2 is not None)
     f3 = zv.plot_surface()
     assert(f3 is not None)
+    f4 = zv.fringe_bar_chart()
+    assert(f4 is not None)
