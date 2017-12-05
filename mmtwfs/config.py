@@ -304,7 +304,7 @@ mmt_config = {
         "binospec": {
             "name": "Binospec WFS",
             "secondary": "f5",
-            "default_mode": None,
+            "default_mode": "binospec",
             "cor_coords": [255.0, 255.0],
             "find_fwhm": 7.0,
             "find_thresh": 5.0,
@@ -316,11 +316,22 @@ mmt_config = {
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 36,  # number of zernike modes to fit
             "init_scale": 1.0,
-            "aberr_table_file": pkg_resources.resource_filename(__name__, os.path.join("data", "null.TXT")),
+            "aberr_table_file": pkg_resources.resource_filename(__name__, os.path.join("data", "f5zernfield_flatsurface.tab")),
             "modes": {
                 "binospec": {
                     "label": "Binospec",
-                    "pup_offset": [0.0, 0.5],  # [x, y] pupil offset from center of reference aperture pattern in subap units
+                    "pup_offset": [0.5, 0.0],  # [x, y] pupil offset from center of reference aperture pattern in subap units
+                    "ref_zern": {
+                        "Z04": 0.0 * u.nm
+                    },
+                    "reference_file": pkg_resources.resource_filename(
+                        __name__,
+                        os.path.join("data", "ref_images", "binospec_ref.fits")
+                    )
+                },
+                "old_binospec": {
+                    "label": "Binospec",
+                    "pup_offset": [0.5, 0.0],  # [x, y] pupil offset from center of reference aperture pattern in subap units
                     "ref_zern": {
                         "Z04": 0.0 * u.nm
                     },

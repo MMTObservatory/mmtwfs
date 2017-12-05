@@ -120,6 +120,17 @@ def test_bogus_mul():
     else:
         assert False
 
+def test_bogus_pow():
+    z1 = ZernikeVector(Z04=1000)
+    try:
+        z2 = z1 ** "bazz"
+    except ZernikeException:
+        assert True
+    except Exception as e:
+        assert False
+    else:
+        assert False
+
 def test_bogus_key():
     zv = ZernikeVector()
     try:
@@ -220,6 +231,12 @@ def test_zernike_div_nan():
     a2 = z2 / z1
     assert(a1 == 1. / a2)
 
+def test_zernike_pow():
+    amp = 1000
+    z1 = ZernikeVector(Z04=amp)
+    z2 = z1 ** 2
+    assert(amp**2 == z2['Z04'].value)
+
 def test_p2v():
     zv = ZernikeVector(Z04=1000)
     p2v = zv.peak2valley
@@ -288,6 +305,8 @@ def test_plots():
     assert(f2 is not None)
     f3 = zv.plot_surface()
     assert(f3 is not None)
+    f4 = zv.fringe_bar_chart()
+    assert(f4 is not None)
     zv.normalize()
     zv['Z99'] = 100.0 * u.nm
     f1 = zv.bar_chart()
@@ -296,3 +315,5 @@ def test_plots():
     assert(f2 is not None)
     f3 = zv.plot_surface()
     assert(f3 is not None)
+    f4 = zv.fringe_bar_chart()
+    assert(f4 is not None)

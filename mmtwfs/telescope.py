@@ -105,8 +105,8 @@ class MMT(object):
         """
         Use the pupil model to make a pupil mask that can be used as a kernel for finding pupil-like things in images
         """
-        if size >= 500:
-            msg = "WFS pupil sizes are currently restricted to 500 pixels in diameter or less."
+        if size >= 700:
+            msg = "WFS pupil sizes are currently restricted to 700 pixels in diameter or less."
             raise WFSConfigException(value=msg)
 
         rotation = u.Quantity(rotation, u.deg)
