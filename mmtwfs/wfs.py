@@ -1022,7 +1022,7 @@ class WFS(object):
 
         return cc_x_corr.round(3), cc_y_corr.round(3)
 
-    def calculate_recenter(self, fit_results):
+    def calculate_recenter(self, fit_results, defoc=1.0):
         """
         Perform zero-coma hexapod tilts to align the pupil center to the center-of-rotation. The location of the CoR is configured
         to be at self.cor_coords
@@ -1031,8 +1031,8 @@ class WFS(object):
         yc = fit_results['ycen']
         xref = self.cor_coords[0]
         yref = self.cor_coords[1]
-        dx = xc - xref
-        dy = yc - yref  # python Y axis starts at top and goes down
+        dx = -(xc - xref)  # flip the sign here because E to the right in derot pupil so +AZ to the left
+        dy = yc - yref
 
         total_rotation = u.Quantity(fit_results['rotator'] + self.rotation, u.rad).value
 
@@ -1042,8 +1042,8 @@ class WFS(object):
 
         az, el = pol2cart([dr, derot_phi])
 
-        az *= self.pix_size
-        el *= -1 * self.pix_size  # cassegrain image flip
+        az *= -1 * self.pix_size * defoc  # pix size scales with the pupil size as focus changes.
+        el *= -1 * self.pix_size * defoc
 
         return az.round(3), el.round(3)
 

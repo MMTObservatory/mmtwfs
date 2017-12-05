@@ -226,7 +226,7 @@ mmt_config = {
             "secondary": "f9",
             "default_mode": "blue",
             "lampsrv": "_lampbox._tcp.mmto.arizona.edu",
-            "cor_coords": [415.0, 425.0],
+            "cor_coords": [419.0, 439.0],
             "find_fwhm": 12.0,
             "find_thresh": 7.0,
             "rotation": -225. * u.deg,
