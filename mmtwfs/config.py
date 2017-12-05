@@ -243,13 +243,13 @@ mmt_config = {
                 "blue": {
                     "label": "Blue Channel",
                     "ref_zern": {
-                        "Z04": 7982. * u.nm
+                        "Z04": 8282. * u.nm
                     },
                 },
                 "red": {
                     "label": "Red Channel",
                     "ref_zern": {
-                        "Z04": 7982. * u.nm
+                        "Z04": 8282. * u.nm
                     },
                 },
                 "spol": {
