@@ -1134,7 +1134,7 @@ class ZernikeVector(MutableMapping):
         ax.set_xticks(ind)
         ax.set_xticklabels(labels, rotation=45, ha='right', size='x-small')
         ax.set_ylim(-max_c, max_c)
-        ax.set_ylabel(f"RMS Wavefront Error ({self.units})")
+        ax.set_ylabel(f"Wavefront Amplitude ({self.units})")
         if title is not None:
             ax.set_title(title)
         cb = fig.colorbar(cmap)
