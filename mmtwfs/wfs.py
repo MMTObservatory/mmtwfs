@@ -690,6 +690,18 @@ class WFS(object):
         self.telescope.disconnect()
         self.secondary.disconnect()
 
+    def get_flipud(self, mode=None):
+        """
+        Method to determine if the WFS image needs to be flipped up/down
+        """
+        return False
+
+    def get_fliplr(self, mode=None):
+        """
+        Method to determine if the WFS image needs to be flipped left/right
+        """
+        return False
+
     def seeing(self, mode, sigma, airmass=None):
         """
         Given a sigma derived from a gaussian fit to a WFS spot, deconvolve the systematic width from the reference image
@@ -787,15 +799,20 @@ class WFS(object):
         datasec = slice_from_string(hdr['DATASEC'], fits_convention=True)
         return data[datasec]
 
-    def measure_slopes(self, fitsfile, mode=None, plot=True, flipud=False):
+    def measure_slopes(self, fitsfile, mode=None, plot=True, flipud=False, fliplr=False):
         """
         Take a WFS image in FITS format, perform background subtration, pupil centration, and then use get_slopes()
         to perform the aperture placement and spot centroiding.
         """
         data, hdr = self.process_image(fitsfile)
 
-        if flipud:
+        # flip data up/down if we need to. only binospec needs to currently.
+        if flipud or self.get_flipud(mode=mode):
             data = np.flipud(data)
+
+        # flip left/right if we need to. no mode currently does, but who knows what the future holds.
+        if fliplr or self.get_fliplr(mode=mode):
+            data = np.fliplr(data)
 
         if mode is None:
             mode = self.get_mode(hdr)
@@ -1154,6 +1171,18 @@ class Binospec(F5):
     Defines configuration and methods specific to the Binospec WFS system. Binospec uses the same aberration table
     as the F5 system so we inherit from that.
     """
+    def get_flipud(self, mode):
+        """
+        Method to determine if the WFS image needs to be flipped up/down
+
+        During the first binospec commissioning run the images were flipped u/d as they came in. Since then, they are
+        left as-is and get flipped internally based on this flag. The reference file is already flipped.
+        """
+        if mode == "old_binospec":
+            return False
+        else:
+            return True
+
     def focal_plane_position(self, hdr):
         """
         Transform from the Binospec guider coordinate system to MMTO focal plane coordinates.
