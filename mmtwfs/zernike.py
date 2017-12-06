@@ -976,11 +976,12 @@ class ZernikeVector(MutableMapping):
         else:
             return key
 
-    def from_array(self, coeffs, zmap=None, modestart=None):
+    def from_array(self, coeffs, zmap=None, modestart=None, normalized=False):
         """
         Load coefficients from a provided list/array starting from modestart. Array is assumed to start
         from self.modestart if modestart is not provided.
         """
+        self.normalized = normalized
         if len(coeffs) > 0:
             if modestart is None:
                 modestart = self.modestart
