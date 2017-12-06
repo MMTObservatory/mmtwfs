@@ -271,7 +271,7 @@ def grid_spacing(data, apertures):
     xsum = np.histogram(apertures['xcentroid'], bins=bx)
     ysum = np.histogram(apertures['ycentroid'], bins=by)
 
-    k = np.linspace(5.0, 50., 1000)  # look for spacings from 5 to 50 pixels (plenty of range)
+    k = np.linspace(10.0, 50., 1000)  # look for spacings from 10 to 50 pixels (plenty of range, but not too small to alias)
     f = 1.0 / k  # convert spacing to frequency
     xp = stats.LombScargle(x, xsum[0]).power(f)
     yp = stats.LombScargle(y, ysum[0]).power(f)
@@ -587,6 +587,7 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
     results = {
         "slopes": np.ma.masked_invalid(slopes),
         "pup_coords": pup_coords.transpose(),
+        "spots": srcs,
         "src_aps": src_aps,
         "spacing": (xspacing, yspacing),
         "center": pup_center,
@@ -897,6 +898,7 @@ class WFS(object):
         results['seeing'] = seeing
         results['raw_seeing'] = raw_seeing
         results['slopes'] = slopes
+        results['spots'] = slope_results['spots']
         results['pup_coords'] = coords
         results['apertures'] = aps
         results['xspacing'] = slope_results['spacing'][0]
