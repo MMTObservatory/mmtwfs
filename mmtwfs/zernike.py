@@ -1102,7 +1102,10 @@ class ZernikeVector(MutableMapping):
         label_keys = sorted(self.__zernikelabels.keys())
         last_label = self._key_to_l(label_keys[-1])
         last_coeff = self._key_to_l(sorted(self.coeffs.keys())[-1])
-        modes = label_keys[3:]  # ignore piston and tilts in bar plot
+        if last_coeff < 37:
+            modes = label_keys[3:last_coeff]  # ignore piston and tilts in bar plot
+        else:
+            modes = label_keys[3:]
         labels = [self.shortlabel(m) for m in modes]
         if self.normalized:
             coeffs = [self.__getitem__(m).value * noll_coefficient(self._key_to_l(m)) for m in modes]
@@ -1150,7 +1153,10 @@ class ZernikeVector(MutableMapping):
         label_keys = sorted(self.__zernikelabels.keys())
         last_label = self._key_to_l(label_keys[-1])
         last_coeff = self._key_to_l(sorted(self.coeffs.keys())[-1])
-        modes = label_keys[3:]  # ignore piston and tilts in bar plot
+        if last_coeff < 37:
+            modes = label_keys[3:last_coeff]  # ignore piston and tilts in bar plot
+        else:
+            modes = label_keys[3:]
         labels = [self.shortlabel(m) for m in modes]
         if self.normalized:
             coeffs = [np.abs(self.__getitem__(m).value) for m in modes]
@@ -1178,7 +1184,7 @@ class ZernikeVector(MutableMapping):
         cmap = cm.ScalarMappable(col.Normalize(0, max_c), cm.magma_r)
         cmap._A = []  # stupid matplotlib
         ind = np.arange(len(labels))
-        fig, ax = plt.subplots(figsize=(12, 5))
+        fig, ax = plt.subplots(figsize=(11, 5))
         fig.set_label("RMS Wavefront Error per Zernike Mode")
         rects = ax.bar(ind, coeffs, color=cmap.to_rgba(coeffs))
         ax.spines['top'].set_visible(False)
