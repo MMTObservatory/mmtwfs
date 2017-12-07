@@ -320,7 +320,7 @@ mmt_config = {
             "modes": {
                 "binospec": {
                     "label": "Binospec",
-                    "pup_offset": [0.5, 0.0],  # [x, y] pupil offset from center of reference aperture pattern in subap units
+                    "pup_offset": [0.25, 0.0],  # [x, y] pupil offset from center of reference aperture pattern in subap units
                     "ref_zern": {
                         "Z04": 0.0 * u.nm
                     },
@@ -331,7 +331,7 @@ mmt_config = {
                 },
                 "old_binospec": {
                     "label": "Binospec",
-                    "pup_offset": [0.5, 0.0],  # [x, y] pupil offset from center of reference aperture pattern in subap units
+                    "pup_offset": [0.25, 0.0],  # [x, y] pupil offset from center of reference aperture pattern in subap units
                     "ref_zern": {
                         "Z04": 0.0 * u.nm
                     },
