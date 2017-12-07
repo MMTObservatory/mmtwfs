@@ -835,6 +835,14 @@ class WFS(object):
         # make rotated pupil mask
         pup_mask = self.pupil_mask(rotator=rotator)
 
+        # use the inverse influence matrix to calculate slopes due to reference aberrations
+        inverse_infmat = self.modes[mode]['zernike_matrix'][1]
+        ref_zv = self.reference_aberrations(mode, hdr=hdr)
+        zref = ref_zv.array
+        if len(zref) < self.nzern:
+            pad = np.zeros(self.nzern - len(zref))
+            zref = np.hstack((zref, pad))
+
         try:
             slope_results = get_slopes(
                 data,
@@ -850,6 +858,7 @@ class WFS(object):
             ref_mask = slope_results['ref_mask']
             src_mask = slope_results['src_mask']
             figures = slope_results['figures']
+            ref_slopes = -(1. / self.tiltfactor) * np.dot(zref, inverse_infmat).reshape(2, slopes.shape[1])
         except WFSAnalysisFailed as e:
             log.warning(f"Wavefront slope measurement failed: {e}")
             slope_fig = None
@@ -875,10 +884,11 @@ class WFS(object):
         seeing, raw_seeing = self.seeing(mode=mode, sigma=slope_results['spot_sigma'], airmass=airmass)
 
         if plot:
+            sub_slopes = slopes - ref_slopes
             x = aps.positions.transpose()[0][src_mask]
             y = aps.positions.transpose()[1][src_mask]
-            uu = slopes[0][ref_mask]
-            vv = slopes[1][ref_mask]
+            uu = sub_slopes[0][ref_mask]
+            vv = sub_slopes[1][ref_mask]
             norm = wfs_norm(data)
             figures['slopes'].set_label("Aperture Positions and Spot Movement")
             ax = figures['slopes'].axes[0]
@@ -898,6 +908,7 @@ class WFS(object):
         results['seeing'] = seeing
         results['raw_seeing'] = raw_seeing
         results['slopes'] = slopes
+        results['ref_slopes'] = ref_slopes
         results['spots'] = slope_results['spots']
         results['pup_coords'] = coords
         results['apertures'] = aps
