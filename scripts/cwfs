@@ -1,0 +1,250 @@
+#!/usr/bin/env python
+##
+# @package mmtwfs
+# @file cwfs.py
+# @brief main script to run cwfs
+##
+# @authors: Bo Xin & Chuck Claver (LSST); modified by T. E. Pickering (MMTO)
+
+import os
+import sys
+import argparse
+import numpy as np
+
+import astropy.units as u
+from astropy.io import fits
+
+from mmtwfs.zernike import ZernikeVector
+from mmtwfs.wfs import WFSFactory
+
+
+# main function
+def main():
+
+    parser = argparse.ArgumentParser(
+        description='----LLST cwfs (Curvature Wavefront Sensing) code modified for MMTO use----'
+    )
+
+    parser.add_argument(
+        'intra',
+        help='Intra focal image file name (no path). This uses a negative M2 focus offset.'
+    )
+    parser.add_argument(
+        'extra',
+        help='Extra focal image file name (no path). This uses a positive M2 focus offset.'
+    )
+    parser.add_argument(
+        '-codedir',
+        dest='codedir',
+        default='/mmt/cwfs',
+        help='Location of the LSST CWFS code, default=/mmt/cwfs/python'
+    )
+    parser.add_argument(
+        '-imdir',
+        dest='imgDir',
+        default='.',
+        help='Relative or absolute path for input images'
+    )
+    parser.add_argument(
+        '-focoff',
+        dest='focoff',
+        type=float,
+        default=1000.0,
+        help='Magnitude of focus offset applied to M2 in microns, default=1000.0'
+    )
+    parser.add_argument(
+        '-ixy',
+        dest='intra_xy',
+        nargs=2,
+        type=float,
+        default=[0, 0],
+        help='Intra focal field (x,y) in deg, default=[0 0]'
+    )
+    parser.add_argument(
+        '-exy',
+        dest='extra_xy',
+        nargs=2,
+        type=float,
+        default=[0, 0],
+        help='Extra focal field (x,y) in deg, default=[0 0]'
+    )
+    parser.add_argument(
+        '-inst',
+        dest='instruFile',
+        default='mmto',
+        help='instrument parameter file, default=mmto; ".param" is appended automatically'
+    )
+    parser.add_argument(
+        '-a',
+        dest='algoFile',
+        default='exp',
+        help='algorithm parameter file, default=exp, ".algo" is appended automatically'
+    )
+    parser.add_argument(
+        '-m',
+        dest='model',
+        choices=('paraxial', 'onAxis', 'offAxis'),
+        default='onAxis',
+        help='Optical model to be used, default=onAxis'
+    )
+    parser.add_argument(
+        '-o',
+        dest='output',
+        default='cwfs',
+        help='Root of filenames to use for outputs'
+    )
+    parser.add_argument(
+        '-sendm1',
+        dest='sendm1',
+        action='store_true',
+        help='Send force corrections to the primary (M1)'
+    )
+    parser.add_argument(
+        '-sendm2',
+        dest='sendm2',
+        action='store_true',
+        help='Send force corrections to the secondary (M2)'
+    )
+    parser.add_argument(
+        '-thresh',
+        dest='thresh',
+        type=float,
+        default=150.0,
+        help='Amplitude threshold to determine which modes to use in corrective force calculations'
+    )
+    parser.add_argument(
+        '-m1gain',
+        dest='m1gain',
+        type=float,
+        default=0.5,
+        help='Gain factor for calculating M1 corrections'
+    )
+    parser.add_argument(
+        '-m2gain',
+        dest='m2gain',
+        type=float,
+        default=1.,
+        help='Gain factor for calculating M2 corrections'
+    )
+    parser.add_argument(
+        '-v',
+        '--version',
+        action='version',
+        version='%(prog)s 1.0'
+    )
+    parser.add_argument(
+        '-d',
+        dest='debugLevel',
+        type=int,
+        default=0,
+        choices=(-1, 0, 1, 2, 3),
+        help='debug level, -1=quiet, 0=Zernikes, 1=operator, 2=expert, 3=everything, default=0'
+    )
+    args = parser.parse_args()
+
+    if args.debugLevel >= 1:
+        print(args)
+
+    # instatiate F/5 wfs object for calculating corrections from zernike solutions and sending them on
+    wfs = WFSFactory(wfs="f5")
+
+    # configure gains for calculating corrections
+    wfs.m1gain = args.m1gain
+    wfs.m2gain = args.m2gain
+
+    # get location of the LSST code, append it to sys.path, and then do the llst imports
+    sys.path.append(args.codedir)
+    from lsst.cwfs.instrument import Instrument
+    from lsst.cwfs.algorithm import Algorithm
+    from lsst.cwfs.image import Image, readFile
+    from lsst.cwfs.tools import outParam, outZer4Up
+
+    # load intra and extra focal images
+    intraFile, extraFile = args.intra, args.extra
+
+    if args.imgDir:
+        intraFile = os.path.join(args.imgDir, intraFile)
+        extraFile = os.path.join(args.imgDir, extraFile)
+
+    # get rotator angles from each image
+    rots = []
+    for f in [intraFile, extraFile]:
+        h = fits.open(f)
+        hdr = h[-1].header
+        if 'ROT' in hdr:
+            rots.append(hdr['ROT'])
+    if len(rots) > 0:
+        rot = np.array(rots).mean() * u.deg
+    else:
+        print("WARNING: No rotator information in headers. Assuming rotator angle of 0.0")
+        rot = 0.0 * u.deg
+
+    # The pupil rotation in the single-object guider on binospec was determined to be -90 deg.
+    rotation = -90 * u.deg - rot
+
+    I1 = Image(readFile(intraFile), args.intra_xy, Image.INTRA, intraFile)
+    I2 = Image(readFile(extraFile), args.extra_xy, Image.EXTRA, extraFile)
+
+    # load instrument and algorithm parameters
+    inst = Instrument(args.instruFile, I1.sizeinPix)
+
+    # this is a MMTO hack. 0.0 doesn't work, but this will yield an annular zernike solution that is very close to circular.
+    # the MMTO wfs code currently doesn't support annular zernikes for calculating corrections.
+    inst.obscuration = 0.01
+
+    # convert M2 focus offset in microns to meters of focus shift at the instrument focal plane
+    inst.offset = args.focoff * 1.0e-6 * 18.8
+
+    # set up fitting algorithm
+    algo = Algorithm(args.algoFile, inst, args.debugLevel)
+
+    # run it
+    algo.runIt(inst, I1, I2, args.model)
+
+    # output parameters
+    if not(args.output == ''):
+        outParam(args.output + ".param", algo, inst, I1, I2, args.model)
+
+    # convert the LSST zernike array to a ZernikeVector that the mmtwfs code
+    # can handle, then apply necessary derotation to it.
+    zv = ZernikeVector()
+    zv.from_array(algo.zer4UpNm, modestart=4, normalized=True)
+    zv.denormalize()
+    zv.rotate(angle=-rotation)
+    if args.debugLevel >= 0:
+        print(zv)
+
+    # output Zernikes 4 and up
+    if not(args.output == ''):
+        outZer4Up(algo.zer4UpNm, 'nm', args.output + ".raw.lsst.zernikes")
+        zv.save(filename=args.output + ".rot.zernikes")
+
+    # calculate the corrections
+    focus = wfs.calculate_focus(zv)
+    cc_x, cc_y = wfs.calculate_cc(zv)
+    forces, m1focus, zv_masked = wfs.calculate_primary(zv, threshold=args.thresh * u.nm)
+    print("Focus: {0:0.1f}  M1 Focus: {3:0.1f}  CC_X: {1:0.1f}  CC_Y: {2:0.1f}".format(
+            focus,
+            cc_x,
+            cc_y,
+            m1focus
+        )
+    )
+    if args.debugLevel >= 1:
+        print(forces)
+
+    # send corrections to secondary, if applicable
+    if args.sendm2:
+        print("Sending {0:0.1f} focus to secondary...".format(focus))
+        wfs.secondary.focus(focus)
+        print("Sending {0:0.1f}/{1:0.1f} CC_X/CC_Y to secondary...".format(cc_x, cc_y))
+        wfs.secondary.correct_coma(cc_x, cc_y)
+
+    # send corrections to primary, if applicable
+    if args.sendm1:
+        print("Sending forces to cell and {0:0.1f} focus to secondary...".format(m1focus))
+        wfs.telescope.correct_primary(forces, m1focus, filename=args.output + ".forces")
+
+
+if __name__ == "__main__":
+    main()
