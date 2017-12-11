@@ -36,7 +36,7 @@ def main():
     parser.add_argument(
         '-codedir',
         dest='codedir',
-        default='/mmt/cwfs',
+        default='/mmt/cwfs/python',
         help='Location of the LSST CWFS code, default=/mmt/cwfs/python'
     )
     parser.add_argument(
