@@ -10,6 +10,7 @@ import os
 import sys
 import argparse
 import numpy as np
+from pathlib import Path
 
 import astropy.units as u
 from astropy.io import fits
@@ -24,107 +25,123 @@ def main():
     parser = argparse.ArgumentParser(
         description='----LLST cwfs (Curvature Wavefront Sensing) code modified for MMTO use----'
     )
-
     parser.add_argument(
-        'intra',
-        help='Intra focal image file name (no path). This uses a negative M2 focus offset.'
-    )
-    parser.add_argument(
-        'extra',
-        help='Extra focal image file name (no path). This uses a positive M2 focus offset.'
+        'images',
+        metavar="<FITS image>",
+        nargs=2,
+        help='Intra and extra focal image file names (no path). If no focus information, first image is assumed to be intra-focal.'
     )
     parser.add_argument(
         '-codedir',
+        metavar='<CWFS code dir>',
         dest='codedir',
         default='/mmt/cwfs/python',
-        help='Location of the LSST CWFS code, default=/mmt/cwfs/python'
+        help='Location of the LSST CWFS code. Default /mmt/cwfs/python.'
     )
     parser.add_argument(
         '-imdir',
+        metavar='<image dir>',
         dest='imgDir',
         default='.',
-        help='Relative or absolute path for input images'
+        help='Relative or absolute path for input images. Default "./".'
     )
     parser.add_argument(
         '-focoff',
+        metavar='<M2 focus offset>',
         dest='focoff',
         type=float,
         default=1000.0,
-        help='Magnitude of focus offset applied to M2 in microns, default=1000.0'
+        help='Magnitude of focus offset applied to M2 in microns. Default 1000.0 um.'
     )
     parser.add_argument(
         '-ixy',
+        metavar=('<intra x>', '<intra y>'),
         dest='intra_xy',
         nargs=2,
         type=float,
         default=[0, 0],
-        help='Intra focal field (x,y) in deg, default=[0 0]'
+        help='Intra focal field (x,y) in deg. Default [0 0].'
     )
     parser.add_argument(
         '-exy',
+        metavar=('<extra x>', '<extra y>'),
         dest='extra_xy',
         nargs=2,
         type=float,
         default=[0, 0],
-        help='Extra focal field (x,y) in deg, default=[0 0]'
+        help='Extra focal field (x,y) in deg. Default [0 0].'
     )
     parser.add_argument(
-        '-inst',
+        '-i',
+        '--instrument',
+        metavar='<instrument>',
         dest='instruFile',
         default='mmto',
-        help='instrument parameter file, default=mmto; ".param" is appended automatically'
+        help='Instrument parameter file. Default "mmto". ".param" is appended automatically.'
     )
     parser.add_argument(
         '-a',
+        '--algorithm',
+        metavar='<algorithm>',
         dest='algoFile',
         default='exp',
-        help='algorithm parameter file, default=exp, ".algo" is appended automatically'
+        help='Algorithm parameter file. Default "exp". ".algo" is appended automatically.'
     )
     parser.add_argument(
         '-m',
+        '--model',
+        metavar='<model>',
         dest='model',
         choices=('paraxial', 'onAxis', 'offAxis'),
         default='onAxis',
-        help='Optical model to be used, default=onAxis'
+        help='Optical model to be used. Default "onAxis".'
     )
     parser.add_argument(
         '-o',
+        '--output',
+        metavar='<output file root>',
         dest='output',
         default='cwfs',
-        help='Root of filenames to use for outputs'
+        help='Root of filenames to use for outputs. Default "cwfs".'
     )
     parser.add_argument(
-        '-sendm1',
+        '-m1',
+        '--sendm1',
         dest='sendm1',
         action='store_true',
         help='Send force corrections to the primary (M1)'
     )
     parser.add_argument(
-        '-sendm2',
+        '-m2',
+        '--sendm2',
         dest='sendm2',
         action='store_true',
         help='Send force corrections to the secondary (M2)'
     )
     parser.add_argument(
         '-thresh',
+        '--threshold',
+        metavar='<threshold>',
         dest='thresh',
         type=float,
         default=150.0,
-        help='Amplitude threshold to determine which modes to use in corrective force calculations'
+        help='Amplitude threshold to determine which modes to use in corrective force calculations. Default 150 nm.'
     )
     parser.add_argument(
-        '-m1gain',
+        '--m1gain',
+        metavar='<M1 gain>',
         dest='m1gain',
         type=float,
-        default=0.5,
-        help='Gain factor for calculating M1 corrections'
+        default=1.0,
+        help='Gain factor for calculating M1 corrections. Default 1.0.'
     )
     parser.add_argument(
-        '-m2gain',
+        '--m2gain',
+        metavar='<M2 gain>',
         dest='m2gain',
         type=float,
-        default=1.,
-        help='Gain factor for calculating M2 corrections'
+        default=1.0,
+        help='Gain factor for calculating M2 corrections. Default 1.0.'
     )
     parser.add_argument(
         '-v',
@@ -134,6 +151,8 @@ def main():
     )
     parser.add_argument(
         '-d',
+        '--debug',
+        metavar='<debug level>',
         dest='debugLevel',
         type=int,
         default=0,
@@ -159,31 +178,48 @@ def main():
     from lsst.cwfs.image import Image, readFile
     from lsst.cwfs.tools import outParam, outZer4Up
 
-    # load intra and extra focal images
-    intraFile, extraFile = args.intra, args.extra
-
-    if args.imgDir:
-        intraFile = os.path.join(args.imgDir, intraFile)
-        extraFile = os.path.join(args.imgDir, extraFile)
-
-    # get rotator angles from each image
+    # get rotator and focus values from the headers, if available
     rots = []
-    for f in [intraFile, extraFile]:
-        h = fits.open(f)
+    focusvals = []
+    images = args.images
+    for image in images:
+        if args.imgDir:
+            image = os.path.join(args.imgDir, image)
+        h = fits.open(image)
         hdr = h[-1].header
         if 'ROT' in hdr:
             rots.append(hdr['ROT'])
+        if 'FOCUS' in hdr:
+            focusvals.append(hdr['FOCUS'])
+
     if len(rots) > 0:
         rot = np.array(rots).mean() * u.deg
+        print(f"Using rotator angle of {rot.round(2)}.")
     else:
-        print("WARNING: No rotator information in headers. Assuming rotator angle of 0.0")
+        print("WARNING: No rotator information in headers. Assuming rotator angle of 0.0.")
         rot = 0.0 * u.deg
+
+    if len(focusvals) == 2:
+        focusvals = np.array(focusvals)
+        intraFile = Path(images[np.argmin(focusvals)])
+        extraFile = Path(images[np.argmax(focusvals)])
+        focoff = focusvals.max() - focusvals.mean()
+    else:
+        focoff = args.focoff
+        intraFile = Path(images[0])
+        extraFile = Path(images[1])
+        print(f"WARNING: No focus information in image headers. Assuming M2 focus offset of {focoff} um.")
+
+    print(f"\t Intra-focal image: {intraFile.name}")
+    print(f"\t Extra-focal image: {extraFile.name}")
 
     # The pupil rotation in the single-object guider on binospec was determined to be -90 deg.
     rotation = -90 * u.deg - rot
 
-    I1 = Image(readFile(intraFile), args.intra_xy, Image.INTRA, intraFile)
-    I2 = Image(readFile(extraFile), args.extra_xy, Image.EXTRA, extraFile)
+    print(f"Total pupil rotation: {rotation.round(2)}")
+
+    I1 = Image(readFile(str(intraFile)), args.intra_xy, Image.INTRA, intraFile)
+    I2 = Image(readFile(str(extraFile)), args.extra_xy, Image.EXTRA, extraFile)
 
     # load instrument and algorithm parameters
     inst = Instrument(args.instruFile, I1.sizeinPix)
@@ -193,7 +229,7 @@ def main():
     inst.obscuration = 0.01
 
     # convert M2 focus offset in microns to meters of focus shift at the instrument focal plane
-    inst.offset = args.focoff * 1.0e-6 * 18.8
+    inst.offset = focoff * 1.0e-6 * 18.8
 
     # set up fitting algorithm
     algo = Algorithm(args.algoFile, inst, args.debugLevel)
