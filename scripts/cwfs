@@ -187,6 +187,10 @@ def main():
             image = os.path.join(args.imgDir, image)
         h = fits.open(image)
         hdr = h[-1].header
+        data = h[-1].data
+        if len(h) > 1:
+            f = fits.PrimaryHDU(data, hdr)
+            f.writeto(image, overwrite=True)
         if 'ROT' in hdr:
             rots.append(hdr['ROT'])
         if 'FOCUS' in hdr:
