@@ -170,7 +170,9 @@ def main():
 
     # instatiate F/5 wfs object for calculating corrections from zernike solutions and sending them on
     wfs = WFSFactory(wfs="f5", plot=False)
-
+    if args.sendm1 or args.sendm2:
+        wfs.connect()
+    
     # configure gains for calculating corrections
     wfs.m1gain = args.m1gain
     wfs.m2gain = args.m2gain
