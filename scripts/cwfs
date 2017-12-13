@@ -195,8 +195,10 @@ def main():
         if len(h) > 1 or data.shape == (516, 532):
             print(f"Found raw Binospec SOG image. Trimming and rewriting {image} as single extension.")
             data = data[259-128:259+128, 295-128:295+128]
-            f = fits.PrimaryHDU(data, hdr)
-            f.writeto(image, overwrite=True)
+            data = np.flipud(data)
+
+        f = fits.PrimaryHDU(data, hdr)
+        f.writeto(image, overwrite=True)
         if 'ROT' in hdr:
             rots.append(hdr['ROT'])
         if 'FOCUS' in hdr:
