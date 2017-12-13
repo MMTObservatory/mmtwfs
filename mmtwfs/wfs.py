@@ -178,7 +178,8 @@ def mk_reference(data, xoffset=0, yoffset=0, pup_inner=45., pup_outer=175., fwhm
     """
     data = check_wfsdata(data)
     spots, wfsfind_fig = wfsfind(data, fwhm=fwhm, threshold=threshold, plot=plot)
-    wfsfind_fig.set_label("Reference Image")
+    if plot:
+        wfsfind_fig.set_label("Reference Image")
     xcen = spots['xcentroid'].mean()
     ycen = spots['ycentroid'].mean()
     spacing = grid_spacing(data, spots)
@@ -614,7 +615,12 @@ def WFSFactory(wfs="f5", config={}, **kwargs):
     if wfs not in wfses:
         raise WFSConfigException(value="Specified WFS, %s, not valid or not implemented." % wfs)
 
-    wfs_cls = wfs_map[wfs](config=config)
+    if 'plot' in config:
+        plot = config['plot']
+    else:
+        plot = True
+
+    wfs_cls = wfs_map[wfs](config=config, plot=plot)
     return wfs_cls
 
 
@@ -622,12 +628,12 @@ class WFS(object):
     """
     Defines configuration pattern and methods common to all WFS systems
     """
-    def __init__(self, config={}):
+    def __init__(self, config={}, plot=True, **kwargs):
         key = self.__class__.__name__.lower()
         self.__dict__.update(merge_config(mmt_config['wfs'][key], config))
         self.telescope = MMT(secondary=self.secondary)
         self.secondary = self.telescope.secondary
-
+        self.plot = plot
         self.connected = False
 
         # this factor calibrates spot motion in pixels to nm of wavefront error
@@ -644,7 +650,7 @@ class WFS(object):
                 pup_inner=self.pup_inner,
                 pup_outer=self.pup_size / 2.,
                 init_scale=self.init_scale,
-                plot=True
+                plot=self.plot
             )
 
         # now assign 'reference' for each mode so that it can be accessed consistently in all cases
@@ -664,7 +670,7 @@ class WFS(object):
                     pup_inner=self.pup_inner,
                     pup_outer=self.pup_size / 2.,
                     init_scale=self.init_scale,
-                    plot=True
+                    plot=self.plot
                 )
             else:
                 self.modes[mode]['reference'] = reference
@@ -806,6 +812,7 @@ class WFS(object):
         to perform the aperture placement and spot centroiding.
         """
         data, hdr = self.process_image(fitsfile)
+        plot = plot and self.plot
 
         # flip data up/down if we need to. only binospec needs to currently.
         if flipud or self.get_flipud(mode=mode):
@@ -933,6 +940,7 @@ class WFS(object):
         """
         Use results from self.measure_slopes() to fit a set of zernike polynomials to the wavefront shape.
         """
+        plot = plot and self.plot
         if slope_results['slopes'] is not None:
             results = {}
             mode = slope_results['mode']
@@ -1100,8 +1108,8 @@ class F9(WFS):
     """
     Defines configuration and methods specific to the F/9 WFS system
     """
-    def __init__(self, config={}):
-        super(F9, self).__init__(config=config)
+    def __init__(self, config={}, plot=True):
+        super(F9, self).__init__(config=config, plot=plot)
 
         self.connected = False
         self.sock = None
@@ -1135,8 +1143,8 @@ class F5(WFS):
     """
     Defines configuration and methods specific to the F/5 WFS systems
     """
-    def __init__(self, config={}):
-        super(F5, self).__init__(config=config)
+    def __init__(self, config={}, plot=True):
+        super(F5, self).__init__(config=config, plot=plot)
 
         self.connected = False
         self.sock = None
