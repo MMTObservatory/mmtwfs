@@ -45,7 +45,7 @@ def test_check_wfsdata():
 
 def test_wfses():
     for s in mmt_config['wfs']:
-        wfs = WFSFactory(wfs=s, test="foo")
+        wfs = WFSFactory(wfs=s, plot=True, test="foo")
         assert(wfs.test == "foo")
 
 def test_bogus_wfs():
