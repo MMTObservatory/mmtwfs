@@ -194,7 +194,7 @@ def main():
         data = h[-1].data
         if len(h) > 1 or data.shape == (516, 532):
             print(f"Found raw Binospec SOG image. Trimming and rewriting {image} as single extension.")
-            data = data[253-128:253+128, 296-128:296+128]
+            data = data[259-128:259+128, 295-128:295+128]
             f = fits.PrimaryHDU(data, hdr)
             f.writeto(image, overwrite=True)
         if 'ROT' in hdr:
@@ -226,8 +226,8 @@ def main():
     print(f"\t Intra-focal image: {intraFile.name}")
     print(f"\t Extra-focal image: {extraFile.name}")
 
-    # The pupil rotation in the single-object guider on binospec was determined to be -90 deg.
-    rotation = -90 * u.deg - rot
+    # The pupil rotation in the single-object guider on binospec was determined to be 0 deg.
+    rotation = 0 * u.deg - rot
 
     print(f"Total pupil rotation: {rotation.round(2)}")
 
