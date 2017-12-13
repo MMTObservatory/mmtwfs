@@ -12,6 +12,10 @@ import argparse
 import numpy as np
 from pathlib import Path
 
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
 import astropy.units as u
 from astropy.io import fits
 
@@ -101,7 +105,7 @@ def main():
         '--output',
         metavar='<output file root>',
         dest='output',
-        default='cwfs',
+        default='',
         help='Root of filenames to use for outputs. Default "cwfs".'
     )
     parser.add_argument(
@@ -165,7 +169,7 @@ def main():
         print(args)
 
     # instatiate F/5 wfs object for calculating corrections from zernike solutions and sending them on
-    wfs = WFSFactory(wfs="f5")
+    wfs = WFSFactory(wfs="f5", plot=False)
 
     # configure gains for calculating corrections
     wfs.m1gain = args.m1gain
@@ -188,13 +192,18 @@ def main():
         h = fits.open(image)
         hdr = h[-1].header
         data = h[-1].data
-        if len(h) > 1:
+        if len(h) > 1 or data.shape == (516, 532):
+            print(f"Found raw Binospec SOG image. Trimming and rewriting {image} as single extension.")
+            data = data[253-128:253+128, 296-128:296+128]
             f = fits.PrimaryHDU(data, hdr)
             f.writeto(image, overwrite=True)
         if 'ROT' in hdr:
             rots.append(hdr['ROT'])
         if 'FOCUS' in hdr:
             focusvals.append(hdr['FOCUS'])
+
+    if args.output == '':
+        args.output = image
 
     if len(rots) > 0:
         rot = np.array(rots).mean() * u.deg
@@ -242,9 +251,11 @@ def main():
     algo.runIt(inst, I1, I2, args.model)
 
     # output parameters
-    if not(args.output == ''):
-        outParam(args.output + ".param", algo, inst, I1, I2, args.model)
+    outParam(args.output + ".param", algo, inst, I1, I2, args.model)
 
+    # save wavefront image
+    plt.imshow(algo.Wconverge, origin='lower')
+    plt.savefig(args.output + ".pdf")
     # convert the LSST zernike array to a ZernikeVector that the mmtwfs code
     # can handle, then apply necessary derotation to it.
     zv = ZernikeVector()
@@ -255,9 +266,9 @@ def main():
         print(zv)
 
     # output Zernikes 4 and up
-    if not(args.output == ''):
-        outZer4Up(algo.zer4UpNm, 'nm', args.output + ".raw.lsst.zernikes")
-        zv.save(filename=args.output + ".rot.zernikes")
+    outZer4Up(algo.zer4UpNm, 'nm', args.output + ".raw.lsst.zernikes")
+    zv.save(filename=args.output + ".rot.zernikes")
+    zv.fringe_bar_chart().savefig(args.output + ".zernikes.pdf")
 
     # calculate the corrections
     focus = wfs.calculate_focus(zv)
