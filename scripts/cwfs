@@ -9,6 +9,7 @@
 import os
 import sys
 import argparse
+import time
 import numpy as np
 from pathlib import Path
 
@@ -172,7 +173,7 @@ def main():
     wfs = WFSFactory(wfs="f5", plot=False)
     if args.sendm1 or args.sendm2:
         wfs.connect()
-    
+
     # configure gains for calculating corrections
     wfs.m1gain = args.m1gain
     wfs.m2gain = args.m2gain
@@ -299,6 +300,7 @@ def main():
     if args.sendm1:
         print("Sending forces to cell and {0:0.1f} focus to secondary...".format(m1focus))
         wfs.telescope.correct_primary(forces, m1focus, filename=args.output + ".forces")
+        time.sleep(5)
 
 
 if __name__ == "__main__":
