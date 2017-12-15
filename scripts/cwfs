@@ -23,6 +23,11 @@ from astropy.io import fits
 from mmtwfs.zernike import ZernikeVector
 from mmtwfs.wfs import WFSFactory
 
+import logging
+
+
+log = logging.getLogger('CWFS')
+log.setLevel(logging.INFO)
 
 # main function
 def main():
@@ -167,7 +172,7 @@ def main():
     args = parser.parse_args()
 
     if args.debugLevel >= 1:
-        print(args)
+        log.info(args)
 
     # instatiate F/5 wfs object for calculating corrections from zernike solutions and sending them on
     wfs = WFSFactory(wfs="f5", plot=False)
@@ -196,7 +201,7 @@ def main():
         hdr = h[-1].header
         data = h[-1].data
         if len(h) > 1 or data.shape == (516, 532):
-            print(f"Found raw Binospec SOG image. Trimming and rewriting {image} as single extension.")
+            log.info(f"Found raw Binospec SOG image. Trimming and rewriting {image} as single extension.")
             data = data[259-128:259+128, 295-128:295+128]
             data = np.flipud(data)
 
@@ -212,9 +217,9 @@ def main():
 
     if len(rots) > 0:
         rot = np.array(rots).mean() * u.deg
-        print(f"Using rotator angle of {rot.round(2)}.")
+        log.info(f"Using rotator angle of {rot.round(2)}.")
     else:
-        print("WARNING: No rotator information in headers. Assuming rotator angle of 0.0.")
+        log.warning("WARNING: No rotator information in headers. Assuming rotator angle of 0.0.")
         rot = 0.0 * u.deg
 
     if len(focusvals) == 2:
@@ -226,18 +231,18 @@ def main():
         focoff = args.focoff
         intraFile = Path(images[0])
         extraFile = Path(images[1])
-        print(f"WARNING: No focus information in image headers. Assuming M2 focus offset of {focoff} um.")
+        log.warning(f"WARNING: No focus information in image headers. Assuming M2 focus offset of {focoff} um.")
 
-    print(f"\t Intra-focal image: {intraFile.name}")
-    print(f"\t Extra-focal image: {extraFile.name}")
+    log.info(f"\t Intra-focal image: {intraFile.name}")
+    log.info(f"\t Extra-focal image: {extraFile.name}")
 
     # The pupil rotation in the single-object guider on binospec was determined to be 0 deg.
     rotation = 0 * u.deg - rot
 
-    print(f"Total pupil rotation: {rotation.round(2)}")
+    log.info(f"Total pupil rotation: {rotation.round(2)}")
 
-    I1 = Image(readFile(str(intraFile)), args.intra_xy, Image.INTRA, intraFile)
-    I2 = Image(readFile(str(extraFile)), args.extra_xy, Image.EXTRA, extraFile)
+    I1 = Image(readFile(str(intraFile)), args.intra_xy, Image.INTRA)
+    I2 = Image(readFile(str(extraFile)), args.extra_xy, Image.EXTRA)
 
     # load instrument and algorithm parameters
     inst = Instrument(args.instruFile, I1.sizeinPix)
@@ -268,7 +273,7 @@ def main():
     zv.denormalize()
     zv.rotate(angle=-rotation)
     if args.debugLevel >= 0:
-        print(zv)
+        log.info(zv)
 
     # output Zernikes 4 and up
     outZer4Up(algo.zer4UpNm, 'nm', args.output + ".raw.lsst.zernikes")
@@ -279,7 +284,7 @@ def main():
     focus = wfs.calculate_focus(zv)
     cc_x, cc_y = wfs.calculate_cc(zv)
     forces, m1focus, zv_masked = wfs.calculate_primary(zv, threshold=args.thresh * u.nm)
-    print("Focus: {0:0.1f}  M1 Focus: {3:0.1f}  CC_X: {1:0.1f}  CC_Y: {2:0.1f}".format(
+    log.info("Focus: {0:0.1f}  M1 Focus: {3:0.1f}  CC_X: {1:0.1f}  CC_Y: {2:0.1f}".format(
             focus,
             cc_x,
             cc_y,
@@ -287,18 +292,18 @@ def main():
         )
     )
     if args.debugLevel >= 1:
-        print(forces)
+        log.info(forces)
 
     # send corrections to secondary, if applicable
     if args.sendm2:
-        print("Sending {0:0.1f} focus to secondary...".format(focus))
+        log.info("Sending {0:0.1f} focus to secondary...".format(focus))
         wfs.secondary.focus(focus)
-        print("Sending {0:0.1f}/{1:0.1f} CC_X/CC_Y to secondary...".format(cc_x, cc_y))
+        log.info("Sending {0:0.1f}/{1:0.1f} CC_X/CC_Y to secondary...".format(cc_x, cc_y))
         wfs.secondary.correct_coma(cc_x, cc_y)
 
     # send corrections to primary, if applicable
     if args.sendm1:
-        print("Sending forces to cell and {0:0.1f} focus to secondary...".format(m1focus))
+        log.info("Sending forces to cell and {0:0.1f} focus to secondary...".format(m1focus))
         wfs.telescope.correct_primary(forces, m1focus, filename=args.output + ".forces")
         time.sleep(10)
 
