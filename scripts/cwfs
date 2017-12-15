@@ -279,7 +279,7 @@ def main():
     zv.denormalize()
     zv.rotate(angle=-rotation)
     if args.debugLevel >= 0:
-        log.info("\n" + zv)
+        log.info("\n" + repr(zv))
 
     # output Zernikes 4 and up
     outZer4Up(algo.zer4UpNm, 'nm', args.output + ".raw.lsst.zernikes")
