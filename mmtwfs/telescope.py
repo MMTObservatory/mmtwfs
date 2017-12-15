@@ -204,6 +204,7 @@ class MMT(object):
         def_mask.extend(mask)
         mask = list(set(def_mask))
         zv_masked = zv.copy()
+        zv_masked.denormalize()
         for k in mask:
             zv_masked.ignore(k)
 

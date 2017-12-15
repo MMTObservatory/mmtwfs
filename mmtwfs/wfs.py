@@ -1004,20 +1004,23 @@ class WFS(object):
         terms in 'zv' to use in the force calculations. Any terms with normalized amplitude less than threshold will
         not be used in the force calculation. In addition, individual terms can be forced to be masked.
         """
-        zv.normalize()
+        zv.denormalize()
         zv_masked = ZernikeVector()
+        zv_norm = zv.copy()
+        zv_norm.normalize()
 
-        log.info(f"zv {zv} thresh: {threshold} mask {mask}")
+        log.info(f"thresh: {threshold} mask {mask}")
 
         for z in zv:
-            if abs(zv[z]) >= threshold:
+            if abs(zv_norm[z]) >= threshold:
                 zv_masked[z] = zv[z]
                 log.info(f"{z}: Good")
             else:
                 log.info(f"{z}: Bad")
         zv_masked.denormalize()  # need to assure we're using fringe coeffs
+        log.info(f"\nInput masked: {zv_masked}")
         forces, m1focus, zv_allmasked = self.telescope.calculate_primary_corrections(zv=zv_masked, mask=mask, gain=self.m1_gain)
-        log.info(f"All masked: {zv_allmasked}")
+        log.info(f"\nAll masked: {zv_allmasked}")
         return forces, m1focus, zv_allmasked
 
     def calculate_focus(self, zv):
