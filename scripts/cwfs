@@ -31,7 +31,7 @@ log.setLevel(logging.INFO)
 
 ch = logging.StreamHandler(sys.stdout)
 ch.setLevel(logging.DEBUG)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
 ch.setFormatter(formatter)
 log.addHandler(ch)
 
@@ -279,7 +279,7 @@ def main():
     zv.denormalize()
     zv.rotate(angle=-rotation)
     if args.debugLevel >= 0:
-        log.info(zv)
+        log.info("\n" + zv)
 
     # output Zernikes 4 and up
     outZer4Up(algo.zer4UpNm, 'nm', args.output + ".raw.lsst.zernikes")
