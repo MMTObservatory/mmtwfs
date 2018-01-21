@@ -1009,18 +1009,18 @@ class WFS(object):
         zv_norm = zv.copy()
         zv_norm.normalize()
 
-        log.info(f"thresh: {threshold} mask {mask}")
+        log.debug(f"thresh: {threshold} mask {mask}")
 
         for z in zv:
             if abs(zv_norm[z]) >= threshold:
                 zv_masked[z] = zv[z]
-                log.info(f"{z}: Good")
+                log.debug(f"{z}: Good")
             else:
-                log.info(f"{z}: Bad")
+                log.debug(f"{z}: Bad")
         zv_masked.denormalize()  # need to assure we're using fringe coeffs
-        log.info(f"\nInput masked: {zv_masked}")
+        log.debug(f"\nInput masked: {zv_masked}")
         forces, m1focus, zv_allmasked = self.telescope.calculate_primary_corrections(zv=zv_masked, mask=mask, gain=self.m1_gain)
-        log.info(f"\nAll masked: {zv_allmasked}")
+        log.debug(f"\nAll masked: {zv_allmasked}")
         return forces, m1focus, zv_allmasked
 
     def calculate_focus(self, zv):
@@ -1235,7 +1235,7 @@ class Binospec(F5):
         focal_r = (guide_r / self.secondary.plate_scale).to(u.deg)
         focal_phi = guide_phi + rot + 180. * u.deg
 
-        log.info(f"guide_phi: {guide_phi.to(u.rad)} rot: {rot}")
+        log.debug(f"guide_phi: {guide_phi.to(u.rad)} rot: {rot}")
 
         return focal_r, focal_phi
 
