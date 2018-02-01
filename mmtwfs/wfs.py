@@ -1071,14 +1071,28 @@ class WFS(object):
 
         return az.round(3), el.round(3)
 
+    def clear_m1_corrections(self):
+        """
+        Clear corrections applied to the primary mirror. This includes the 'm1spherical' offsets sent to the secondary.
+        """
+        log.info("Clearing WFS corrections from M1 and m1spherical offsets from M2.")
+        clear_forces, clear_m1focus = self.telescope.clear_forces()
+        return clear_forces, clear_m1focus
+
+    def clear_m2_corrections(self):
+        """
+        Clear corrections sent to the secondary mirror, specifically the 'wfs' offsets.
+        """
+        log.info("Clearing WFS offsets from M2's hexapod.")
+        cmds = self.secondary.clear_wfs()
+        return cmds
+
     def clear_corrections(self):
         """
         Clear all applied WFS corrections
         """
-        log.info("Clearing WFS corrections from primary and secondary...")
-        clear_forces, clear_m1focus = self.telescope.clear_forces()
-        cmds = self.secondary.clear_wfs()
-        return clear_forces, clear_m1focus
+        self.clear_m1_corrections()
+        self.clear_m2_corrections()
 
     def connect(self):
         """
