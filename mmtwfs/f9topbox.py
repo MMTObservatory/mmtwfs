@@ -21,7 +21,7 @@ class CompMirror(object):
     """
     def __init__(self):
         # get host/port for topbox communication
-        self.host, self.port = srvlookup("lampbox")
+        self.host, self.port = srvlookup("_lampbox._tcp.mmto.arizona.edu")
 
         # use this boolean to determine if commands are actually to be sent
         self.connected = False
