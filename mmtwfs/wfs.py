@@ -38,6 +38,7 @@ from ccdproc.utils.slices import slice_from_string
 from .utils import srvlookup
 from .config import recursive_subclasses, merge_config, mmt_config
 from .telescope import MMT
+from .f9topbox import CompMirror
 from .zernike import zernike_influence_matrix, ZernikeVector, cart2pol, pol2cart
 from .custom_exceptions import WFSConfigException, WFSAnalysisFailed
 
@@ -1114,12 +1115,6 @@ class WFS(object):
         self.telescope.disconnect()
         self.secondary.disconnect()
         self.connected = False
-        if self.sock:
-            try:
-                self.sock.close()
-                self.sock = None
-            except Exception as e:
-                log.error(f"Error closing connection to topbox server: {e}")
 
 
 class F9(WFS):
@@ -1130,10 +1125,24 @@ class F9(WFS):
         super(F9, self).__init__(config=config, plot=plot)
 
         self.connected = False
-        self.sock = None
 
-        # get host/port to use for topbox communication
-        self.host, self.port = srvlookup(self.lampsrv)
+        # set up CompMirror object
+        self.compmirror = CompMirror()
+
+    def connect(self):
+        """
+        Run parent connect() method and then connect to the topbox if we can connect to the rest.
+        """
+        super(F9, self).connect()
+        if self.connected:
+            self.compmirror.connect()
+
+    def disconnect(self):
+        """
+        Run parent disconnect() method and then disconnect the topbox
+        """
+        super(F9, self).disconnect()
+        self.compmirror.disconnect()
 
 
 class NewF9(F9):
