@@ -12,7 +12,7 @@ import logging.handlers
 from .utils import srvlookup
 
 log = logging.getLogger("F/9 TopBox")
-log.setLevel(logging.DEBUG)
+log.setLevel(logging.INFO)
 
 
 class CompMirror(object):
@@ -131,9 +131,9 @@ class CompMirror(object):
         """
         status = self.get_mirror()
         if status == "in":
-            self.mirror_out()
+            status = self.mirror_out()
         elif status == "out":
-            self.mirror_in()
+            status = self.mirror_in()
         else:
             log.warning(f"Cannot toggle comparison mirror status, {status}.")
         return status
