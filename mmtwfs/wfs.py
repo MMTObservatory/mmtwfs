@@ -1091,8 +1091,9 @@ class WFS(object):
         """
         Clear all applied WFS corrections
         """
-        self.clear_m1_corrections()
-        self.clear_m2_corrections()
+        forces, m1focus = self.clear_m1_corrections()
+        cmds = self.clear_m2_corrections()
+        return forces, m1focus, cmds
 
     def connect(self):
         """

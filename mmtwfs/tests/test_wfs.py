@@ -162,6 +162,6 @@ def test_recenter():
 
 def test_clear():
     wfs = WFSFactory(wfs='f5')
-    clear_forces, clear_m1f = wfs.clear_corrections()
+    clear_forces, clear_m1f, cmds = wfs.clear_corrections()
     assert(clear_m1f == 0.0)
     assert(np.allclose(clear_forces['force'], 0.0))
