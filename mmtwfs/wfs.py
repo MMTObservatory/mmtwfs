@@ -1208,7 +1208,7 @@ class F5(WFS):
             z_offaxis[k] = np.interp(field_r.to(u.deg).value, self.aberr_table['field_r'], self.aberr_table[k]) * u.um
 
         # now rotate the off-axis aberrations
-        z_offaxis.rotate(angle=field_phi)
+        z_offaxis.rotate(angle=field_phi - 90. * u.deg)
 
         z = z_default + z_offaxis
 
