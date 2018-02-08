@@ -107,7 +107,7 @@ def test_bino_analysis():
     results = wfs.measure_slopes(test_file, mode="old_binospec")
     zresults = wfs.fit_wavefront(results)
     testval = int(zresults['zernike']['Z10'].value)
-    assert((testval > 0) & (testval < 10))
+    assert((testval > -40) & (testval < -10))
 
 @cleanup
 def test_newbino_analysis():
@@ -116,7 +116,7 @@ def test_newbino_analysis():
     results = wfs.measure_slopes(test_file, mode="binospec")
     zresults = wfs.fit_wavefront(results)
     testval = int(zresults['zernike']['Z10'].value)
-    assert((testval > 330) & (testval < 340))
+    assert((testval > 240) & (testval < 250))
 
 @cleanup
 def test_too_few_spots():

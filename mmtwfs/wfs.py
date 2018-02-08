@@ -1245,6 +1245,22 @@ class Binospec(F5):
         else:
             return True
 
+    def process_image(self, fitsfile):
+        """
+        Process the image to make it suitable for accurate wavefront analysis.  Steps include nuking cosmic rays,
+        subtracting background, handling overscan regions, etc.
+        """
+        rawdata, hdr = check_wfsdata(fitsfile, header=True)
+
+        cr_mask, data = detect_cosmics(rawdata, sigclip=15., niter=5, cleantype='medmask', psffwhm=10.)
+
+        # calculate the background and subtract it
+        bkg_estimator = photutils.MedianBackground()
+        bkg = photutils.Background2D(data, (50, 50), filter_size=(15, 15), bkg_estimator=bkg_estimator)
+        data -= bkg.background
+
+        return data, hdr
+
     def focal_plane_position(self, hdr):
         """
         Transform from the Binospec guider coordinate system to MMTO focal plane coordinates.
