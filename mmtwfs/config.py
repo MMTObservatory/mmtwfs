@@ -310,17 +310,17 @@ mmt_config = {
             "find_thresh": 5.0,
             "rotation": 180. * u.deg,  # per j. kansky 9/26/2017
             "pix_size": 0.156 * u.arcsec,
-            "pup_size": 290,  # pixels
+            "pup_size": 295,  # pixels
             "pup_inner": 50,
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
-            "nzern": 21,  # number of zernike modes to fit
+            "nzern": 36,  # number of zernike modes to fit
             "init_scale": 1.0,
             "aberr_table_file": pkg_resources.resource_filename(__name__, os.path.join("data", "f5zernfield_flatsurface.tab")),
             "modes": {
                 "binospec": {
                     "label": "Binospec",
-                    "pup_offset": [-0.5, 0.0],  # [x, y] pupil offset from center of reference aperture pattern in subap units
+                    "pup_offset": [0.0, 0.0],  # [x, y] pupil offset from center of reference aperture pattern in subap units
                     "ref_zern": {
                         "Z04": 0.0 * u.nm
                     },

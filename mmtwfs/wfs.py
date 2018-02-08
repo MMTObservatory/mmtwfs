@@ -22,7 +22,7 @@ import matplotlib.cm as cm
 from skimage import feature
 from skimage.morphology import reconstruction
 from skimage.transform import rotate as imrotate
-from scipy import stats, ndimage, optimize
+from scipy import ndimage, optimize
 
 import astropy.units as u
 from astropy.io import fits
@@ -1207,7 +1207,7 @@ class F5(WFS):
             k = "Z%02d" % i
             z_offaxis[k] = np.interp(field_r.to(u.deg).value, self.aberr_table['field_r'], self.aberr_table[k]) * u.um
 
-        # now rotate the off-axis aberrations
+        # remove the 90 degree offset between the MMT and zernike conventions and then rotate the offaxis aberrations
         z_offaxis.rotate(angle=field_phi - 90. * u.deg)
 
         z = z_default + z_offaxis
@@ -1219,6 +1219,20 @@ class Binospec(F5):
     Defines configuration and methods specific to the Binospec WFS system. Binospec uses the same aberration table
     as the F5 system so we inherit from that.
     """
+    def __init__(self, config={}, plot=True):
+        super(Binospec, self).__init__(config=config, plot=plot)
+
+        # the binospec reference images use a more diffuse source so the spot fwhm's in them are too big.
+        # have several examples of on-sky data where the spots from the stars are smaller than the reference spots.
+        # for now, we'll bodge the fwhm values to be what they should be theoretically. these are close to the fwhm's
+        # measured in MMIRS reference images and the MMIRS systems are nearly identical optically to binospec's.
+        fwhm = 2.0
+        sigma = stats.funcs.gaussian_fwhm_to_sigma * fwhm
+        self.modes['binospec']['reference']['fwhm'] = fwhm
+        self.modes['old_binospec']['reference']['fwhm'] = fwhm
+        self.modes['binospec']['reference']['sigma'] = sigma
+        self.modes['old_binospec']['reference']['sigma'] = sigma
+
     def get_flipud(self, mode):
         """
         Method to determine if the WFS image needs to be flipped up/down
@@ -1257,7 +1271,7 @@ class Binospec(F5):
 
         # transform radius in guider coords to degrees in focal plane
         focal_r = (guide_r / self.secondary.plate_scale).to(u.deg)
-        focal_phi = guide_phi + rot + 180. * u.deg
+        focal_phi = guide_phi + rot + self.rotation
 
         log.debug(f"guide_phi: {guide_phi.to(u.rad)} rot: {rot}")
 
@@ -1306,6 +1320,6 @@ class MMIRS(F5):
 
         # transform radius in guider coords to degrees in focal plane
         focal_r = (0.0016922 * guide_r - 4.60789e-9 * guide_r**3 - 8.111307e-14 * guide_r**5) * u.deg
-        focal_phi = guide_phi + rot
+        focal_phi = guide_phi + rot + self.rotation
 
         return focal_r, focal_phi
