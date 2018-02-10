@@ -6,12 +6,6 @@ Classes and utilities for operating the wavefront sensors of the MMTO and analyz
 """
 
 import warnings
-import socket
-
-import logging
-import logging.handlers
-log = logging.getLogger("WFS")
-log.setLevel(logging.INFO)
 
 import numpy as np
 import photutils
@@ -20,8 +14,6 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 
 from skimage import feature
-from skimage.morphology import reconstruction
-from skimage.transform import rotate as imrotate
 from scipy import ndimage, optimize
 
 import astropy.units as u
@@ -35,12 +27,16 @@ from astroscrappy import detect_cosmics
 
 from ccdproc.utils.slices import slice_from_string
 
-from .utils import srvlookup
 from .config import recursive_subclasses, merge_config, mmt_config
 from .telescope import MMT
 from .f9topbox import CompMirror
 from .zernike import zernike_influence_matrix, ZernikeVector, cart2pol, pol2cart
 from .custom_exceptions import WFSConfigException, WFSAnalysisFailed
+
+import logging
+import logging.handlers
+log = logging.getLogger("WFS")
+log.setLevel(logging.INFO)
 
 
 def wfs_norm(data, interval=visualization.ZScaleInterval(contrast=0.05), stretch=visualization.LinearStretch()):
@@ -135,117 +131,6 @@ def wfsfind(data, fwhm=7.0, threshold=5.0, plot=True, ap_radius=5.0, std=None):
         ax.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
         apertures.plot(color='red', lw=1.5, alpha=0.5, ax=ax)
     return sources, fig
-
-
-def mk_reference(data, xoffset=0, yoffset=0, pup_inner=45., pup_outer=175., fwhm=4.0, threshold=30.0, init_scale=1.0, plot=True):
-    """
-    Read WFS reference image and generate reference magnifications (i.e. grid spacing) and
-    aperture positions.
-
-    Arguments
-    ---------
-    data: FITS filename or 2D ndarray
-        WFS reference image
-    xoffset, yoffset: float
-        Offsets in units of aperture spacing between the center of the reference aperture grid
-        and the center of the pupil projected onto the grid.
-    pup_inner: float
-        Reference radius in pixels of the central hole of the pupil
-    pup_outer: float
-        Reference radius in pixels of the outer extent of the pupil
-    fwhm: float
-        FWHM in pixels of DAOfind convolution kernel
-    threshold: float
-        DAOfind threshold in units of the standard deviation of the image
-    init_scale: float
-        Initial guess for scale factor between reference aperture grid and an observed one
-    plot: bool
-        Toggle plotting of the reference image and overlayed apertures
-
-    Returns
-    -------
-    ref: dict
-        Keys -
-            xspacing: float
-                Mean grid spacing along X axis (pixels)
-            yspacing: float
-                Mean grid spacing along Y axis (pixels)
-            apertures: astropy.Table
-                Reference apertures within pup_inner and pup_outer
-            pup_coords: tuple (1D ndarray, 1D ndarray)
-                X and Y positions of apertures in pupil coordinates
-            init_scale: float
-                Initial guess for scale factor between reference aperture grid and an observed one
-    """
-    data = check_wfsdata(data)
-    spots, wfsfind_fig = wfsfind(data, fwhm=fwhm, threshold=threshold, plot=plot)
-    if plot:
-        wfsfind_fig.set_label("Reference Image")
-    xcen = spots['xcentroid'].mean()
-    ycen = spots['ycentroid'].mean()
-    spacing = grid_spacing(data, spots)
-
-    # make masks for each reference spot and fit a 2D gaussian to get its FWHM. the reference FWHM is subtracted in
-    # quadrature from the observed FWHM when calculating the seeing.
-    apsize = np.mean(spacing)
-    apers = photutils.CircularAperture(
-        (spots['xcentroid'], spots['ycentroid']),
-        r=apsize/2.
-    )
-    masks = apers.to_mask(method='subpixel')
-    sigmas = []
-    spot = np.zeros(masks[0].shape)
-    for m in masks:
-        subim = m.cutout(data)
-        # make co-added spot image for use in calculating the seeing
-        if subim.shape == spot.shape:
-            spot += subim
-
-    # just using the mean will be offset from the true center due to missing spots at edges.
-    # find the spot closest to the mean and make it the center position of the pattern.
-    dist = ((spots['xcentroid'] - xcen)**2 + (spots['ycentroid'] - ycen)**2)
-    closest = np.argmin(dist)
-    xoff = spots['xcentroid'][closest] - xcen
-    yoff = spots['ycentroid'][closest] - ycen
-    xcen += xoff
-    ycen += yoff
-    xcen += xoffset*spacing[0]
-    ycen += yoffset*spacing[1]
-    spots['xcentroid'] -= xcen
-    spots['ycentroid'] -= ycen
-    spots['dist'] = np.sqrt(spots['xcentroid']**2 + spots['ycentroid']**2)
-    ref = {}
-    ref['xspacing'] = spacing[0]
-    ref['yspacing'] = spacing[1]
-    spacing = max(spacing[0], spacing[1])
-    # we set the limit to half an aperture spacing in from the outer edge to make sure all of the points
-    # lie within the zernike radius
-    ref['apertures'] = spots[(spots['dist'] > pup_inner) & (spots['dist'] < pup_outer)]
-    ref['pup_coords'] = (ref['apertures']['xcentroid']/pup_outer, ref['apertures']['ycentroid']/pup_outer)
-    ref['pup_inner'] = pup_inner
-    ref['pup_outer'] = pup_outer
-    ref['xcen'] = xcen
-    ref['ycen'] = ycen
-    ref['figure'] = wfsfind_fig
-    ref['init_scale'] = init_scale
-
-    # set up 2D gaussian model plus constant background to fit to the coadded spot.  tested this compared to fitting each
-    # spot individually and they give the same result with this method being faster.
-    with warnings.catch_warnings():
-        # ignore astropy warnings about issues with the fit...
-        warnings.simplefilter("ignore")
-        model = Gaussian2D(amplitude=spot.max(), x_mean=spot.shape[1]/2, y_mean=spot.shape[0]/2) + Polynomial2D(degree=0)
-        fitter = LevMarLSQFitter()
-        y, x = np.mgrid[:spot.shape[0], :spot.shape[1]]
-        fit = fitter(model, x, y, spot)
-
-    sigma = 0.5 * (fit.x_stddev_0.value + fit.y_stddev_0.value)
-    fwhm = stats.funcs.gaussian_sigma_to_fwhm * sigma
-    ref['fwhm'] = fwhm
-    ref['sigma'] = sigma
-    ref['spot'] = spot
-
-    return ref
 
 
 def grid_spacing(data, apertures):
@@ -376,7 +261,6 @@ def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True):
         if subim.shape == spot.shape:
             spot += subim
 
-        err = stddev * np.ones_like(subim)
         signal = subim.sum()
         noise = np.sqrt(stddev**2 / (subim.shape[0] * subim.shape[1]))
         snr = signal / noise
@@ -409,7 +293,7 @@ def match_apertures(refx, refy, spotx, spoty, max_dist=25.):
     match = np.nan * np.ones(len(refx))
     matched = []
     for i in np.arange(len(refx)):
-        dists = np.sqrt( (spots[0]-refs[0][i])**2 + (spots[1]-refs[1][i])**2 )
+        dists = np.sqrt((spots[0]-refs[0][i])**2 + (spots[1]-refs[1][i])**2)
         min_i = np.argmin(dists)
         if np.min(dists) < max_dist:
             if min_i not in matched:
@@ -432,7 +316,7 @@ def aperture_distance(refx, refy, spotx, spoty):
     refs = np.array([refx, refy])
     spots = np.array([spotx, spoty])
     for i in np.arange(len(refx)):
-        dists = np.sqrt( (spots[0]-refs[0][i])**2 + (spots[1]-refs[1][i])**2 )
+        dists = np.sqrt((spots[0]-refs[0][i])**2 + (spots[1]-refs[1][i])**2)
         tot_dist += np.min(dists)
     return np.log(tot_dist)
 
@@ -491,46 +375,56 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
     data = check_wfsdata(data)
     pup_mask = check_wfsdata(pup_mask)
 
+    if ref.pup_outer is None:
+        raise WFSConfigException("No pupil information applied to SH reference.")
+
+    pup_outer = ref.pup_outer
+    pup_inner = ref.pup_inner
+
     # input data should be background subtracted for best results. this initial guess of the center positions
     # will be good enough to get the central obscuration, but will need to be fine-tuned for aperture association.
     xcen, ycen, pupcen_fig = center_pupil(data, pup_mask, plot=plot)
     pup_center = [xcen, ycen]
 
     # using the mean spacing is straightforward for square apertures and a reasonable underestimate for hexagonal ones (e.g. f/9)
-    ref_spacing = np.mean([ref['xspacing'], ref['yspacing']])
+    ref_spacing = np.mean([ref.xspacing, ref.yspacing])
     apsize = ref_spacing
 
     srcs, masks, snrs, sigma, wfsfind_fig = get_apertures(data, apsize, fwhm=fwhm, thresh=thresh)
 
     # if we don't detect spots in at least half of the reference apertures, we can't usually get a good wavefront measurement
-    if len(srcs) < 0.5 * len(ref['apertures']['xcentroid']):
-        msg = "Only %d spots detected out of %d apertures." % (len(srcs), len(ref['apertures']['xcentroid']))
+    if len(srcs) < 0.5 * len(ref.masked_apertures['xcentroid']):
+        msg = "Only %d spots detected out of %d apertures." % (len(srcs), len(ref.masked_apertures['xcentroid']))
         raise WFSAnalysisFailed(value=msg)
+
+    # get grid spacing of the data
+    xspacing, yspacing = grid_spacing(data, srcs)
+
+    # find the scale difference between data and ref and use as init
+    init_scale = (xspacing/ref.xspacing + yspacing/ref.yspacing) / 2.
+
+    # apply masking to detected sources to avoid partially illuminated apertures at the edges
+    srcs['dist'] = np.sqrt((srcs['xcentroid'] - xcen)**2 + (srcs['ycentroid'] - ycen)**2)
+    srcs = srcs[(srcs['dist'] > pup_inner*init_scale) & (srcs['dist'] < pup_outer*init_scale)]
 
     src_aps = photutils.CircularAperture(
         (srcs['xcentroid'], srcs['ycentroid']),
         r=apsize/2.
     )
 
-    # get grid spacing of the data
-    xspacing, yspacing = grid_spacing(data, srcs)
-
-    # find the scale difference between data and ref and use as init
-    init_scale = (xspacing/ref['xspacing'] + yspacing/ref['yspacing']) / 2.
-
     # set up to do a fit of the reference apertures to the spot positions with the center, scaling, and position-dependent
     # scaling (coma) as free parameters
-    args = (ref['apertures'], srcs)
+    args = (ref.masked_apertures, srcs)
     par_keys = ('xcen', 'ycen', 'scale', 'xcoma', 'ycoma')
     pars = (xcen, ycen, init_scale, 0.0, 0.0)
-    coma_bound = 1e-7
+    coma_bound = 1e-7  # keep coma constrained by now since it can cause trouble
     # scipy.optimize.minimize can do bounded minimization so leverage that to keep the solution within a reasonable range.
     bounds = (
-        (xcen-30, xcen+30),  # hopefully we're not too far off from true center...
-        (ycen-30, ycen+30),
+        (xcen-20, xcen+20),  # hopefully we're not too far off from true center...
+        (ycen-20, ycen+20),
         (init_scale-0.05, init_scale+0.05),  # reasonable range of expected focus difference...
-        (-coma_bound, coma_bound),  # this should be way more than enough to account for any reasonable amount of coma we'll encounter.
-        (-coma_bound, coma_bound)   # however, the larger range range appears to help minimize avoid local minima
+        (-coma_bound, coma_bound),
+        (-coma_bound, coma_bound)
     )
     min_results = optimize.minimize(fit_apertures, pars, args=args, bounds=bounds, options={'ftol': 1e-13, 'gtol': 1e-7})
 
@@ -542,18 +436,18 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
     scale = fit_results['scale']
     xcoma, ycoma = fit_results['xcoma'], fit_results['ycoma']
 
-    refx = ref['apertures']['xcentroid'] * (scale + ref['apertures']['xcentroid'] * xcoma) + fit_results['xcen']
-    refy = ref['apertures']['ycentroid'] * (scale + ref['apertures']['ycentroid'] * ycoma) + fit_results['ycen']
-    xspacing = scale * ref['xspacing']
-    yspacing = scale * ref['yspacing']
+    refx = ref.masked_apertures['xcentroid'] * (scale + ref.masked_apertures['xcentroid'] * xcoma) + fit_results['xcen']
+    refy = ref.masked_apertures['ycentroid'] * (scale + ref.masked_apertures['ycentroid'] * ycoma) + fit_results['ycen']
+    xspacing = scale * ref.xspacing
+    yspacing = scale * ref.yspacing
 
     # match reference apertures to spots
     spacing = np.max([xspacing, yspacing])
     ref_mask, src_mask = match_apertures(refx, refy, srcs['xcentroid'], srcs['ycentroid'], max_dist=spacing/2.)
 
     # these are unscaled so that the slope includes defocus
-    trim_refx = ref['apertures']['xcentroid'][ref_mask] + xcen
-    trim_refy = ref['apertures']['ycentroid'][ref_mask] + ycen
+    trim_refx = ref.masked_apertures['xcentroid'][ref_mask] + xcen
+    trim_refy = ref.masked_apertures['ycentroid'][ref_mask] + ycen
     ref_aps = photutils.CircularAperture(
         (trim_refx, trim_refy),
         r=ref_spacing/2.
@@ -562,10 +456,7 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
     slope_x = srcs['xcentroid'][src_mask] - trim_refx
     slope_y = srcs['ycentroid'][src_mask] - trim_refy
 
-    # use the pupil center found by correlation because the pupil can shift around on the lenslet array so
-    # using that center can affect determination of pupil coordinates
-    pup_size = ref['pup_outer']
-    pup_coords = (ref_aps.positions - pup_center) / [pup_size, pup_size]
+    pup_coords = (ref_aps.positions - pup_center) / [pup_outer, pup_outer]
 
     aps_fig = None
     if plot:
@@ -573,12 +464,11 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
         aps_fig, ax = plt.subplots()
         aps_fig.set_label("Aperture Positions")
         ax.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
-        #apers.plot(color='red')
         ax.scatter(pup_center[0], pup_center[1])
         src_aps.plot(color='blue', ax=ax)
 
     # need full slopes array the size of the complete set of reference apertures and pre-filled with np.nan for masking
-    slopes = np.nan * np.ones((2, len(ref['apertures']['xcentroid'])))
+    slopes = np.nan * np.ones((2, len(ref.masked_apertures['xcentroid'])))
 
     slopes[0][ref_mask] = slope_x
     slopes[1][ref_mask] = slope_y
@@ -600,6 +490,108 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
         "grid_fit": fit_results
     }
     return results
+
+
+class SH_Reference(object):
+    """
+    Class to handle Shack-Hartmann reference data
+    """
+    def __init__(self, data, fwhm=4.0, threshold=30.0, init_scale=1.0, plot=True):
+        """
+        Read WFS reference image and generate reference magnifications (i.e. grid spacing) and
+        aperture positions.
+
+        Arguments
+        ---------
+        data: FITS filename or 2D ndarray
+            WFS reference image
+        fwhm: float
+            FWHM in pixels of DAOfind convolution kernel
+        threshold: float
+            DAOfind threshold in units of the standard deviation of the image
+        init_scale: float
+            Initial guess for scale factor between reference aperture grid and an observed one
+        plot: bool
+            Toggle plotting of the reference image and overlayed apertures
+        """
+        self.data = check_wfsdata(data)
+        self.apertures, self.figure = wfsfind(data, fwhm=fwhm, threshold=threshold, plot=plot)
+        if plot:
+            self.figure.set_label("Reference Image")
+
+        self.xcen = self.apertures['xcentroid'].mean()
+        self.ycen = self.apertures['ycentroid'].mean()
+        self.xspacing, self.yspacing = grid_spacing(data, self.apertures)
+        self.init_scale = init_scale
+
+        # make masks for each reference spot and fit a 2D gaussian to get its FWHM. the reference FWHM is subtracted in
+        # quadrature from the observed FWHM when calculating the seeing.
+        apsize = np.mean([self.xspacing, self.yspacing])
+        apers = photutils.CircularAperture(
+            (self.apertures['xcentroid'], self.apertures['ycentroid']),
+            r=apsize/2.
+        )
+        masks = apers.to_mask(method='subpixel')
+        self.spot = np.zeros(masks[0].shape)
+        for m in masks:
+            subim = m.cutout(data)
+            # make co-added spot image for use in calculating the seeing
+            if subim.shape == self.spot.shape:
+                self.spot += subim
+
+        self.apertures['xcentroid'] -= self.xcen
+        self.apertures['ycentroid'] -= self.ycen
+        self.apertures['dist'] = np.sqrt(self.apertures['xcentroid']**2 + self.apertures['ycentroid']**2)
+        self.masked_apertures = self.apertures
+
+        # set up 2D gaussian model plus constant background to fit to the coadded spot.  tested this compared to fitting each
+        # spot individually and they give the same result with this method being faster.
+        with warnings.catch_warnings():
+            # ignore astropy warnings about issues with the fit...
+            warnings.simplefilter("ignore")
+            model = Gaussian2D(
+                amplitude=self.spot.max(),
+                x_mean=self.spot.shape[1]/2,
+                y_mean=self.spot.shape[0]/2
+            ) + Polynomial2D(degree=0)
+            fitter = LevMarLSQFitter()
+            y, x = np.mgrid[:self.spot.shape[0], :self.spot.shape[1]]
+            fit = fitter(model, x, y, self.spot)
+
+        self.sigma = 0.5 * (fit.x_stddev_0.value + fit.y_stddev_0.value)
+        self.fwhm = stats.funcs.gaussian_sigma_to_fwhm * self.sigma
+
+        self.pup_inner = None
+        self.pup_outer = None
+
+    def adjust_center(self, x, y):
+        """
+        Adjust reference center to new x, y position.
+        """
+        self.apertures['xcentroid'] += self.xcen
+        self.apertures['ycentroid'] += self.ycen
+        self.apertures['xcentroid'] -= x
+        self.apertures['ycentroid'] -= y
+        self.apertures['dist'] = np.sqrt(self.apertures['xcentroid']**2 + self.apertures['ycentroid']**2)
+        self.xcen = x
+        self.ycen = y
+        self.apply_pupil(self.pup_inner, self.pup_outer)
+
+    def apply_pupil(self, pup_inner, pup_outer):
+        """
+        Apply a pupil mask to the reference apertures
+        """
+        if pup_inner is not None and pup_outer is not None:
+            self.masked_apertures = self.apertures[(self.apertures['dist'] > pup_inner) & (self.apertures['dist'] < pup_outer)]
+            self.pup_inner = pup_inner
+            self.pup_outer = pup_outer
+
+    def pup_coords(self, pup_outer):
+        """
+        Take outer radius of pupil and calculate pupil coordinates for the masked apertures
+        """
+        coords = (self.masked_apertures['xcentroid']/pup_outer, self.masked_apertures['ycentroid']/pup_outer)
+        return coords
 
 
 def WFSFactory(wfs="f5", config={}, **kwargs):
@@ -644,59 +636,20 @@ class WFS(object):
         if hasattr(self, "reference_file"):
             refdata, hdr = check_wfsdata(self.reference_file, header=True)
             refdata = self.trim_overscan(refdata, hdr)
-            reference = mk_reference(
-                refdata,
-                xoffset=self.pup_offset[0],
-                yoffset=self.pup_offset[1],
-                pup_inner=self.pup_inner,
-                pup_outer=self.pup_size / 2.,
-                init_scale=self.init_scale,
-                plot=self.plot
-            )
+            reference = SH_Reference(refdata, init_scale=self.init_scale, plot=self.plot)
 
         # now assign 'reference' for each mode so that it can be accessed consistently in all cases
         for mode in self.modes:
-            if 'pup_offset' in self.modes[mode]:
-                pup_off = self.modes[mode]['pup_offset']
-            else:
-                pup_off = self.pup_offset
-
             if 'reference_file' in self.modes[mode]:
                 refdata, hdr = check_wfsdata(self.modes[mode]['reference_file'], header=True)
                 refdata = self.trim_overscan(refdata, hdr)
-                self.modes[mode]['reference'] = mk_reference(
+                self.modes[mode]['reference'] = SH_Reference(
                     refdata,
-                    xoffset=pup_off[0],
-                    yoffset=pup_off[1],
-                    pup_inner=self.pup_inner,
-                    pup_outer=self.pup_size / 2.,
                     init_scale=self.init_scale,
                     plot=self.plot
                 )
             else:
                 self.modes[mode]['reference'] = reference
-
-            self.modes[mode]['zernike_matrix'] = zernike_influence_matrix(
-                pup_coords=self.modes[mode]['reference']['pup_coords'],
-                nmodes=self.nzern,
-                modestart=2  # ignore the piston term
-            )
-
-    def connect(self):
-        """
-        Set state to connected so that calculated corrections get passed through to appropriate systems.
-        """
-        self.connected = True
-        self.telescope.connect()
-        self.secondary.connect()
-
-    def disconnect(self):
-        """
-        Set state to disconnected for testing/development
-        """
-        self.connected = False
-        self.telescope.disconnect()
-        self.secondary.disconnect()
 
     def get_flipud(self, mode=None):
         """
@@ -710,6 +663,21 @@ class WFS(object):
         """
         return False
 
+    def ref_pupil_location(self, mode, hdr=None):
+        """
+        Use pup_offset to adjust where the pupil should land on the reference image. For most cases, this just
+        applies the pup_offset. For binospec and eventually mmirs, the header information will be used to get
+        probe position and the shift will be calculated from that.
+        """
+        if 'pup_offset' in self.modes[mode]:
+            pup_offset = self.modes[mode]['pup_offset']
+        else:
+            pup_offset = self.pup_offset
+        ref = self.modes[mode]['reference']
+        x = ref.xcen + pup_offset[0] * ref.xspacing
+        y = ref.ycen + pup_offset[1] * ref.yspacing
+        return x, y
+
     def seeing(self, mode, sigma, airmass=None):
         """
         Given a sigma derived from a gaussian fit to a WFS spot, deconvolve the systematic width from the reference image
@@ -722,15 +690,14 @@ class WFS(object):
 
         # calculate the physical size of each aperture.
         ref = self.modes[mode]['reference']
-        apsize_pix = np.max((ref['xspacing'], ref['yspacing']))
+        apsize_pix = np.max((ref.xspacing, ref.yspacing))
         d = self.telescope.diameter * apsize_pix / self.pup_size
         d = d.to(u.m).value  # r_0 equation expects meters so convert
 
         # we need to deconvolve the instrumental spot width from the measured one to get the portion of the width that
         # is due to spot motion
-        ref_sigma = ref['sigma']
-        if sigma > ref_sigma:
-            corr_sigma = np.sqrt(sigma**2 - ref_sigma**2)
+        if sigma > ref.sigma:
+            corr_sigma = np.sqrt(sigma**2 - ref.sigma**2)
         else:
             return 0.0 * u.arcsec, 0.0 * u.arcsec
 
@@ -738,7 +705,7 @@ class WFS(object):
 
         # this equation relates the motion within a single aperture to the characteristic scale size of the
         # turbulence, r_0.
-        r_0 = ( 0.179 * (wave**2) * (d**(-1/3))/corr_sigma**2 )**0.6
+        r_0 = (0.179 * (wave**2) * (d**(-1/3))/corr_sigma**2)**0.6
 
         # this equation relates the turbulence scale size to an expected image FWHM at the given wavelength.
         raw_seeing = u.Quantity(u.rad * 0.98 * wave / r_0, u.arcsec)
@@ -843,8 +810,25 @@ class WFS(object):
         # make rotated pupil mask
         pup_mask = self.pupil_mask(rotator=rotator)
 
+        # get adjusted reference center position and update the reference
+        xcen, ycen = self.ref_pupil_location(mode, hdr=hdr)
+        self.modes[mode]['reference'].adjust_center(xcen, ycen)
+
+        # apply pupil to the reference
+        self.modes[mode]['reference'].apply_pupil(self.pup_inner, self.pup_size/2.)
+
+        # get pupil coords
+        ref_pup_coords = self.modes[mode]['reference'].pup_coords(self.pup_size/2.)
+
         # use the inverse influence matrix to calculate slopes due to reference aberrations
-        inverse_infmat = self.modes[mode]['zernike_matrix'][1]
+        zernike_matrix = zernike_influence_matrix(
+            pup_coords=ref_pup_coords,
+            nmodes=self.nzern,
+            modestart=2  # ignore the piston term
+        )
+        infmat = zernike_matrix[0]
+        inverse_infmat = zernike_matrix[1]
+
         ref_zv = self.reference_aberrations(mode, hdr=hdr)
         zref = ref_zv.array
         if len(zref) < self.nzern:
@@ -913,6 +897,8 @@ class WFS(object):
             ax.set_title("Seeing: %.2f\" (%.2f\" @ zenith)" % (raw_seeing.value, seeing.value))
 
         results = {}
+        results['infmat'] = infmat
+        results['inverse_infmat'] = inverse_infmat
         results['seeing'] = seeing
         results['raw_seeing'] = raw_seeing
         results['slopes'] = slopes
@@ -945,8 +931,8 @@ class WFS(object):
         if slope_results['slopes'] is not None:
             results = {}
             mode = slope_results['mode']
-            infmat = self.modes[mode]['zernike_matrix'][0]
-            inverse_infmat = self.modes[mode]['zernike_matrix'][1]
+            infmat = slope_results['infmat']
+            inverse_infmat = slope_results['inverse_infmat']
             slopes = slope_results['slopes']
             slope_vec = -self.tiltfactor * slopes.ravel()  # convert arcsec to radians
             zfit = np.dot(slope_vec, infmat)
@@ -1214,6 +1200,7 @@ class F5(WFS):
 
         return z
 
+
 class Binospec(F5):
     """
     Defines configuration and methods specific to the Binospec WFS system. Binospec uses the same aberration table
@@ -1228,10 +1215,10 @@ class Binospec(F5):
         # measured in MMIRS reference images and the MMIRS systems are nearly identical optically to binospec's.
         fwhm = 2.0
         sigma = stats.funcs.gaussian_fwhm_to_sigma * fwhm
-        self.modes['binospec']['reference']['fwhm'] = fwhm
-        self.modes['old_binospec']['reference']['fwhm'] = fwhm
-        self.modes['binospec']['reference']['sigma'] = sigma
-        self.modes['old_binospec']['reference']['sigma'] = sigma
+        self.modes['binospec']['reference'].fwhm = fwhm
+        self.modes['old_binospec']['reference'].fwhm = fwhm
+        self.modes['binospec']['reference'].sigma = sigma
+        self.modes['old_binospec']['reference'].sigma = sigma
 
     def get_flipud(self, mode):
         """
@@ -1252,7 +1239,9 @@ class Binospec(F5):
         """
         rawdata, hdr = check_wfsdata(fitsfile, header=True)
 
-        cr_mask, data = detect_cosmics(rawdata, sigclip=15., niter=5, cleantype='medmask', psffwhm=10.)
+        trimdata = self.trim_overscan(rawdata, hdr=hdr)
+
+        cr_mask, data = detect_cosmics(trimdata, sigclip=15., niter=5, cleantype='medmask', psffwhm=10.)
 
         # calculate the background and subtract it
         bkg_estimator = photutils.MedianBackground()
@@ -1260,6 +1249,27 @@ class Binospec(F5):
         data -= bkg.background
 
         return data, hdr
+
+    def ref_pupil_location(self, mode, hdr=None):
+        """
+        If a header is passed in, use Jan Kansky's linear relations to get the pupil center on the reference image.
+        Otherwise, use the default method.
+        """
+        if hdr is None:
+            ref = self.modes[mode]['reference']
+            pup_offset = self.modes[mode]['pup_offset']
+            x = ref.xcen + pup_offset[0] * ref.xspacing
+            y = ref.ycen + pup_offset[1] * ref.yspacing
+        else:
+            for k in ['STARXMM', 'STARYMM']:
+                if k not in hdr:
+                    # we'll be lenient for now with missing header info. if not provided, assume we're on-axis.
+                    msg = f"Missing value, {k}, that is required to transform Binospec guider coordinates. Defaulting to 0.0."
+                    log.warning(msg)
+                    hdr[k] = 0.0
+            x = 232.771 + 0.17544 * hdr['STARXMM']
+            y = 512 - (265.438 + -0.20406 * hdr['STARYMM'])
+        return x, y
 
     def focal_plane_position(self, hdr):
         """

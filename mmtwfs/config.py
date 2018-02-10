@@ -142,9 +142,9 @@ mmt_config = {
             "find_thresh": 5.0,  # threshold for DAOfind
             "rotation": 234.0 * u.deg,  # rotation of aperture locations w.r.t. the primary mirror
             "pix_size": 0.135 * u.arcsec,  # arcsec per WFS detector pixel
-            "pup_size": 460,  # pixels
+            "pup_size": 450,  # pixels
             "pup_inner": 65,  # inner obscuration radius in pixels
-            "pup_offset": [-0.42, 0.47],  # [x, y] pupil offset from center of reference aperture pattern
+            "pup_offset": [0.5, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 21,  # number of zernike modes to fit
@@ -232,8 +232,8 @@ mmt_config = {
             "rotation": -225. * u.deg,
             "pix_size": 0.09639 * u.arcsec,  # SBIG STT-8300 with 5.4 um pixels binned 3x3
             "pup_size": 530,  # pupil outer diameter in pixels
-            "pup_inner": 65,  # inner obscuration radius in pixels
-            "pup_offset": [0.0, 0.5],  # [x, y] pupil offset from center of reference aperture pattern
+            "pup_inner": 75,  # inner obscuration radius in pixels
+            "pup_offset": [0.0, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 21,  # number of zernike modes to fit
@@ -269,7 +269,7 @@ mmt_config = {
             "find_thresh": 5.0,
             "rotation": 180. * u.deg,  # this is referenced to camera2. camera1 is camera2+180, but is flipped by image acq
             "pix_size": 0.156 * u.arcsec,
-            "pup_size": 310,  # pixels
+            "pup_size": 290,  # pixels
             "pup_inner": 50,
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
@@ -279,7 +279,7 @@ mmt_config = {
             "modes": {
                 "mmirs1": {
                     "label": "Camera 1",
-                    "pup_offset": [0.75, 0.5],  # [x, y] pupil offset from center of reference aperture pattern
+                    "pup_offset": [1.0, 0.5],  # [x, y] pupil offset from center of reference aperture pattern
                     "ref_zern": {
                         "Z04": -1325. * u.nm
                     },
@@ -310,8 +310,8 @@ mmt_config = {
             "find_thresh": 5.0,
             "rotation": 180. * u.deg,  # per j. kansky 9/26/2017
             "pix_size": 0.156 * u.arcsec,
-            "pup_size": 270,  # pixels
-            "pup_inner": 50,
+            "pup_size": 265,  # pixels
+            "pup_inner": 45,
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 21,  # number of zernike modes to fit
@@ -320,7 +320,7 @@ mmt_config = {
             "modes": {
                 "binospec": {
                     "label": "Binospec",
-                    "pup_offset": [0.5, 0.0],  # [x, y] pupil offset from center of reference aperture pattern in subap units
+                    "pup_offset": [0.0, 0.0],  # [x, y] pupil offset from center of reference aperture pattern in subap units
                     "ref_zern": {
                         "Z04": 0.0 * u.nm
                     },
