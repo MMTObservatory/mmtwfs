@@ -310,8 +310,8 @@ mmt_config = {
             "find_thresh": 5.0,
             "rotation": 180. * u.deg,  # per j. kansky 9/26/2017
             "pix_size": 0.156 * u.arcsec,
-            "pup_size": 275,  # pixels
-            "pup_inner": 50,
+            "pup_size": 265,  # pixels
+            "pup_inner": 45,
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 21,  # number of zernike modes to fit
