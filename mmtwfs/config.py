@@ -142,9 +142,9 @@ mmt_config = {
             "find_thresh": 5.0,  # threshold for DAOfind
             "rotation": 234.0 * u.deg,  # rotation of aperture locations w.r.t. the primary mirror
             "pix_size": 0.135 * u.arcsec,  # arcsec per WFS detector pixel
-            "pup_size": 450,  # pixels
+            "pup_size": 430,  # pixels
             "pup_inner": 65,  # inner obscuration radius in pixels
-            "pup_offset": [0.5, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
+            "pup_offset": [0.3, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 21,  # number of zernike modes to fit
