@@ -948,7 +948,7 @@ class ZernikeVector(MutableMapping):
             self.units = u.Unit(json_data['units'])
 
         if 'normalized' in json_data:
-            self.normalized = json_data['units']
+            self.normalized = json_data['normalized']
 
         if 'modestart' in json_data:
             self.modestart = json_data['modestart']
@@ -1115,7 +1115,7 @@ class ZernikeVector(MutableMapping):
         # lump higher order terms into one RMS bin.
         if last_coeff > last_label:
             hi_orders = ZernikeVector(modestart=last_label+1, normalized=self.normalized, units=self.units, **self.coeffs)
-            labels.append("High Orders RMS")
+            labels.append("Hi Ord RMS")
             coeffs.append(hi_orders.rms.value)
 
         # add total RMS
