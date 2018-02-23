@@ -148,7 +148,8 @@ mmt_config = {
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 21,  # number of zernike modes to fit
-            "init_scale": 1.0,  # initial guess for scale of aperture grid w.r.t. reference
+            "az_parity": 1,  # E/W flip in image motion
+            "el_parity": 1,  # N/S flip in image motion
             "reference_file": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "f5_hecto_ref.fits")),
             "aberr_table_file": pkg_resources.resource_filename(__name__, os.path.join("data", "f5zernfield_std_curvedsurface.TXT")),
             "modes": {
@@ -198,7 +199,8 @@ mmt_config = {
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 21,  # number of zernike modes to fit
-            "init_scale": 0.95,
+            "az_parity": -1,  # E/W flip in image motion
+            "el_parity": 1,  # N/S flip in image motion
             "reference_file": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "f9_ref.fits")),
             "modes": {
                 "blue": {
@@ -237,7 +239,8 @@ mmt_config = {
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 21,  # number of zernike modes to fit
-            "init_scale": 0.95,
+            "az_parity": -1,  # E/W flip in image motion
+            "el_parity": 1,  # N/S flip in image motion
             "reference_file": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "f9_new_ref.fits")),
             "modes": {
                 "blue": {
@@ -274,7 +277,8 @@ mmt_config = {
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 21,  # number of zernike modes to fit
-            "init_scale": 1.0,
+            "az_parity": 1,  # E/W flip in image motion
+            "el_parity": 1,  # N/S flip in image motion
             "aberr_table_file": pkg_resources.resource_filename(__name__, os.path.join("data", "mmirszernfield.tab")),
             "modes": {
                 "mmirs1": {
@@ -315,7 +319,8 @@ mmt_config = {
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 21,  # number of zernike modes to fit
-            "init_scale": 1.0,
+            "az_parity": 1,  # E/W flip in image motion
+            "el_parity": 1,  # N/S flip in image motion
             "aberr_table_file": pkg_resources.resource_filename(__name__, os.path.join("data", "f5zernfield_flatsurface.tab")),
             "modes": {
                 "binospec": {

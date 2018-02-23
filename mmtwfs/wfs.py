@@ -496,7 +496,7 @@ class SH_Reference(object):
     """
     Class to handle Shack-Hartmann reference data
     """
-    def __init__(self, data, fwhm=4.0, threshold=30.0, init_scale=1.0, plot=True):
+    def __init__(self, data, fwhm=4.0, threshold=30.0, plot=True):
         """
         Read WFS reference image and generate reference magnifications (i.e. grid spacing) and
         aperture positions.
@@ -509,8 +509,6 @@ class SH_Reference(object):
             FWHM in pixels of DAOfind convolution kernel
         threshold: float
             DAOfind threshold in units of the standard deviation of the image
-        init_scale: float
-            Initial guess for scale factor between reference aperture grid and an observed one
         plot: bool
             Toggle plotting of the reference image and overlayed apertures
         """
@@ -522,7 +520,6 @@ class SH_Reference(object):
         self.xcen = self.apertures['xcentroid'].mean()
         self.ycen = self.apertures['ycentroid'].mean()
         self.xspacing, self.yspacing = grid_spacing(data, self.apertures)
-        self.init_scale = init_scale
 
         # make masks for each reference spot and fit a 2D gaussian to get its FWHM. the reference FWHM is subtracted in
         # quadrature from the observed FWHM when calculating the seeing.
@@ -636,7 +633,7 @@ class WFS(object):
         if hasattr(self, "reference_file"):
             refdata, hdr = check_wfsdata(self.reference_file, header=True)
             refdata = self.trim_overscan(refdata, hdr)
-            reference = SH_Reference(refdata, init_scale=self.init_scale, plot=self.plot)
+            reference = SH_Reference(refdata, plot=self.plot)
 
         # now assign 'reference' for each mode so that it can be accessed consistently in all cases
         for mode in self.modes:
@@ -645,7 +642,6 @@ class WFS(object):
                 refdata = self.trim_overscan(refdata, hdr)
                 self.modes[mode]['reference'] = SH_Reference(
                     refdata,
-                    init_scale=self.init_scale,
                     plot=self.plot
                 )
             else:
@@ -1042,8 +1038,8 @@ class WFS(object):
         yc = fit_results['ycen']
         xref = self.cor_coords[0]
         yref = self.cor_coords[1]
-        dx = -(xc - xref)  # flip the sign here because E to the right in derot pupil so +AZ to the left
-        dy = yc - yref
+        dx = self.az_parity * (xc - xref)
+        dy = self.el_parity * (yc - yref)
 
         total_rotation = u.Quantity(fit_results['rotator'] + self.rotation, u.rad).value
 
