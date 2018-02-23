@@ -98,7 +98,7 @@ def test_f5_analysis():
     results = f5.measure_slopes(test_file)
     zresults = f5.fit_wavefront(results)
     testval = int(zresults['zernike']['Z10'].value)
-    assert((testval > 50) & (testval < 70))
+    assert((testval > 10) & (testval < 20))
 
 @cleanup
 def test_bino_analysis():
