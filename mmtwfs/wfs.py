@@ -14,6 +14,8 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 
 from skimage import feature
+from skimage.transform import AffineTransform
+from skimage.measure import ransac
 from scipy import ndimage, optimize
 
 import astropy.units as u
@@ -420,8 +422,8 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
     coma_bound = 1e-7  # keep coma constrained by now since it can cause trouble
     # scipy.optimize.minimize can do bounded minimization so leverage that to keep the solution within a reasonable range.
     bounds = (
-        (xcen-10, xcen+10),  # hopefully we're not too far off from true center...
-        (ycen-10, ycen+10),
+        (xcen-15, xcen+15),  # hopefully we're not too far off from true center...
+        (ycen-15, ycen+15),
         (init_scale-0.05, init_scale+0.05),  # reasonable range of expected focus difference...
         (-coma_bound, coma_bound),
         (-coma_bound, coma_bound)
@@ -441,13 +443,19 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
     xspacing = scale * ref.xspacing
     yspacing = scale * ref.yspacing
 
-    # match reference apertures to spots
+    # coarse match reference apertures to spots
     spacing = np.max([xspacing, yspacing])
     ref_mask, src_mask = match_apertures(refx, refy, srcs['xcentroid'], srcs['ycentroid'], max_dist=spacing/2.)
+
+    # now use RANSAC to fine tune the X, Y offset of the aperture pattern
+    fine_src = np.array((refx[ref_mask], refy[ref_mask])).transpose()
+    fine_dst = np.array((srcs['xcentroid'][src_mask], srcs['ycentroid'][src_mask])).transpose()
+    model, inliers = ransac((fine_src, fine_dst), AffineTransform, min_samples=3, residual_threshold=2, max_trials=100)
 
     # these are unscaled so that the slope includes defocus
     trim_refx = ref.masked_apertures['xcentroid'][ref_mask] + xcen
     trim_refy = ref.masked_apertures['ycentroid'][ref_mask] + ycen
+
     ref_aps = photutils.CircularAperture(
         (trim_refx, trim_refy),
         r=ref_spacing/2.
@@ -1161,6 +1169,32 @@ class F5(WFS):
         # load lookup table for off-axis aberrations
         self.aberr_table = ascii.read(self.aberr_table_file)
 
+    def process_image(self, fitsfile):
+        """
+        Process the image to make it suitable for accurate wavefront analysis.  Steps include nuking cosmic rays,
+        subtracting background, handling overscan regions, etc.
+        """
+        rawdata, hdr = check_wfsdata(fitsfile, header=True)
+
+        trimdata = self.trim_overscan(rawdata, hdr=hdr)
+
+        cr_mask, data = detect_cosmics(trimdata, sigclip=15., niter=5, cleantype='medmask', psffwhm=10.)
+
+        # calculate the background and subtract it
+        bkg_estimator = photutils.MedianBackground()
+        bkg = photutils.Background2D(data, (20, 20), filter_size=(10, 10), bkg_estimator=bkg_estimator)
+        data -= bkg.background
+
+        return data, hdr
+
+    def ref_pupil_location(self, mode, hdr=None):
+        """
+        For now we set the F/5 wfs center by hand based on engineering data. Should determine this more carefully.
+        """
+        x = 262.0
+        y = 259.0
+        return x, y
+
     def focal_plane_position(self, hdr):
         """
         Need to fill this in for the hecto f/5 WFS system. For now will assume it's always on-axis.
@@ -1228,24 +1262,6 @@ class Binospec(F5):
         else:
             return True
 
-    def process_image(self, fitsfile):
-        """
-        Process the image to make it suitable for accurate wavefront analysis.  Steps include nuking cosmic rays,
-        subtracting background, handling overscan regions, etc.
-        """
-        rawdata, hdr = check_wfsdata(fitsfile, header=True)
-
-        trimdata = self.trim_overscan(rawdata, hdr=hdr)
-
-        cr_mask, data = detect_cosmics(trimdata, sigclip=15., niter=5, cleantype='medmask', psffwhm=10.)
-
-        # calculate the background and subtract it
-        bkg_estimator = photutils.MedianBackground()
-        bkg = photutils.Background2D(data, (50, 50), filter_size=(15, 15), bkg_estimator=bkg_estimator)
-        data -= bkg.background
-
-        return data, hdr
-
     def ref_pupil_location(self, mode, hdr=None):
         """
         If a header is passed in, use Jan Kansky's linear relations to get the pupil center on the reference image.
@@ -1263,8 +1279,8 @@ class Binospec(F5):
                     msg = f"Missing value, {k}, that is required to transform Binospec guider coordinates. Defaulting to 0.0."
                     log.warning(msg)
                     hdr[k] = 0.0
-            x = 232.771 + 0.17544 * hdr['STARXMM']
-            y = 512 - (265.438 + -0.20406 * hdr['STARYMM'])
+            y = 232.771 + 0.17544 * hdr['STARXMM']
+            x = 265.438 + -0.20406 * hdr['STARYMM'] + 12.0
         return x, y
 
     def focal_plane_position(self, hdr):
@@ -1317,6 +1333,25 @@ class MMIRS(F5):
         MMIRS leaves the overscan in, but doesn't give any header information. So gotta trim by hand...
         """
         return data[5:, 12:]
+
+    def process_image(self, fitsfile):
+        """
+        Process the image to make it suitable for accurate wavefront analysis.  Steps include nuking cosmic rays,
+        subtracting background, handling overscan regions, etc.
+        """
+        rawdata, hdr = check_wfsdata(fitsfile, header=True)
+
+        trimdata = self.trim_overscan(rawdata, hdr=hdr)
+
+        # MMIRS gets a lot of hot pixels/CRs so make a quick pass to nuke them
+        cr_mask, data = detect_cosmics(trimdata, sigclip=5., niter=5, cleantype='medmask', psffwhm=5.)
+
+        # calculate the background and subtract it
+        bkg_estimator = photutils.MedianBackground()
+        bkg = photutils.Background2D(data, (10, 10), filter_size=(5, 5), bkg_estimator=bkg_estimator)
+        data -= bkg.background
+
+        return data, hdr
 
     def focal_plane_position(self, hdr):
         """
