@@ -167,6 +167,13 @@ mmt_config = {
                         "Z11": -150. * u.nm
                     },
                 },
+                "mmtcam": {
+                    "label": "MMTCam",
+                    "ref_zern": {
+                        "Z04": -500. * u.nm,
+                        "Z11": -150. * u.nm
+                    },
+                },
                 "maestro": {
                     "label": "Maestro",
                     "ref_zern": {

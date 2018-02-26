@@ -450,11 +450,11 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
     # now use RANSAC to fine tune the X, Y offset of the aperture pattern
     fine_src = np.array((refx[ref_mask], refy[ref_mask])).transpose()
     fine_dst = np.array((srcs['xcentroid'][src_mask], srcs['ycentroid'][src_mask])).transpose()
-    model, inliers = ransac((fine_src, fine_dst), AffineTransform, min_samples=3, residual_threshold=2, max_trials=100)
+    model, inliers = ransac((fine_src, fine_dst), AffineTransform, min_samples=3, residual_threshold=spacing, max_trials=100)
 
     # these are unscaled so that the slope includes defocus
-    trim_refx = ref.masked_apertures['xcentroid'][ref_mask] + xcen
-    trim_refy = ref.masked_apertures['ycentroid'][ref_mask] + ycen
+    trim_refx = ref.masked_apertures['xcentroid'][ref_mask] + fit_results['xcen']
+    trim_refy = ref.masked_apertures['ycentroid'][ref_mask] + fit_results['ycen']
 
     ref_aps = photutils.CircularAperture(
         (trim_refx, trim_refy),
