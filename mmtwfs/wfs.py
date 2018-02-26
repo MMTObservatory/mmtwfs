@@ -448,9 +448,9 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
     ref_mask, src_mask = match_apertures(refx, refy, srcs['xcentroid'], srcs['ycentroid'], max_dist=spacing/2.)
 
     # now use RANSAC to fine tune the X, Y offset of the aperture pattern
-    fine_src = np.array((refx[ref_mask], refy[ref_mask])).transpose()
-    fine_dst = np.array((srcs['xcentroid'][src_mask], srcs['ycentroid'][src_mask])).transpose()
-    model, inliers = ransac((fine_src, fine_dst), AffineTransform, min_samples=3, residual_threshold=spacing, max_trials=100)
+    #fine_src = np.array((refx[ref_mask], refy[ref_mask])).transpose()
+    #fine_dst = np.array((srcs['xcentroid'][src_mask], srcs['ycentroid'][src_mask])).transpose()
+    #model, inliers = ransac((fine_src, fine_dst), AffineTransform, min_samples=3, residual_threshold=spacing, max_trials=100)
 
     # these are unscaled so that the slope includes defocus
     trim_refx = ref.masked_apertures['xcentroid'][ref_mask] + fit_results['xcen']
@@ -1046,19 +1046,19 @@ class WFS(object):
         yc = fit_results['ycen']
         xref = self.cor_coords[0]
         yref = self.cor_coords[1]
-        dx = self.az_parity * (xc - xref)
-        dy = self.el_parity * (yc - yref)
+        dx = xc - xref
+        dy = yc - yref
 
-        total_rotation = u.Quantity(fit_results['rotator'] + self.rotation, u.rad).value
+        total_rotation = u.Quantity(self.rotation - fit_results['rotator'], u.rad).value
 
         dr, phi = cart2pol([dx, dy])
 
-        derot_phi = phi - total_rotation
+        derot_phi = phi + total_rotation
 
         az, el = pol2cart([dr, derot_phi])
 
-        az *= -1 * self.pix_size * defoc  # pix size scales with the pupil size as focus changes.
-        el *= -1 * self.pix_size * defoc
+        az *= self.az_parity * self.pix_size * defoc  # pix size scales with the pupil size as focus changes.
+        el *= self.el_parity * self.pix_size * defoc
 
         return az.round(3), el.round(3)
 
