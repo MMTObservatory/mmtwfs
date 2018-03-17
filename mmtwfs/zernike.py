@@ -1094,19 +1094,24 @@ class ZernikeVector(MutableMapping):
         ph = self.total_phase(r, p)
         return x, y, r, p, ph
 
-    def fringe_bar_chart(self, total=True, max_c=2000*u.nm, title=None):
+    def fringe_bar_chart(self, total=True, max_c=2000*u.nm, title=None, last_mode=None):
         """
         Plot a bar chart of the fringe amplitudes of the coefficients
         """
         # we want to plot bars for each of the modes we usually use and thus label.
         label_keys = sorted(self.__zernikelabels.keys())
-        last_label = self._key_to_l(label_keys[-1])
+        if last_mode is None:
+            last_label = self._key_to_l(label_keys[-1])
+        else:
+            last_label = last_mode
         last_coeff = self._key_to_l(sorted(self.coeffs.keys())[-1])
-        if last_coeff < 37:
+
+        if last_coeff < 21:
             modes = label_keys[3:last_coeff]  # ignore piston and tilts in bar plot
         else:
-            modes = label_keys[3:]
+            modes = label_keys[3:22]
         labels = [self.shortlabel(m) for m in modes]
+
         if self.normalized:
             coeffs = [self.__getitem__(m).value * noll_coefficient(self._key_to_l(m)) for m in modes]
         else:
@@ -1145,19 +1150,24 @@ class ZernikeVector(MutableMapping):
         cb.set_label("%s" % self.units)
         return fig
 
-    def bar_chart(self, residual=None, total=True, max_c=500*u.nm, title=None):
+    def bar_chart(self, residual=None, total=True, max_c=500*u.nm, title=None, last_mode=None):
         """
         Plot a bar chart of the coefficients and, optionally, a residual amount not included in the coefficients.
         """
         # we want to plot bars for each of the modes we usually use and thus label.
         label_keys = sorted(self.__zernikelabels.keys())
-        last_label = self._key_to_l(label_keys[-1])
+        if last_mode is None:
+            last_label = self._key_to_l(label_keys[-1])
+        else:
+            last_label = last_mode
+
         last_coeff = self._key_to_l(sorted(self.coeffs.keys())[-1])
-        if last_coeff < 37:
+        if last_coeff < 21:
             modes = label_keys[3:last_coeff]  # ignore piston and tilts in bar plot
         else:
-            modes = label_keys[3:]
+            modes = label_keys[3:22]
         labels = [self.shortlabel(m) for m in modes]
+
         if self.normalized:
             coeffs = [np.abs(self.__getitem__(m).value) for m in modes]
         else:
