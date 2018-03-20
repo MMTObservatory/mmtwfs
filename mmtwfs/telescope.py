@@ -202,6 +202,11 @@ class MMT(object):
         # leave out tilts, focus, and coma from force calcs to start with
         def_mask = ['Z02', 'Z03', 'Z04', 'Z07', 'Z08']
         def_mask.extend(mask)
+
+        # mask out all high order terms beyond 2nd order spherical
+        for i in range(23, 99):
+            def_mask.append("Z{0:02d}".format(i))
+
         mask = list(set(def_mask))
         zv_masked = zv.copy()
         zv_masked.denormalize()
@@ -220,7 +225,7 @@ class MMT(object):
         #   Z22 ~ 20r**6 - 30r**4 + 12r**2 - 1
         #   Z37 ~ 70r**8 - 140r**6 + 90r**4 - 20r**2 + 1
         #
-        zv_masked['Z04'] = -6.0 * zv_masked['Z11'] + 12.0 * zv_masked['Z22'] - 20.0 * zv_masked['Z37']
+        zv_masked['Z04'] = -6.0 * zv_masked['Z11'] - 12.0 * zv_masked['Z22'] - 20.0 * zv_masked['Z37']
 
         m1focus_corr = gain * zv_masked['Z04'] / self.secondary.focus_trans
 
