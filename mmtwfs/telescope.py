@@ -4,11 +4,6 @@
 import subprocess
 import warnings
 
-import logging
-import logging.handlers
-log = logging.getLogger("Telescope")
-log.setLevel(logging.INFO)
-
 import numpy as np
 from skimage.transform import rotate as imrotate
 
@@ -17,7 +12,6 @@ from astropy.io import ascii
 from astropy.table import Table
 from astropy import visualization
 
-import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import matplotlib.colors as col
@@ -27,10 +21,16 @@ from .custom_exceptions import WFSConfigException
 from .secondary import SecondaryFactory
 from .zernike import ZernikeVector
 
+import logging
+import logging.handlers
+
 # we need to wrap the poppy import in a context manager to trap its whinging about missing pysynphot stuff that we don't use.
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     import poppy
+
+log = logging.getLogger("Telescope")
+log.setLevel(logging.INFO)
 
 
 class MMT(object):
@@ -145,7 +145,6 @@ class MMT(object):
         psf = osys.calc_psf(w)
         psf_fig = None
         if plot:
-            im = psf[0].data
             psf_fig, ax = plt.subplots()
             psf_fig.set_label("PSF at {0:0.0f}".format(wavelength))
             norm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.LinearStretch())
@@ -202,6 +201,11 @@ class MMT(object):
         # leave out tilts, focus, and coma from force calcs to start with
         def_mask = ['Z02', 'Z03', 'Z04', 'Z07', 'Z08']
         def_mask.extend(mask)
+
+        # mask out all high order terms beyond 2nd order spherical
+        for i in range(23, 99):
+            def_mask.append("Z{0:02d}".format(i))
+
         mask = list(set(def_mask))
         zv_masked = zv.copy()
         zv_masked.denormalize()
@@ -220,7 +224,7 @@ class MMT(object):
         #   Z22 ~ 20r**6 - 30r**4 + 12r**2 - 1
         #   Z37 ~ 70r**8 - 140r**6 + 90r**4 - 20r**2 + 1
         #
-        zv_masked['Z04'] = -6.0 * zv_masked['Z11'] + 12.0 * zv_masked['Z22'] - 20.0 * zv_masked['Z37']
+        zv_masked['Z04'] = -6.0 * zv_masked['Z11'] - 12.0 * zv_masked['Z22'] - 20.0 * zv_masked['Z37']
 
         m1focus_corr = gain * zv_masked['Z04'] / self.secondary.focus_trans
 
@@ -285,7 +289,7 @@ class MMT(object):
         if self.connected:
             log.info("Undoing last set of primary mirror corrections...")
             self.to_rcell(self.last_forces, filename=zfilename)
-            frac = self.bend_mirror(filename=filename)
+            frac = self.bend_mirror(filename=zfilename)
             self.secondary.m1spherical(frac * self.last_m1focus)
         else:
             log.info("Not connected; no undo commands sent.")

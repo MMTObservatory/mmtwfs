@@ -12,9 +12,7 @@ Expressions for cartesian derivatives of the Zernike polynomials were adapted fr
 
 import re
 import json
-import sys
 
-import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import matplotlib.colors as col
@@ -107,7 +105,7 @@ def dR_drho(m, n, rho):
     See http://adsabs.harvard.edu/abs/2014OptLE..52....7N for details.
     """
     dR_mn = R_mn(m, n, rho) * (rho**2 * (n + 2.) + m) / (rho * (1. - rho**2)) - \
-            R_mn(m+1, n+1, rho) * (n + m + 2.) / (1. - rho**2)
+        R_mn(m+1, n+1, rho) * (n + m + 2.) / (1. - rho**2)
 
     return dR_mn
 
@@ -227,7 +225,7 @@ def dZ_dx(m, n, rho, phi, norm=False):
         nc = norm_coefficient(m, n)
 
     dwf = dR_drho(m, n, rho) * theta_m(m, phi) * np.cos(phi) - \
-          R_mn(m, n, rho) * dtheta_dphi(m, phi) * np.sin(phi) / rho
+        R_mn(m, n, rho) * dtheta_dphi(m, phi) * np.sin(phi) / rho
 
     dwf *= nc
 
@@ -265,7 +263,7 @@ def dZ_dy(m, n, rho, phi, norm=False):
         nc = norm_coefficient(m, n)
 
     dwf = dR_drho(m, n, rho) * theta_m(m, phi) * np.sin(phi) + \
-          R_mn(m, n, rho) * dtheta_dphi(m, phi) * np.cos(phi) / rho
+        R_mn(m, n, rho) * dtheta_dphi(m, phi) * np.cos(phi) / rho
 
     dwf *= nc
 
@@ -626,8 +624,8 @@ class ZernikeVector(MutableMapping):
         """
         if self._valid_key(key):
             # this is a hacky way to get, say, Z4 to become Z04 to maintain consistency
-            l = self._key_to_l(key)
-            key = self._l_to_key(l)
+            mode = self._key_to_l(key)
+            key = self._l_to_key(mode)
             self.coeffs[key] = u.Quantity(item, self.units)
         else:
             raise KeyError(f"Malformed Zernike mode key, {key}")
@@ -643,18 +641,7 @@ class ZernikeVector(MutableMapping):
         """
         Overload __repr__ to print out coefficients in a nice way including units and descriptive labels.
         """
-        s = ""
-        if self.normalized:
-            s += "Normalized (Noll) Coefficients\n"
-        else:
-            s += "Fringe Coefficients\n"
-
-        for k in sorted(self.coeffs.keys()):
-            if k in self.__zernikelabels:
-                s += "{0:>4s}: {1:>12s} \t {2:s}".format(k, "{0:0.03g}".format(self.coeffs[k]), self.label(k))
-            else:
-                s += "{0:>4s}: {1:>12s}".format(k, "{0:0.03g}".format(self.coeffs[k]))
-            s += "\n"
+        s = self.pretty_print(last=99)
 
         return s
 
@@ -830,16 +817,16 @@ class ZernikeVector(MutableMapping):
         Parse key to get Noll mode number.
         """
         try:
-            l = int(key.replace("Z", ""))
+            mode = int(key.replace("Z", ""))
         except Exception as e:
             raise ZernikeException(f"Malformed Zernike mode key, {key} ({e})")
-        return l
+        return mode
 
-    def _l_to_key(self, l):
+    def _l_to_key(self, mode):
         """
         Take Noll mode number and generate valid coefficient key.
         """
-        key = "Z{0:02d}".format(l)
+        key = "Z{0:02d}".format(mode)
         return key
 
     @property
@@ -911,6 +898,33 @@ class ZernikeVector(MutableMapping):
         rms = np.sqrt(np.sum(norm_coeffs**2))
         self.modestart = orig_modestart
         return rms
+
+    def pretty_print(self, last=22):
+        """
+        Overload __repr__ to print out coefficients in a nice way including units and descriptive labels.
+        """
+        s = ""
+        if self.normalized:
+            s += "Normalized (Noll) Coefficients\n"
+        else:
+            s += "Fringe Coefficients\n"
+
+        keys = sorted(self.coeffs.keys())
+        for k in keys:
+            if self._key_to_l(k) <= last:
+                if k in self.__zernikelabels:
+                    s += "{0:>4s}: {1:>12s} \t {2:s}".format(k, "{0:0.03g}".format(self.coeffs[k]), self.label(k))
+                else:
+                    s += "{0:>4s}: {1:>12s}".format(k, "{0:0.03g}".format(self.coeffs[k]))
+                s += "\n"
+
+        s += "\n"
+        if self._key_to_l(keys[-1]) > last:
+            hi_orders = ZernikeVector(modestart=last+1, normalized=self.normalized, units=self.units, **self.coeffs)
+            s += "High Orders RMS: \t {0:0.03g}  {1:>3s} ➞ {2:>3s}\n".format(hi_orders.rms, self._l_to_key(last+1), keys[-1])
+        s += "Total RMS: \t \t {0:0.03g}\n".format(self.rms)
+
+        return s
 
     def copy(self):
         """
@@ -988,8 +1002,8 @@ class ZernikeVector(MutableMapping):
 
             if zmap:
                 for k in zmap:
-                    l = self._key_to_l(k)
-                    if l >= modestart:
+                    mode = self._key_to_l(k)
+                    if mode >= modestart:
                         self.__setitem__(k, coeffs[zmap[k]])
             else:
                 for i, c in enumerate(coeffs):
@@ -1004,8 +1018,8 @@ class ZernikeVector(MutableMapping):
         if not self.normalized:
             self.normalized = True
             for k in self.coeffs:
-                l = self._key_to_l(k)
-                noll = noll_coefficient(l)
+                mode = self._key_to_l(k)
+                noll = noll_coefficient(mode)
                 self.coeffs[k] /= noll
 
     def denormalize(self):
@@ -1015,8 +1029,8 @@ class ZernikeVector(MutableMapping):
         if self.normalized:
             self.normalized = False
             for k in self.coeffs:
-                l = self._key_to_l(k)
-                noll = noll_coefficient(l)
+                mode = self._key_to_l(k)
+                noll = noll_coefficient(mode)
                 self.coeffs[k] *= noll
 
     def ignore(self, key):
@@ -1073,12 +1087,12 @@ class ZernikeVector(MutableMapping):
         """
         phase = 0.0
         for k, z in self.coeffs.items():
-            l = self._key_to_l(k)
+            mode = self._key_to_l(k)
             if self.normalized:
-                norm = noll_coefficient(l)
+                norm = noll_coefficient(mode)
             else:
                 norm = 1.0
-            ph = z * norm * zernike_noll(l, rho, phi)
+            ph = z * norm * zernike_noll(mode, rho, phi)
             phase += ph
         return phase
 
@@ -1094,19 +1108,24 @@ class ZernikeVector(MutableMapping):
         ph = self.total_phase(r, p)
         return x, y, r, p, ph
 
-    def fringe_bar_chart(self, total=True, max_c=2000*u.nm, title=None):
+    def fringe_bar_chart(self, total=True, max_c=2000*u.nm, title=None, last_mode=None):
         """
         Plot a bar chart of the fringe amplitudes of the coefficients
         """
         # we want to plot bars for each of the modes we usually use and thus label.
         label_keys = sorted(self.__zernikelabels.keys())
-        last_label = self._key_to_l(label_keys[-1])
+        if last_mode is None:
+            last_label = self._key_to_l(label_keys[-1])
+        else:
+            last_label = last_mode
         last_coeff = self._key_to_l(sorted(self.coeffs.keys())[-1])
-        if last_coeff < 37:
+
+        if last_coeff < 21:
             modes = label_keys[3:last_coeff]  # ignore piston and tilts in bar plot
         else:
-            modes = label_keys[3:]
+            modes = label_keys[3:22]
         labels = [self.shortlabel(m) for m in modes]
+
         if self.normalized:
             coeffs = [self.__getitem__(m).value * noll_coefficient(self._key_to_l(m)) for m in modes]
         else:
@@ -1129,7 +1148,7 @@ class ZernikeVector(MutableMapping):
         ind = np.arange(len(labels))
         fig, ax = plt.subplots(figsize=(11, 5))
         fig.set_label("Fringe Wavefront Amplitude per Zernike Mode")
-        rects = ax.bar(ind, coeffs, color=cmap.to_rgba(coeffs))
+        ax.bar(ind, coeffs, color=cmap.to_rgba(coeffs))
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
         ax.yaxis.grid(color='gray', linestyle='dotted')
@@ -1145,19 +1164,24 @@ class ZernikeVector(MutableMapping):
         cb.set_label("%s" % self.units)
         return fig
 
-    def bar_chart(self, residual=None, total=True, max_c=500*u.nm, title=None):
+    def bar_chart(self, residual=None, total=True, max_c=500*u.nm, title=None, last_mode=None):
         """
         Plot a bar chart of the coefficients and, optionally, a residual amount not included in the coefficients.
         """
         # we want to plot bars for each of the modes we usually use and thus label.
         label_keys = sorted(self.__zernikelabels.keys())
-        last_label = self._key_to_l(label_keys[-1])
+        if last_mode is None:
+            last_label = self._key_to_l(label_keys[-1])
+        else:
+            last_label = last_mode
+
         last_coeff = self._key_to_l(sorted(self.coeffs.keys())[-1])
-        if last_coeff < 37:
+        if last_coeff < 21:
             modes = label_keys[3:last_coeff]  # ignore piston and tilts in bar plot
         else:
-            modes = label_keys[3:]
+            modes = label_keys[3:22]
         labels = [self.shortlabel(m) for m in modes]
+
         if self.normalized:
             coeffs = [np.abs(self.__getitem__(m).value) for m in modes]
         else:
@@ -1186,7 +1210,7 @@ class ZernikeVector(MutableMapping):
         ind = np.arange(len(labels))
         fig, ax = plt.subplots(figsize=(11, 5))
         fig.set_label("RMS Wavefront Error per Zernike Mode")
-        rects = ax.bar(ind, coeffs, color=cmap.to_rgba(coeffs))
+        ax.bar(ind, coeffs, color=cmap.to_rgba(coeffs))
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
         ax.yaxis.grid(color='gray', linestyle='dotted')

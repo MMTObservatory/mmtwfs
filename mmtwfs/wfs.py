@@ -14,8 +14,6 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 
 from skimage import feature
-from skimage.transform import AffineTransform
-from skimage.measure import ransac
 from scipy import ndimage, optimize
 
 import astropy.units as u
@@ -254,32 +252,34 @@ def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True):
         r=apsize/2.
     )
     masks = apers.to_mask(method='subpixel')
+    sigma = 0.0
     snrs = []
-    spot = np.zeros(masks[0].shape)
-    for m in masks:
-        subim = m.cutout(data)
+    if len(masks) >= 1:
+        spot = np.zeros(masks[0].shape)
+        for m in masks:
+            subim = m.cutout(data)
 
-        # make co-added spot image for use in calculating the seeing
-        if subim.shape == spot.shape:
-            spot += subim
+            # make co-added spot image for use in calculating the seeing
+            if subim.shape == spot.shape:
+                spot += subim
 
-        signal = subim.sum()
-        noise = np.sqrt(stddev**2 / (subim.shape[0] * subim.shape[1]))
-        snr = signal / noise
-        snrs.append(snr)
+            signal = subim.sum()
+            noise = np.sqrt(stddev**2 / (subim.shape[0] * subim.shape[1]))
+            snr = signal / noise
+            snrs.append(snr)
 
-    snrs = np.array(snrs)
+        snrs = np.array(snrs)
 
-    # set up 2D gaussian model plus constant background to fit to the coadded spot
-    with warnings.catch_warnings():
-        # ignore astropy warnings about issues with the fit...
-        warnings.simplefilter("ignore")
-        model = Gaussian2D(amplitude=spot.max(), x_mean=spot.shape[1]/2, y_mean=spot.shape[0]/2) + Polynomial2D(degree=0)
-        fitter = LevMarLSQFitter()
-        y, x = np.mgrid[:spot.shape[0], :spot.shape[1]]
-        fit = fitter(model, x, y, spot)
+        # set up 2D gaussian model plus constant background to fit to the coadded spot
+        with warnings.catch_warnings():
+            # ignore astropy warnings about issues with the fit...
+            warnings.simplefilter("ignore")
+            model = Gaussian2D(amplitude=spot.max(), x_mean=spot.shape[1]/2, y_mean=spot.shape[0]/2) + Polynomial2D(degree=0)
+            fitter = LevMarLSQFitter()
+            y, x = np.mgrid[:spot.shape[0], :spot.shape[1]]
+            fit = fitter(model, x, y, spot)
 
-        sigma = 0.5 * (fit.x_stddev_0.value + fit.y_stddev_0.value)
+            sigma = 0.5 * (fit.x_stddev_0.value + fit.y_stddev_0.value)
 
     return srcs, masks, snrs, sigma, wfsfind_fig
 
@@ -428,7 +428,11 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
         (-coma_bound, coma_bound),
         (-coma_bound, coma_bound)
     )
-    min_results = optimize.minimize(fit_apertures, pars, args=args, bounds=bounds, options={'ftol': 1e-13, 'gtol': 1e-7})
+    try:
+        min_results = optimize.minimize(fit_apertures, pars, args=args, bounds=bounds, options={'ftol': 1e-13, 'gtol': 1e-7})
+    except Exception as e:
+        msg = f"Aperture grid matching failed: {e}"
+        raise WFSAnalysisFailed(value=msg)
 
     fit_results = {}
     for i, k in enumerate(par_keys):
@@ -448,9 +452,9 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
     ref_mask, src_mask = match_apertures(refx, refy, srcs['xcentroid'], srcs['ycentroid'], max_dist=spacing/2.)
 
     # now use RANSAC to fine tune the X, Y offset of the aperture pattern
-    #fine_src = np.array((refx[ref_mask], refy[ref_mask])).transpose()
-    #fine_dst = np.array((srcs['xcentroid'][src_mask], srcs['ycentroid'][src_mask])).transpose()
-    #model, inliers = ransac((fine_src, fine_dst), AffineTransform, min_samples=3, residual_threshold=spacing, max_trials=100)
+    # fine_src = np.array((refx[ref_mask], refy[ref_mask])).transpose()
+    # fine_dst = np.array((srcs['xcentroid'][src_mask], srcs['ycentroid'][src_mask])).transpose()
+    # model, inliers = ransac((fine_src, fine_dst), AffineTransform, min_samples=3, residual_threshold=spacing, max_trials=100)
 
     # these are unscaled so that the slope includes defocus
     trim_refx = ref.masked_apertures['xcentroid'][ref_mask] + fit_results['xcen']

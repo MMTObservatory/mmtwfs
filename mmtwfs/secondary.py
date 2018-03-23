@@ -5,18 +5,17 @@
 Classes and utilities for optical modeling and controlling the position of the secondary mirrors of the MMTO.
 """
 import socket
-import sys
-
-import logging
-import logging.handlers
-log = logging.getLogger("Secondary")
-log.setLevel(logging.INFO)
 
 import astropy.units as u
 
 from .utils import srvlookup
 from .config import recursive_subclasses, merge_config, mmt_config
 from .custom_exceptions import WFSConfigException, WFSCommandException
+
+import logging
+import logging.handlers
+log = logging.getLogger("Secondary")
+log.setLevel(logging.INFO)
 
 
 def SecondaryFactory(secondary="f5", config={}, **kwargs):
@@ -60,7 +59,7 @@ class Secondary(object):
             sock = self.hex_sock()
             sock.sendall(cmd.encode("utf8"))
             sock.sendall(b"apply_offsets\n")
-            result = sock.recv(4096)
+            sock.recv(4096)
             sock.shutdown(socket.SHUT_RDWR)
             sock.close()
         return cmd
@@ -210,6 +209,7 @@ class Secondary(object):
             sock.shutdown(socket.SHUT_RDWR)
             sock.close()
         return cmds
+
 
 class F5(Secondary):
     """
