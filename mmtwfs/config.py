@@ -116,7 +116,7 @@ mmt_config = {
         "f5": {
             "hexserv": "_hexapod._tcp.mmto.arizona.edu",
             "diameter": 1688.0 * u.mm,  # clear aperture of secondary
-            "plate_scale": 0.167 * u.mm / u.arcsec, # plate scale of the focal plane (this is for spectroscopic mode)
+            "plate_scale": 0.167 * u.mm / u.arcsec,  # plate scale of the focal plane (this is for spectroscopic mode)
             "theta_cc": 79.0 * u.nm / u.arcsec,  # nm of coma per arcsec of center-of-curvature tilt.
             "cc_trans": 24.97 * u.um / u.arcsec,  # um of hexapod translation per arcsec of center-of-curvature tilt.
             "zc_trans": 9.453 * u.um / u.arcsec,  # um of hexapod translation per arcsec of zero-coma tilt.
@@ -150,8 +150,14 @@ mmt_config = {
             "nzern": 80,  # number of zernike modes to fit
             "az_parity": -1,  # E/W flip in image motion
             "el_parity": 1,  # N/S flip in image motion
-            "reference_file": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "f5_hecto_ref.fits")),
-            "aberr_table_file": pkg_resources.resource_filename(__name__, os.path.join("data", "f5zernfield_std_curvedsurface.TXT")),
+            "reference_file": pkg_resources.resource_filename(
+                __name__,
+                os.path.join("data", "ref_images", "f5_hecto_ref.fits")
+            ),
+            "aberr_table_file": pkg_resources.resource_filename(
+                __name__,
+                os.path.join("data", "f5zernfield_std_curvedsurface.TXT")
+            ),
             "modes": {
                 "megacam": {
                     "label": "Megacam",

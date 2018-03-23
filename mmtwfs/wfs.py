@@ -14,8 +14,6 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 
 from skimage import feature
-from skimage.transform import AffineTransform
-from skimage.measure import ransac
 from scipy import ndimage, optimize
 
 import astropy.units as u
@@ -454,9 +452,9 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
     ref_mask, src_mask = match_apertures(refx, refy, srcs['xcentroid'], srcs['ycentroid'], max_dist=spacing/2.)
 
     # now use RANSAC to fine tune the X, Y offset of the aperture pattern
-    #fine_src = np.array((refx[ref_mask], refy[ref_mask])).transpose()
-    #fine_dst = np.array((srcs['xcentroid'][src_mask], srcs['ycentroid'][src_mask])).transpose()
-    #model, inliers = ransac((fine_src, fine_dst), AffineTransform, min_samples=3, residual_threshold=spacing, max_trials=100)
+    # fine_src = np.array((refx[ref_mask], refy[ref_mask])).transpose()
+    # fine_dst = np.array((srcs['xcentroid'][src_mask], srcs['ycentroid'][src_mask])).transpose()
+    # model, inliers = ransac((fine_src, fine_dst), AffineTransform, min_samples=3, residual_threshold=spacing, max_trials=100)
 
     # these are unscaled so that the slope includes defocus
     trim_refx = ref.masked_apertures['xcentroid'][ref_mask] + fit_results['xcen']

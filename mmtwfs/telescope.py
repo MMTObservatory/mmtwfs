@@ -4,11 +4,6 @@
 import subprocess
 import warnings
 
-import logging
-import logging.handlers
-log = logging.getLogger("Telescope")
-log.setLevel(logging.INFO)
-
 import numpy as np
 from skimage.transform import rotate as imrotate
 
@@ -17,7 +12,6 @@ from astropy.io import ascii
 from astropy.table import Table
 from astropy import visualization
 
-import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import matplotlib.colors as col
@@ -27,10 +21,16 @@ from .custom_exceptions import WFSConfigException
 from .secondary import SecondaryFactory
 from .zernike import ZernikeVector
 
+import logging
+import logging.handlers
+
 # we need to wrap the poppy import in a context manager to trap its whinging about missing pysynphot stuff that we don't use.
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     import poppy
+
+log = logging.getLogger("Telescope")
+log.setLevel(logging.INFO)
 
 
 class MMT(object):
@@ -145,7 +145,6 @@ class MMT(object):
         psf = osys.calc_psf(w)
         psf_fig = None
         if plot:
-            im = psf[0].data
             psf_fig, ax = plt.subplots()
             psf_fig.set_label("PSF at {0:0.0f}".format(wavelength))
             norm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.LinearStretch())
@@ -290,7 +289,7 @@ class MMT(object):
         if self.connected:
             log.info("Undoing last set of primary mirror corrections...")
             self.to_rcell(self.last_forces, filename=zfilename)
-            frac = self.bend_mirror(filename=filename)
+            frac = self.bend_mirror(filename=zfilename)
             self.secondary.m1spherical(frac * self.last_m1focus)
         else:
             log.info("Not connected; no undo commands sent.")
