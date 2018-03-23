@@ -59,10 +59,10 @@ class Secondary(object):
             sock = self.hex_sock()
             sock.sendall(cmd.encode("utf8"))
             sock.sendall(b"apply_offsets\n")
-            result = sock.recv(4096)
+            sock.recv(4096)
             sock.shutdown(socket.SHUT_RDWR)
             sock.close()
-        return cmd, result
+        return cmd
 
     def connect(self):
         """

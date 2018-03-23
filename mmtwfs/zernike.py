@@ -16,6 +16,7 @@ import json
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import matplotlib.colors as col
+from mpl_toolkits.mplot3d import Axes3D
 
 import numpy as np
 import astropy.units as u
