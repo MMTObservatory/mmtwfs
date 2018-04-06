@@ -852,7 +852,8 @@ class ZernikeVector(MutableMapping):
         """
         keys = sorted(self.coeffs.keys())
         last = self._key_to_l(keys[-1])
-        arr = u.Quantity(np.zeros(last - self.modestart + 1), self.units)
+        arrsize = max(0, last - self.modestart + 1)
+        arr = u.Quantity(np.zeros(arrsize), self.units)
         for k in keys:
             i = self._key_to_l(k) - self.modestart
             if i >= 0:
