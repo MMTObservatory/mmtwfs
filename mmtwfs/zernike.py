@@ -910,19 +910,20 @@ class ZernikeVector(MutableMapping):
             s += "Fringe Coefficients\n"
 
         keys = sorted(self.coeffs.keys())
-        for k in keys:
-            if self._key_to_l(k) <= last:
-                if k in self.__zernikelabels:
-                    s += "{0:>4s}: {1:>12s} \t {2:s}".format(k, "{0:0.03g}".format(self.coeffs[k]), self.label(k))
-                else:
-                    s += "{0:>4s}: {1:>12s}".format(k, "{0:0.03g}".format(self.coeffs[k]))
-                s += "\n"
+        if len(keys) > 0:
+            for k in keys:
+                if self._key_to_l(k) <= last:
+                    if k in self.__zernikelabels:
+                        s += "{0:>4s}: {1:>12s} \t {2:s}".format(k, "{0:0.03g}".format(self.coeffs[k]), self.label(k))
+                    else:
+                        s += "{0:>4s}: {1:>12s}".format(k, "{0:0.03g}".format(self.coeffs[k]))
+                    s += "\n"
 
-        s += "\n"
-        if self._key_to_l(keys[-1]) > last:
-            hi_orders = ZernikeVector(modestart=last+1, normalized=self.normalized, units=self.units, **self.coeffs)
-            s += "High Orders RMS: \t {0:0.03g}  {1:>3s} ➞ {2:>3s}\n".format(hi_orders.rms, self._l_to_key(last+1), keys[-1])
-        s += "Total RMS: \t \t {0:0.03g}\n".format(self.rms)
+            s += "\n"
+            if self._key_to_l(keys[-1]) > last:
+                hi_orders = ZernikeVector(modestart=last+1, normalized=self.normalized, units=self.units, **self.coeffs)
+                s += "High Orders RMS: \t {0:0.03g}  {1:>3s} ➞ {2:>3s}\n".format(hi_orders.rms, self._l_to_key(last+1), keys[-1])
+            s += "Total RMS: \t \t {0:0.03g}\n".format(self.rms)
 
         return s
 
