@@ -134,7 +134,7 @@ mmt_config = {
     },
     "wfs": {
         "f5": {
-            "name": "F/5 WFS",
+            "name": "Hecto WFS",
             "secondary": "f5",  # secondary used with WFS system
             "default_mode": "hecto",
             "cor_coords": [255.0, 255.0],  # image coordinates of the center of rotation
