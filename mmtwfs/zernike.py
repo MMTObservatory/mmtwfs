@@ -858,8 +858,6 @@ class ZernikeVector(MutableMapping):
             i = self._key_to_l(k) - self.modestart
             if i >= 0:
                 arr[i] = u.Quantity(self.coeffs[k], self.units)
-            else:
-                arr[0] = 0.0 * self.units
         return arr
 
     @property
