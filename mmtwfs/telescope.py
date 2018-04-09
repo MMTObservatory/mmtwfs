@@ -75,6 +75,12 @@ class MMT(object):
         self.last_m1focus = 0.0 * u.um
         self.total_m1focus = 0.0 * u.um
 
+        # initialize poppy optical system used for calculating the PSFs
+        self.osys = poppy.OpticalSystem()
+        self.osys.add_pupil(self.pupil)
+        self.osys.add_pupil(poppy.ZernikeWFE(radius=self.radius.to(u.m).value, coefficients=[0.0, 0.0, 0.0, 0.0]))
+        self.osys.add_detector(pixelscale=self.psf_pixel_scale, fov_arcsec=self.psf_fov)
+
     def _pupil_model(self):
         """
         Use poppy to create a model of the pupil given the configured primary and secondary mirrors.
@@ -116,7 +122,7 @@ class MMT(object):
         pup_im = pup_im / pup_im.max()
         return pup_im
 
-    def psf(self, zv=ZernikeVector(), wavelength=550.*u.nm, pixscale=0.02, fov=1.0, plot=True):
+    def psf(self, zv=ZernikeVector(), wavelength=550.*u.nm, plot=True):
         """
         Take a ZernikeVector and calculate resulting MMTO PSF at given wavelength.
         """
@@ -137,12 +143,18 @@ class MMT(object):
         # poppy wants Noll normalized coefficients
         coeffs = zv.norm_array
 
-        osys = poppy.OpticalSystem()
-        osys.add_pupil(self.pupil)
+        # pop detector out to reuse, pop old wavefront error out to make way for new
+        det = self.osys.planes.pop()
+        fov = det.fov_arcsec.value
+        old_wfe = self.osys.planes.pop()
+
+        # add new wavefront error and put detector back in place
         wfe = poppy.ZernikeWFE(radius=self.radius.to(u.m).value, coefficients=coeffs)
-        osys.add_pupil(wfe)
-        osys.add_detector(pixelscale=pixscale, fov_arcsec=fov)
-        psf = osys.calc_psf(w)
+        self.osys.add_pupil(wfe)
+        self.osys.planes.append(det)
+
+        psf = self.osys.calc_psf(w)
+
         psf_fig = None
         if plot:
             psf_fig, ax = plt.subplots()

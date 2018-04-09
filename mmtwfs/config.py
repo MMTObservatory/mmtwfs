@@ -84,6 +84,8 @@ mmt_config = {
         "n_supports": 4,  # number of secondary support struts
         "support_width": 0.12 * u.m,  # width of support struts in meters
         "support_offset": 45. * u.deg,  # offset of support struts in degrees
+        "psf_pixel_scale": 0.02,  # arcsec/pixel
+        "psf_fov": 1.0,  # arcsec
         # influence matrix to map actuator forces to surface displacement
         "surf2act_file": pkg_resources.resource_filename(__name__, os.path.join("data", "Surf2ActTEL_32.bin")),
         # coordinates of finite element nodes used in surf2act
