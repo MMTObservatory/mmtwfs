@@ -60,14 +60,14 @@ def check_wfsdata(data, header=False):
     """
     Utility to validate WFS data
 
-    Arguments
-    ---------
-    data: FITS filename or 2D ndarray
+    Parameters
+    ----------
+    data : FITS filename or 2D ndarray
         WFS image
 
     Returns
     -------
-    data: 2D np.ndarray
+    data : 2D np.ndarray
         Validated 2D WFS image
     """
     hdr = None
@@ -98,17 +98,17 @@ def wfsfind(data, fwhm=7.0, threshold=5.0, plot=True, ap_radius=5.0, std=None):
     """
     Use photutils.DAOStarFinder() to find and centroid spots in a Shack-Hartmann WFS image.
 
-    Arguments
-    ---------
-    data: FITS filename or 2D ndarray
+    Parameters
+    ----------
+    data : FITS filename or 2D ndarray
         WFS image
-    fwhm: float (default: 5.)
+    fwhm : float (default: 5.)
         FWHM in pixels of DAOfind convolution kernel
-    threshold: float
+    threshold : float
         DAOfind threshold in units of the standard deviation of the image
-    plot: bool
+    plot:  bool
         Toggle plotting of the reference image and overlayed apertures
-    ap_radius: float
+    ap_radius : float
         Radius of plotted apertures
     """
     # data should be background subtracted first...
@@ -142,15 +142,15 @@ def grid_spacing(data, apertures):
     """
     Measure the WFS grid spacing which changes with telescope focus.
 
-    Arguments
-    ---------
-    data: WFS image (FITS or np.ndarray)
-    apertures: astropy.table.Table
+    Parameters
+    ----------
+    data : WFS image (FITS or np.ndarray)
+    apertures : `~astropy.table.Table`
         WFS aperture data to analyze
 
     Returns
     -------
-    xspacing, yspacing: float, float
+    xspacing, yspacing : float, float
         Average grid spacing in X and Y axes
     """
     data = check_wfsdata(data)
@@ -180,22 +180,22 @@ def center_pupil(data, pup_mask, threshold=0.5, sigma=20., plot=True):
     Find the center of the pupil in a WFS image using skimage.feature.match_template(). This generates
     a correlation image and we centroid the peak of the correlation to determine the center.
 
-    Arguments
-    ---------
-    data: str or 2D ndarray
+    Parameters
+    ----------
+    data : str or 2D ndarray
         WFS image to analyze, either FITS file or ndarray image data
-    pup_mask: str or 2D ndarray
+    pup_mask : str or 2D ndarray
         Pupil model to use in the template matching
-    threshold: float (default: 0.0)
+    threshold : float (default: 0.0)
         Sets image to 0 where it's below threshold * image.max()
-    sigma: float (default: 20.)
+    sigma : float (default: 20.)
         Sigma of gaussian smoothing kernel
-    plot: bool
+    plot : bool
         Toggle plotting of the correlation image
 
     Returns
     -------
-    cen: tuple (float, float)
+    cen : tuple (float, float)
         X and Y pixel coordinates of the pupil center
     """
     data = check_wfsdata(data)
@@ -222,22 +222,22 @@ def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True):
     Use wfsfind to locate and centroid spots.  Measure their S/N ratios and the sigma of a 2D gaussian fit to
     the co-added spot.
 
-    Arguments
-    ---------
-    data: str or 2D ndarray
+    Parameters
+    ----------
+    data : str or 2D ndarray
         WFS image to analyze, either FITS file or ndarray image data
-    apsize: float
+    apsize : float
         Diameter/width of the SH apertures
 
     Returns
     -------
-    srcs: astropy.table.Table
+    srcs : astropy.table.Table
         Detected WFS spot positions and properties
-    masks: list of photutils.ApertureMask objects
+    masks : list of photutils.ApertureMask objects
         Masks used for aperture centroiding
-    snrs: 1D np.ndarray
+    snrs : 1D np.ndarray
         S/N for each located spot
-    sigma: float
+    sigma : float
     """
     data = check_wfsdata(data)
 
@@ -331,12 +331,33 @@ def aperture_distance(refx, refy, spotx, spoty):
 def fit_apertures(pars, ref, spots):
     """
     Scale the reference positions by the fit parameters and calculate the total distance between the matches.
-    The parameters are:
-        xc, yc = center positions
-        scale = magnification of the grid (focus)
-        xcoma, ycoma = linear change in magnification as a function of x/y (coma)
+    The parameters of the fit are:
+
+        ``xc, yc = center positions``
+
+        ``scale = magnification of the grid (focus)``
+
+        ``xcoma, ycoma = linear change in magnification as a function of x/y (coma)``
 
     'ref' and 'spots' are assumed to be dict-like and must have the keys 'xcentroid' and 'ycentroid'.
+
+    Parameters
+    ----------
+    pars : list-like
+        The fit parameters passed in as a 5 element list: (xc, yc, scale, xcoma, ycoma)
+
+    ref : dict-like
+        Dict containing ``xcentroid`` and ``ycentroid`` keys that contain the reference X and Y
+        positions of the apertures.
+
+    spots : dict-like
+        Dict containing ``xcentroid`` and ``ycentroid`` keys that contain the measured X and Y
+        positions of the apertures.
+
+    Returns
+    -------
+    dist : float
+        The cumulative distance between the matched reference and measured aperture positions.
     """
     xc = pars[0]
     yc = pars[1]
@@ -355,28 +376,28 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
     """
     Analyze a WFS image and produce pixel offsets between reference and observed spot positions.
 
-    Arguments
-    ---------
-    data: str or 2D np.ndarray
+    Parameters
+    ----------
+    data : str or 2D np.ndarray
         FITS file or np.ndarray containing WFS observation
-    ref: astropy.Table
+    ref : `~astropy.table.Table`
         Table of reference apertures
-    plot: bool
+    plot : bool
         Toggle plotting of image with aperture overlays
 
     Returns
     -------
-    slopes: list of tuples
+    slopes : list of tuples
         X/Y pixel offsets between measured and reference aperture positions.
-    final_aps: astropy.Table
+    final_aps : `~astropy.table.Table`
         Centroided observed apertures
-    xspacing, yspacing: float, float
+    xspacing, yspacing : float, float
         Observed X and Y grid spacing
-    xcen, ycen: float, float
+    xcen, ycen : float, float
         Center of pupil image
-    idx: list
+    idx : list
         Index of reference apertures that have detected spots
-    sigma: float
+    sigma : float
         Sigma of gaussian fit to co-added WFS spot
     """
     data = check_wfsdata(data)
@@ -518,15 +539,15 @@ class SH_Reference(object):
         Read WFS reference image and generate reference magnifications (i.e. grid spacing) and
         aperture positions.
 
-        Arguments
-        ---------
-        data: FITS filename or 2D ndarray
+        Parameters
+        ----------
+        data : FITS filename or 2D ndarray
             WFS reference image
-        fwhm: float
+        fwhm : float
             FWHM in pixels of DAOfind convolution kernel
-        threshold: float
+        threshold : float
             DAOfind threshold in units of the standard deviation of the image
-        plot: bool
+        plot : bool
             Toggle plotting of the reference image and overlayed apertures
         """
         self.data = check_wfsdata(data)

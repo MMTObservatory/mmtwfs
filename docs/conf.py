@@ -31,7 +31,7 @@ except ImportError:
             sys.path.insert(1, a_h_path)
 
 # Load all of the global Astropy configuration
-from astropy_helpers.sphinx.conf import *
+from sphinx_astropy.conf import *
 from astropy.extern import six
 
 # Get configuration information from setup.cfg
@@ -53,7 +53,7 @@ needs_sphinx = '1.2'
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['sphinx.ext.intersphinx', 'sphinx_automodapi.automodapi']
+# extensions = ['sphinx_automodapi.automodapi', 'sphinx_automodapi.smart_resolver', 'numpydoc']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -148,5 +148,23 @@ htmlhelp_basename = 'MMTWFSdoc'
 
 
 # Example configuration for intersphinx: refer to the Python standard library.
-intersphinx_mapping = {'https://docs.python.org/': None,
-                       'http://docs.astropy.org/en/stable/': None}
+#intersphinx_mapping = {'https://docs.python.org/': None,
+#                       'http://docs.astropy.org/en/stable/': None}
+intersphinx_mapping['astropy'] = ('http://docs.astropy.org/en/stable/', None)
+
+## -- Options for the edit_on_github extension ----------------------------------------
+
+if eval(setup_cfg.get('edit_on_github')):
+    extensions += ['sphinx_astropy.ext.edit_on_github']
+
+    versionmod = __import__(setup_cfg['package_name'] + '.version')
+    edit_on_github_project = setup_cfg['github_project']
+    if versionmod.version.release:
+        edit_on_github_branch = "v" + versionmod.version.version
+    else:
+        edit_on_github_branch = "master"
+
+    edit_on_github_source_root = ""
+    edit_on_github_doc_root = "docs"
+
+github_issues_url = 'https://github.com/MMTObservatory/mmtwfs/issues/'
