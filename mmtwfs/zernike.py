@@ -35,23 +35,45 @@ __all__ = ['ZernikeVector', 'cart2pol', 'pol2cart', 'R_mn', 'dR_drho', 'theta_m'
 def cart2pol(arr):
     """
     Convert array of [x, y] vectors to [rho, theta]
+
+    Parameters
+    ----------
+    arr : `~numpy.ndarray`
+        2D array with ``x`` vector as 0th element and ``y`` vector as 1st element.
+
+    Returns
+    -------
+    polarr : `~numpy.ndarray`
+        2D array with ``rho`` as the 0th element and ``theta`` as the 1st element.
     """
     x = arr[0]
     y = arr[1]
     rho = np.sqrt(x**2 + y**2)
     theta = np.arctan2(y, x)
-    return np.array([rho, theta])
+    polarr = np.array([rho, theta])
+    return polarr
 
 
-def pol2cart(arr):
+def pol2cart(polarr):
     """
     Convert array of [rho, theta] vectors to [x, y]
+
+    Parameters
+    ----------
+    polarr : `~numpy.ndarray`
+        2D array with ``rho`` as the 0th element and ``theta`` as the 1st element.
+
+    Returns
+    -------
+    arr : `~numpy.ndarray`
+        2D array with ``x`` vector as 0th element and ``y`` vector as 1st element.
     """
     rho = arr[0]
     theta = arr[1]
     x = rho * np.cos(theta)
     y = rho * np.sin(theta)
-    return np.array([x, y])
+    arr = np.array([x, y])
+    return arr
 
 
 def R_mn(m, n, rho):
@@ -64,12 +86,12 @@ def R_mn(m, n, rho):
         m-th azimuthal Zernike index
     n : int
         n-th radial Zernike index
-    rho : 2D ndarray
+    rho : 2D `~numpy.ndarray`
         Radial coordinate grid
 
     Returns
     -------
-    wf : 2D ndarray
+    wf : 2D `~numpy.ndarray`
         Radial polynomial with identical shape as **rho**
 
     Notes
@@ -97,12 +119,12 @@ def dR_drho(m, n, rho):
         m-th azimuthal Zernike index
     n : int
         n-th radial Zernike index
-    rho : 2D ndarray
+    rho : 2D `~numpy.ndarray`
         Radial coordinate grid
 
     Returns
     -------
-    dwf : 2D ndarray
+    dwf : 2D `~numpy.ndarray`
         Radial polynomial with identical shape as **rho**
 
     Notes
@@ -123,12 +145,12 @@ def theta_m(m, phi):
     ----------
     m : int
         m-th azimuthal Zernike index
-    phi : 2D ndarray
+    phi : 2D `~numpy.ndarray`
         Azimuthal coordinate grid
 
     Returns
     -------
-    theta : 2D ndarray
+    theta : 2D `~numpy.ndarray`
         Angular Zernike mode with identical shape as **phi**
     """
     am = np.abs(m)
@@ -147,12 +169,12 @@ def dtheta_dphi(m, phi):
     ----------
     m : int
         m-th azimuthal Zernike index
-    phi : 2D ndarray
+    phi : 2D `~numpy.ndarray`
         Azimuthal coordinate grid
 
     Returns
     -------
-    dtheta : 2D ndarray
+    dtheta : 2D `~numpy.ndarray`
         Angular slopes of mode, m, with identical shape as **phi**
     """
     am = np.abs(m)
@@ -174,17 +196,17 @@ def zernike(m, n, rho, phi, norm=False):
         m-th azimuthal Zernike index
     n : int
         n-th radial Zernike index
-    rho : 2D ndarray
+    rho : 2D `~numpy.ndarray`
          Radial coordinate grid
-    phi : 2D ndarray
+    phi : 2D `~numpy.ndarray`
         Azimuthal coordinate grid
     norm : bool (default: False)
         Normalize modes to unit variance (i.e. Noll coefficients)
 
     Returns
     -------
-    wf : 2D ndarray
-        Wavefront described by Zernike mode (m, n). Same shape as rho and phi.
+    wf : 2D `~numpy.ndarray`
+        Wavefront described by Zernike mode (m, n). Same shape as **rho** and **phi**.
 
     Notes
     -----
@@ -209,17 +231,17 @@ def dZ_dx(m, n, rho, phi, norm=False):
         m-th azimuthal Zernike index
     n : int
         n-th radial Zernike index
-    rho : 2D ndarray
+    rho : 2D `~numpy.ndarray`
         Radial coordinate grid
-    phi : 2D ndarray
+    phi : 2D `~numpy.ndarray`
         Azimuthal coordinate grid
     norm : bool (default: False)
         Normalize modes to unit variance (i.e. Noll coefficients)
 
     Returns
     -------
-    dwf : 2D ndarray
-        Wavefront slope in X described by Zernike mode (m, n). Same shape as rho and phi.
+    dwf : 2D `~numpy.ndarray`
+        Wavefront slope in X described by Zernike mode (m, n). Same shape as **rho** and **phi**.
 
     Notes
     -----
@@ -247,17 +269,17 @@ def dZ_dy(m, n, rho, phi, norm=False):
         m-th azimuthal Zernike index
     n : int
         n-th radial Zernike index
-    rho : 2D ndarray
+    rho : 2D `~numpy.ndarray`
         Radial coordinate grid
-    phi : 2D ndarray
+    phi : 2D `~numpy.ndarray`
         Azimuthal coordinate grid
     norm : bool (default: False)
         Normalize modes to unit variance (i.e. Noll coefficients)
 
     Returns
     -------
-    dwf : 2D ndarray
-        Wavefront slope in Y described by Zernike mode (m, n). Same shape as rho and phi.
+    dwf : 2D `~numpy.ndarray`
+        Wavefront slope in Y described by Zernike mode (m, n). Same shape as **rho** and **phi**.
 
     Notes
     -----
@@ -316,17 +338,17 @@ def zernike_noll(j, rho, phi, norm=False):
     ----------
     j : int
         j-th Noll Zernike index
-    rho : 2D ndarray
+    rho : 2D `~numpy.ndarray`
         Radial coordinate grid
-    phi : 2D ndarray
+    phi : 2D `~numpy.ndarray`
         Azimuthal coordinate grid
     norm : bool (default: True)
         Normalize modes to unit variance (i.e. Noll coefficients)
 
     Returns
     -------
-    wf : 2D ndarray
-        Wavefront described by Noll Zernike mode, j. Same shape as rho and phi.
+    wf : 2D `~numpy.ndarray`
+        Wavefront described by Noll Zernike mode, j. Same shape as **rho** and **phi**.
     """
     n, m = noll_to_zernike(j)
     wf = zernike(m, n, rho, phi, norm)
@@ -342,17 +364,17 @@ def zernike_slope_noll(j, rho, phi, norm=False):
     ----------
     j : int
         j-th Noll Zernike index
-    rho : 2D ndarray
+    rho : 2D `~numpy.ndarray`
         Radial coordinate grid
-    phi : 2D ndarray
+    phi : 2D `~numpy.ndarray`
         Azimuthal coordinate grid
     norm : bool (default: True)
         Normalize modes to unit variance (i.e. Noll coefficients)
 
     Returns
     -------
-    dwx, dwx : 2D ndarray, 2D ndarray
-        X/Y wavefront slopes of Noll Zernike mode, j. Same shape as rho and phi.
+    dwx, dwx : 2D `~numpy.ndarray`, 2D `~numpy.ndarray`
+        X/Y wavefront slopes of Noll Zernike mode, j. Same shapes as **rho** and **phi**.
     """
     n, m = noll_to_zernike(j)
     dwx = dZ_dx(m, n, rho, phi, norm=norm)
@@ -373,7 +395,7 @@ def noll_normalization_vector(nmodes=30):
 
     Returns
     -------
-    norms : 1D ndarray of length nmodes
+    norms : 1D `~numpy.ndarray` of length nmodes
     """
     nolls = (noll_to_zernike(j+1) for j in range(nmodes))
     norms = np.asanyarray([norm_coefficient(m, n) for n, m in nolls])
@@ -441,7 +463,7 @@ def zernike_influence_matrix(pup_coords, nmodes=20, modestart=2):
 
     Returns
     -------
-    matrices : tuple
+    matrices : tuple (2D `~numpy.ndarray`, 2D `~numpy.ndarray`)
         (slopes-to-zernike matrix, zernike-to-slope matrix)
     """
     x = pup_coords[0]
@@ -556,7 +578,7 @@ class ZernikeVector(MutableMapping):
         normalized : bool (default: False)
             If True, coefficients are normalized to unit variance (Noll coefficients).  If False, coefficients
             reflect the phase amplitude of the mode (fringe coefficients).
-        units : `astropy.units.IrreducibleUnit` or `astropy.units.PrefixUnit` (default: u.nm - nanometers)
+        units : `~astropy.units.IrreducibleUnit` or `~astropy.units.PrefixUnit` (default: u.nm - nanometers)
             Units of the coefficients.
         **kwargs : kwargs
             Keyword arguments for setting terms individually, e.g. Z09=10.0.
