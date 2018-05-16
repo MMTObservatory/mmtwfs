@@ -113,5 +113,5 @@ htmlhelp_basename = 'MMTWFSdoc'
 
 
 # Example configuration for intersphinx: refer to the Python standard library.
-#intersphinx_mapping = {'https://docs.python.org/': None,
-#                       'http://docs.astropy.org/en/stable/': None}
+intersphinx_mapping = {'https://docs.python.org/': None,
+                       'http://docs.astropy.org/en/stable/': None}
