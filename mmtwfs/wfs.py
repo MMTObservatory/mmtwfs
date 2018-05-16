@@ -661,13 +661,13 @@ class WFS(object):
 
     def get_flipud(self, mode=None):
         """
-        Method to determine if the WFS image needs to be flipped up/down
+        Determine if the WFS image needs to be flipped up/down
         """
         return False
 
     def get_fliplr(self, mode=None):
         """
-        Method to determine if the WFS image needs to be flipped left/right
+        Determine if the WFS image needs to be flipped left/right
         """
         return False
 
