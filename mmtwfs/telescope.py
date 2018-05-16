@@ -33,6 +33,9 @@ log = logging.getLogger("Telescope")
 log.setLevel(logging.INFO)
 
 
+__all__ = ['MMT']
+
+
 class MMT(object):
     """
     Defines configuration and methods that pertain to the MMT's telescope and primary mirror systems

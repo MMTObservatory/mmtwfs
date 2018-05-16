@@ -39,6 +39,11 @@ log = logging.getLogger("WFS")
 log.setLevel(logging.INFO)
 
 
+__all__ = ['SH_Reference', 'WFS', 'F9', 'NewF9', 'F5', 'Binospec', 'MMIRS', 'WFSFactory', 'wfs_norm', 'check_wfsdata',
+           'wfsfind', 'grid_spacing', 'center_pupil', 'get_apertures', 'match_apertures', 'aperture_distance', 'fit_apertures',
+           'get_slopes']
+
+
 def wfs_norm(data, interval=visualization.ZScaleInterval(contrast=0.05), stretch=visualization.LinearStretch()):
     """
     Define default image normalization to use for WFS images

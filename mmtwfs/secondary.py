@@ -18,6 +18,9 @@ log = logging.getLogger("Secondary")
 log.setLevel(logging.INFO)
 
 
+__all__ = ['Secondary', 'F9', 'F5', 'SecondaryFactory']
+
+
 def SecondaryFactory(secondary="f5", config={}, **kwargs):
     """
     Build and return proper Secondary sub-class instance based on the value of 'secondary'.

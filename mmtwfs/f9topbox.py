@@ -15,6 +15,9 @@ log = logging.getLogger("F/9 TopBox")
 log.setLevel(logging.INFO)
 
 
+__all__ = ['CompMirror']
+
+
 class CompMirror(object):
     """
     Defines how to query and command the comparison mirror within the F/9 topbox

@@ -1,6 +1,8 @@
 # Licensed under GPL3
 # coding=utf-8
 
+__all__ = ['MMTWFSException', 'WFSConfigException', 'WFSCommandException', 'WFSAnalysisFailed', 'ZernikeException']
+
 
 class MMTWFSException(Exception):
     """

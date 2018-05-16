@@ -1,5 +1,5 @@
-Wavefront Sensor Analysis Software for the MMTO (`mmtwfs`)
-==========================================================
+Wavefront Sensor Analysis Software for the MMTO (:py:mod:`mmtwfs`)
+==================================================================
 
 Introduction
 ------------
@@ -40,8 +40,8 @@ subclass to construct. The default configuration for each supported WFS is defin
 To analyze a Shack-Hartmann image taken by the wavefront sensor and measure the wavefront slopes, use the
 :meth:`~mmtwfs.wfs.WFS.measure_slopes` method:
 
-    >>> from astropy.utils.data import get_pkg_data_filename
-    >>> wfsfile = get_pkg_data_filename('data/test_data/bino_wfs_0600.fits', package='mmtwfs')
+    >>> from astropy.utils.data import get_pkg_data_filename as get_file
+    >>> wfsfile = get_file('data/test_data/bino_wfs_0600.fits', package='mmtwfs')
     >>> slope_results = bino_wfs.measure_slopes(wfsfile)
 
 To fit a model to these slopes, pass ``slope_results`` to the :meth:`~mmtwfs.wfs.WFS.fit_wavefront` method:

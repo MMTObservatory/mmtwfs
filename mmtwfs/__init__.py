@@ -1,7 +1,6 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
-
 """
-This is an Astropy affiliated package.
+The mmtwfs package is a collection of code that for analyzing Shack-Hartmann wavefront sensor data for the MMTO
 """
 
 # Affiliated packages may add whatever they like to this file, but

@@ -8,6 +8,9 @@ Misc. utility routines
 import dns.resolver as resolver
 
 
+__all__ = ['srvlookup']
+
+
 def srvlookup(server):
     """
     Perform a SRV lookup of 'server' and return its hostname and port.

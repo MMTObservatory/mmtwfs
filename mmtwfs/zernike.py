@@ -27,6 +27,11 @@ from scipy.special import factorial as fac
 from .custom_exceptions import ZernikeException
 
 
+__all__ = ['ZernikeVector', 'cart2pol', 'pol2cart', 'R_mn', 'dR_drho', 'theta_m', 'dtheta_dphi', 'zernike', 'dZ_dx', 'dZ_dy',
+           'noll_to_zernike', 'zernike_noll', 'zernike_slope_noll', 'noll_normalization_vector', 'norm_coefficient',
+           'noll_coefficient', 'zernike_influence_matrix']
+
+
 def cart2pol(arr):
     """
     convert array of [x, y] vectors to [rho, theta]

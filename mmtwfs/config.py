@@ -11,6 +11,9 @@ import pkg_resources
 import astropy.units as u
 
 
+__all__ = ['recursive_subclasses', 'merge_config', 'mmt_config']
+
+
 def recursive_subclasses(cls):
     """
     The __subclasses__() method only goes one level deep, but various classes can be separated by multiple
