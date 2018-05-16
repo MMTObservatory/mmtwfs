@@ -1,6 +1,9 @@
 MMTWFS API Documentation
 ========================
 
+.. automodapi:: mmtwfs
+    :no-inheritance-diagram:
+
 .. automodapi:: mmtwfs.zernike
     :no-inheritance-diagram:
 

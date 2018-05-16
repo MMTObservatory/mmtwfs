@@ -2,7 +2,7 @@
 # coding=utf-8
 
 """
-zernike.py -- A collection of functions and classes for performing wavefront analysis using Zernike polynomials.
+A collection of functions and classes for performing wavefront analysis using Zernike polynomials.
 Several of these routines were adapted from https://github.com/tvwerkhoven/libtim-py. They have been updated to make them
 more applicable for MMTO usage and comments added to clarify what they do and how.
 
@@ -34,7 +34,7 @@ __all__ = ['ZernikeVector', 'cart2pol', 'pol2cart', 'R_mn', 'dR_drho', 'theta_m'
 
 def cart2pol(arr):
     """
-    convert array of [x, y] vectors to [rho, theta]
+    Convert array of [x, y] vectors to [rho, theta]
     """
     x = arr[0]
     y = arr[1]
@@ -45,7 +45,7 @@ def cart2pol(arr):
 
 def pol2cart(arr):
     """
-    convert array of [rho, theta] vectors to [x, y]
+    Convert array of [rho, theta] vectors to [x, y]
     """
     rho = arr[0]
     theta = arr[1]

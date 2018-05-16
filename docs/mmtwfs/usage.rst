@@ -1,5 +1,5 @@
-Using `mmtwfs`
-==============
+Analyzing Shack-Hartmann Data with `mmtwfs`
+===========================================
 
 Script or Notebook
 ------------------
