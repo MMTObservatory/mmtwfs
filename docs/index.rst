@@ -3,7 +3,7 @@
  MMTWFS
 ================
 
-Welcome to the documentation for the MMTO's wavefront sensor analysis software: `mmtwfs`!
+Welcome to the documentation for the MMTO's wavefront sensor analysis software: `mmtwfs`
 
 Documentation
 =============

@@ -4,9 +4,9 @@
 Licenses
 ********
 
-Ccdproc License
+MMTWFS License
 ===============
 
-Ccdproc is licensed under a 3-clause BSD style license:
+MMTWFS is licensed under a 3-clause BSD style license:
 
 .. include:: ../LICENSE.rst

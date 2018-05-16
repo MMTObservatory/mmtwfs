@@ -28,7 +28,7 @@ needs_sphinx = '1.2'
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['sphinx.ext.intersphinx']
+extensions = ['sphinx.ext.intersphinx', 'sphinx_automodapi.automodapi']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -89,7 +89,11 @@ html_theme = 'bootstrap-astropy'
 # documentation.
 #
 # html_theme_options = {}
-
+html_theme_options = {
+    'logotext1': 'mmt',   # white, semi-bold
+    'logotext2': 'wfs',  # orange, light
+    'logotext3': ':docs'   # white, light
+}
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".

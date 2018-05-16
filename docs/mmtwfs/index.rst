@@ -54,8 +54,6 @@ Using `mmtwfs`
 
     usage.rst
     tips_tricks_caveats.rst
-
-.. automodapi:: mmtwfs
-
+    api_docs.rst
 
 .. _GitHub repo: https://github.com/MMTObservatory/mmtwfs
