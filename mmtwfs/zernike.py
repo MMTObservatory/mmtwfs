@@ -68,8 +68,8 @@ def pol2cart(polarr):
     arr : `~numpy.ndarray`
         2D array with ``x`` vector as 0th element and ``y`` vector as 1st element.
     """
-    rho = arr[0]
-    theta = arr[1]
+    rho = polarr[0]
+    theta = polarr[1]
     x = rho * np.cos(theta)
     y = rho * np.sin(theta)
     arr = np.array([x, y])
