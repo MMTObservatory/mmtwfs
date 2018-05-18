@@ -22,17 +22,10 @@ import os
 import sys
 
 try:
-    import astropy_helpers
+    from sphinx_astropy.conf.v1 import *  # noqa
 except ImportError:
-    # Building from inside the docs/ directory?
-    if os.path.basename(os.getcwd()) == 'docs':
-        a_h_path = os.path.abspath(os.path.join('..', 'astropy_helpers'))
-        if os.path.isdir(a_h_path):
-            sys.path.insert(1, a_h_path)
-
-# Load all of the global Astropy configuration
-from sphinx_astropy.conf import *
-from astropy.extern import six
+    print('ERROR: the documentation requires the sphinx-astropy package to be installed')
+    sys.exit(1)
 
 # Get configuration information from setup.cfg
 try:
@@ -46,24 +39,28 @@ setup_cfg = dict(conf.items('metadata'))
 
 # -- General configuration ------------------------------------------------
 
+# By default, highlight as Python 3.
+highlight_language = 'python3'
+
 # If your documentation needs a minimal Sphinx version, state it here.
 #
-needs_sphinx = '1.2'
+# needs_sphinx = '1.2'
 
-# Add any Sphinx extension module names here, as strings. They can be
-# extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
-# ones.
-# extensions = ['sphinx_automodapi.automodapi', 'sphinx_automodapi.smart_resolver', 'numpydoc']
+# To perform a Sphinx version check that needs to be more specific than
+# major.minor, call `check_sphinx_version("x.y.z")` here.
+# check_sphinx_version("1.2.1")
 
-# Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
+# List of patterns, relative to source directory, that match files and
+# directories to ignore when looking for source files.
+exclude_patterns.append('_templates')
 
-# The suffix(es) of source filenames.
-# You can specify multiple suffix as a list of string:
-source_suffix = '.rst'
+# This is added to the end of RST files - a good place to put substitutions to
+# be used globally.
+rst_epilog = """
+.. _MMTO: http://mmto.org
+"""
 
-# The master toctree document.
-master_doc = 'index'
+# numpydoc_show_class_members = True
 
 # -- Project information ------------------------------------------------------
 
@@ -105,10 +102,6 @@ pygments_style = 'sphinx'
 # If true, `todo` and `todoList` produce output, else they produce nothing.
 todo_include_todos = False
 
-rst_epilog = """
-.. _MMTO: http://mmto.org
-"""
-
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 
@@ -141,16 +134,20 @@ html_sidebars = {
     'py-modindex': [],
 }
 
+# The name of an image file (relative to this directory) to place at the top
+# of the sidebar.
+#html_logo = ''
+
 # -- Options for HTMLHelp output ------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'MMTWFSdoc'
+htmlhelp_basename = project + 'doc'
 
 
 # Example configuration for intersphinx: refer to the Python standard library.
 #intersphinx_mapping = {'https://docs.python.org/': None,
 #                       'http://docs.astropy.org/en/stable/': None}
-intersphinx_mapping['astropy'] = ('http://docs.astropy.org/en/stable/', None)
+intersphinx_mapping['astropy'] = ('http://docs.astropy.org/en/latest/', None)
 
 ## -- Options for the edit_on_github extension ----------------------------------------
 
