@@ -34,7 +34,7 @@ PACKAGENAME = metadata.get('mmtwfs', 'mmtwfs')
 DESCRIPTION = metadata.get('description', 'MMTO Wavefront Sensing tools')
 AUTHOR = metadata.get('author', 'T. E. Pickering')
 AUTHOR_EMAIL = metadata.get('author_email', 'tim@mmto.org')
-LICENSE = metadata.get('license', 'GPL3')
+LICENSE = metadata.get('license', 'BSD')
 URL = metadata.get('url', 'https://github.com/tepickering/mmtwfs')
 
 # order of priority for long_description:
