@@ -1,4 +1,4 @@
-# Licensed under GPL3 (see LICENSE)
+# Licensed under a 3-clause BSD style license - see LICENSE.rst
 # coding=utf-8
 
 """
@@ -484,8 +484,20 @@ def zernike_influence_matrix(pup_coords, nmodes=20, modestart=2):
 
 class ZernikeVector(MutableMapping):
     """
-    Class to wrap and visualize a vector of Zernike polynomial coefficients. We build upon a MutableMapping
-    class to provide a way to access/modify coefficients in a dict-like way.
+    Class to wrap and visualize a vector of Zernike polynomial coefficients. We build upon a
+    `~collections.MutableMapping` class to provide a way to access/modify coefficients in a dict-like way.
+
+    Attributes
+    ----------
+    modestart : int
+        Noll mode number of the first included mode.
+    normalized : bool
+        If True, coefficients are normalized to unit variance.  If False, coefficients
+        reflect the phase amplitude of the mode.
+    coeffs : dict
+        Contains the Zernike coefficients with keys of form "Z%02d"
+    ignored : dict
+        Used to store coefficients that are temporarily ignored. Managed via ``self.ignore()`` and ``self.restore()``.
     """
     __zernikelabels = {
         "Z01": "Piston (0, 0)",
@@ -578,23 +590,14 @@ class ZernikeVector(MutableMapping):
         normalized : bool (default: False)
             If True, coefficients are normalized to unit variance (Noll coefficients).  If False, coefficients
             reflect the phase amplitude of the mode (fringe coefficients).
-        units : `~astropy.units.IrreducibleUnit` or `~astropy.units.PrefixUnit` (default: u.nm - nanometers)
+        zmap : dict
+            When loading coefficients from an array this maps the coefficient keys to array indices.
+        units : `~astropy.units.IrreducibleUnit` or `~astropy.units.PrefixUnit` (default: ``u.nm`` - nanometers)
             Units of the coefficients.
         **kwargs : kwargs
             Keyword arguments for setting terms individually, e.g. Z09=10.0.
-
-        Attributes
-        ----------
-        modestart : int
-            Noll mode number of the first included mode.
-        normalized : bool
-            If True, coefficients are normalized to unit variance.  If False, coefficients
-            reflect the phase amplitude of the mode.
-        coeffs : dict
-            Contains the Zernike coefficients with keys of form "Z%02d"
-        ignored : dict
-            Used to store coefficients that are temporarily ignored. Managed via ``self.ignore()`` and ``self.restore()``.
         """
+
         self.modestart = modestart
         self.normalized = normalized
         self.coeffs = {}
