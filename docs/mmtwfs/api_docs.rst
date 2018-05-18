@@ -24,3 +24,4 @@ MMTWFS API Documentation
 
 .. automodapi:: mmtwfs.config
     :no-inheritance-diagram:
+    :include-all-objects:
