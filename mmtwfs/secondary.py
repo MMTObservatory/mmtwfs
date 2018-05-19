@@ -1,4 +1,4 @@
-# Licensed under GPL3
+# Licensed under a 3-clause BSD style license - see LICENSE.rst
 # coding=utf-8
 
 """
@@ -16,6 +16,9 @@ import logging
 import logging.handlers
 log = logging.getLogger("Secondary")
 log.setLevel(logging.INFO)
+
+
+__all__ = ['Secondary', 'F9', 'F5', 'SecondaryFactory']
 
 
 def SecondaryFactory(secondary="f5", config={}, **kwargs):

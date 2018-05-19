@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Licensed under GPL3 (see LICENSE)
+# Licensed under a 3-clause BSD style license - see LICENSE.rst
 
 import astropy.units as u
 

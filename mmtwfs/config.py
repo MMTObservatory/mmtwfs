@@ -1,4 +1,4 @@
-# Licensed under GPL3 (see LICENSE)
+# Licensed under a 3-clause BSD style license - see LICENSE.rst
 # coding=utf-8
 
 """
@@ -9,6 +9,9 @@ import os
 import pkg_resources
 
 import astropy.units as u
+
+
+__all__ = ['recursive_subclasses', 'merge_config', 'mmt_config']
 
 
 def recursive_subclasses(cls):

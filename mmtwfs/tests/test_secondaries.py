@@ -1,4 +1,4 @@
-# Licensed under GPL3 (see LICENSE)
+# Licensed under a 3-clause BSD style license - see LICENSE.rst
 # coding=utf-8
 
 from ..config import mmt_config

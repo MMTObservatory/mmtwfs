@@ -51,6 +51,9 @@ coverage.xml
 *.mo
 *.pot
 
+# OS X stuff
+.DS_store
+
 # Django stuff:
 *.log
 local_settings.py
@@ -64,12 +67,14 @@ instance/
 
 # Sphinx documentation
 docs/_build/
+docs/api
 
 # PyBuilder
 target/
 
 # IPython Notebook
 .ipynb_checkpoints
+.merge_file_*
 
 # pyenv
 .python-version

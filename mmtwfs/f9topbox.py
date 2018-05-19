@@ -1,4 +1,4 @@
-# Licensed under GPL3
+# Licensed under a 3-clause BSD style license - see LICENSE.rst
 # coding=utf-8
 
 """
@@ -13,6 +13,9 @@ from .utils import srvlookup
 
 log = logging.getLogger("F/9 TopBox")
 log.setLevel(logging.INFO)
+
+
+__all__ = ['CompMirror']
 
 
 class CompMirror(object):

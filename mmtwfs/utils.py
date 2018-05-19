@@ -1,4 +1,4 @@
-# Licensed under GPL3
+# Licensed under a 3-clause BSD style license - see LICENSE.rst
 # coding=utf-8
 
 """
@@ -6,6 +6,9 @@ Misc. utility routines
 """
 
 import dns.resolver as resolver
+
+
+__all__ = ['srvlookup']
 
 
 def srvlookup(server):

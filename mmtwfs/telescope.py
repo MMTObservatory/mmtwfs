@@ -1,4 +1,4 @@
-# Licensed under GPL3
+# Licensed under a 3-clause BSD style license - see LICENSE.rst
 # coding=utf-8
 
 import subprocess
@@ -31,6 +31,9 @@ with warnings.catch_warnings():
 
 log = logging.getLogger("Telescope")
 log.setLevel(logging.INFO)
+
+
+__all__ = ['MMT']
 
 
 class MMT(object):

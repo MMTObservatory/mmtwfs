@@ -1,0 +1,24 @@
+
+name: mmtwfs
+
+dependencies:
+  - python>=3
+  - astropy
+  - sphinx
+  - numpy
+  - cython
+  - matplotlib
+  - scipy
+  - scikit-image
+  - pandas
+  - ipython
+  - photutils
+  - jupyter
+  - dnspython
+  - astroscrappy
+  - ccdproc
+  - docutils
+  - pip:
+    - "git+https://github.com/sphinx-gallery/sphinx-gallery.git"
+    - sphinx-astropy
+    - poppy
