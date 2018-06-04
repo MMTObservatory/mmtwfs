@@ -1276,9 +1276,7 @@ class Binospec(F5):
         fwhm = 2.0
         sigma = stats.funcs.gaussian_fwhm_to_sigma * fwhm
         self.modes['binospec']['reference'].fwhm = fwhm
-        self.modes['old_binospec']['reference'].fwhm = fwhm
         self.modes['binospec']['reference'].sigma = sigma
-        self.modes['old_binospec']['reference'].sigma = sigma
 
     def get_flipud(self, mode):
         """
@@ -1287,10 +1285,7 @@ class Binospec(F5):
         During the first binospec commissioning run the images were flipped u/d as they came in. Since then, they are
         left as-is and get flipped internally based on this flag. The reference file is already flipped.
         """
-        if mode == "old_binospec":
-            return False
-        else:
-            return True
+        return True
 
     def ref_pupil_location(self, mode, hdr=None):
         """

@@ -102,15 +102,6 @@ def test_f5_analysis():
 
 @cleanup
 def test_bino_analysis():
-    test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "bino_wfs_0600.fits"))
-    wfs = WFSFactory(wfs='binospec')
-    results = wfs.measure_slopes(test_file, mode="old_binospec")
-    zresults = wfs.fit_wavefront(results)
-    testval = int(zresults['zernike']['Z10'].value)
-    assert((testval > 120) & (testval < 140))
-
-@cleanup
-def test_newbino_analysis():
     test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "wfs_ff_cal_img_2017.1113.111402.fits"))
     wfs = WFSFactory(wfs='binospec')
     results = wfs.measure_slopes(test_file, mode="binospec")

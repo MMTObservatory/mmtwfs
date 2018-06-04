@@ -351,17 +351,6 @@ mmt_config = {
                         __name__,
                         os.path.join("data", "ref_images", "binospec_ref.fits")
                     )
-                },
-                "old_binospec": {
-                    "label": "Binospec",
-                    "pup_offset": [0.0, 0.0],  # [x, y] pupil offset from center of reference aperture pattern in subap units
-                    "ref_zern": {
-                        "Z04": 0.0 * u.nm
-                    },
-                    "reference_file": pkg_resources.resource_filename(
-                        __name__,
-                        os.path.join("data", "ref_images", "binospec_ref.fits")
-                    )
                 }
             }
         }
