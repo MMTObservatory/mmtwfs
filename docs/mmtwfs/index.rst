@@ -41,7 +41,7 @@ To analyze a Shack-Hartmann image taken by the wavefront sensor and measure the 
 :meth:`~mmtwfs.wfs.WFS.measure_slopes` method:
 
     >>> from astropy.utils.data import get_pkg_data_filename as get_file
-    >>> wfsfile = get_file('data/test_data/bino_wfs_0600.fits', package='mmtwfs')
+    >>> wfsfile = get_file('data/test_data/wfs_ff_cal_img_2017.1113.111402.fits', package='mmtwfs')
     >>> slope_results = bino_wfs.measure_slopes(wfsfile)
 
 To fit a model to these slopes, pass ``slope_results`` to the :meth:`~mmtwfs.wfs.WFS.fit_wavefront` method:
