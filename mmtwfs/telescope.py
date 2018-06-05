@@ -253,6 +253,7 @@ class MMT(object):
         forces that the cell reports were applied.
         """
         frac = 1.0
+        log.info(f"Using command, /mmt/scripts/cell_send_forces {filename}, to apply forces...")
         pipe = subprocess.Popen(['/mmt/scripts/cell_send_forces', f"{filename}"], stdout=subprocess.PIPE)
         outstr = pipe.stdout.read().decode('utf8')
 
@@ -260,18 +261,22 @@ class MMT(object):
         if "Able to Apply" in outstr:
             log.info("...forces successfully applied in full.")
 
-        if "Forces Rejected" in outstr:
+        elif "Forces Rejected" in outstr:
             log.error("...forces rejected!")
             frac = 0.0
 
-        if "Unable to apply forces" in outstr:
+        elif "Unable to apply forces" in outstr:
             log.error("...unable to apply forces!")
             frac = 0.0
 
-        if "Applying partial forces" in outstr:
+        elif "Applying partial forces" in outstr:
             percent = float(outstr.split()[3])
             frac = percent / 100.0
             log.warn(f"...applied {percent}% of requested forces.")
+
+        else:
+            log.error(f"...got unexpected reply from cell command: {outstr}")
+
         return frac
 
     def correct_primary(self, t, m1focus_corr, filename="zfile"):
