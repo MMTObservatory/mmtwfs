@@ -255,7 +255,13 @@ class MMT(object):
         frac = 1.0
         log.info(f"Using command, /mmt/scripts/cell_send_forces {filename}, to apply forces...")
         pipe = subprocess.Popen(['/mmt/scripts/cell_send_forces', f"{filename}"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        (stdout, stderr) = pipe.communicate(timeout=10)
+
+        try:
+            (stdout, stderr) = pipe.communicate(timeout=10)
+        except TimeoutExpired:
+            pipe.kill()
+            (stdout, stderr) = pipe.communicate()
+
         outstr = stdout.decode('utf8')
         outerr = stderr.decode('utf8')
 
@@ -329,7 +335,13 @@ class MMT(object):
             log.info("Clearing forces and spherical aberration focus offsets...")
             self.secondary.clear_m1spherical()
             pipe = subprocess.Popen(['/mmt/scripts/cell_clear_forces'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            (stdout, stderr) = pipe.communicate(timeout=10)
+
+            try:
+                (stdout, stderr) = pipe.communicate(timeout=10)
+            except TimeoutExpired:
+                pipe.kill()
+                (stdout, stderr) = pipe.communicate()
+
             outstr = stdout.decode('utf8')
             outerr = stderr.decode('utf8')
             log.info(f"...{outstr.strip()}")
