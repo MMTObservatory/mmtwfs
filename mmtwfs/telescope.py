@@ -1,8 +1,11 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 # coding=utf-8
 
-import subprocess
 import warnings
+
+from tornado.process import Subprocess
+from subprocess import PIPE
+from tornado import gen
 
 import numpy as np
 from skimage.transform import rotate as imrotate
@@ -247,20 +250,22 @@ class MMT(object):
 
         return t, m1focus_corr, zv_masked
 
+    @gen.coroutine
     def bend_mirror(self, filename="zfile"):
         """
         Take a force file and send it to the cell to apply bending forces. Return fraction of requested
         forces that the cell reports were applied.
         """
         frac = 1.0
-        log.info(f"Using command, /home/tim/cell_send_forces {filename}, to apply forces...")
-        pipe = subprocess.Popen(['/home/tim/cell_send_forces', f"{filename}"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        log.info(f"Using command, /mmt/scripts/cell_send_forces {filename}, to apply forces...")
+        process = Subprocess(
+            ['/mmt/scripts/cell_send_forces', f"{filename}"],
+            stdout=Subprocess.STREAM,
+            stderr=Subprocess.STREAM,
+            shell=True
+        )
 
-        try:
-            (stdout, stderr) = pipe.communicate(timeout=10)
-        except TimeoutExpired:
-            pipe.kill()
-            (stdout, stderr) = pipe.communicate()
+        stdout, stderr = yield [process.stdout.read_until_close(), process.stderr.read_until_close()]
 
         outstr = stdout.decode('utf8')
         outerr = stderr.decode('utf8')
@@ -327,6 +332,7 @@ class MMT(object):
         self.total_forces['force'] += frac * self.last_forces['force']
         return self.last_forces.copy(), self.last_m1focus.copy()
 
+    @gen.coroutine
     def clear_forces(self):
         """
         Clear applied forces from primary mirror and clear any m1spherical offsets from secondary hexapod
@@ -334,13 +340,15 @@ class MMT(object):
         if self.connected:
             log.info("Clearing forces and spherical aberration focus offsets...")
             self.secondary.clear_m1spherical()
-            pipe = subprocess.Popen(['/mmt/scripts/cell_clear_forces'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-            try:
-                (stdout, stderr) = pipe.communicate(timeout=10)
-            except TimeoutExpired:
-                pipe.kill()
-                (stdout, stderr) = pipe.communicate()
+            process = Subprocess(
+                ['/mmt/scripts/cell_clear_forces', f"{filename}"],
+                stdout=Subprocess.STREAM,
+                stderr=Subprocess.STREAM,
+                shell=True
+            )
+
+            stdout, stderr = yield [process.stdout.read_until_close(), process.stderr.read_until_close()]
 
             outstr = stdout.decode('utf8')
             outerr = stderr.decode('utf8')
