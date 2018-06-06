@@ -719,7 +719,7 @@ class WFS(object):
         """
         # the effective wavelength of the WFS imagers is about 600-650 nm. we use 650 nm to maintain consistency
         # with the value used by the old SHWFS system.
-        wave = 650 * u.nm
+        wave = 550 * u.nm
         wave = wave.to(u.m).value  # r_0 equation expects meters so convert
 
         # calculate the physical size of each aperture.
@@ -742,7 +742,7 @@ class WFS(object):
         r_0 = (0.179 * (wave**2) * (d**(-1/3))/corr_sigma**2)**0.6
 
         # this equation relates the turbulence scale size to an expected image FWHM at the given wavelength.
-        raw_seeing = u.Quantity(u.rad * 0.98 * wave / r_0, u.arcsec)
+        raw_seeing = u.Quantity(u.rad * 0.98 * .5e-6 / r_0, u.arcsec)
 
         # correct seeing to zenith
         if airmass is not None:
