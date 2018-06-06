@@ -250,7 +250,6 @@ class MMT(object):
 
         return t, m1focus_corr, zv_masked
 
-    @gen.coroutine
     def bend_mirror(self, filename="zfile"):
         """
         Take a force file and send it to the cell to apply bending forces. Return fraction of requested
@@ -265,7 +264,7 @@ class MMT(object):
             shell=True
         )
 
-        stdout, stderr = yield [process.stdout.read_until_close(), process.stderr.read_until_close()]
+        stdout, stderr = [process.stdout.read_until_close(), process.stderr.read_until_close()]
 
         outstr = stdout.decode('utf8')
         outerr = stderr.decode('utf8')
@@ -332,7 +331,6 @@ class MMT(object):
         self.total_forces['force'] += frac * self.last_forces['force']
         return self.last_forces.copy(), self.last_m1focus.copy()
 
-    @gen.coroutine
     def clear_forces(self):
         """
         Clear applied forces from primary mirror and clear any m1spherical offsets from secondary hexapod
@@ -348,7 +346,7 @@ class MMT(object):
                 shell=True
             )
 
-            stdout, stderr = yield [process.stdout.read_until_close(), process.stderr.read_until_close()]
+            stdout, stderr = [process.stdout.read_until_close(), process.stderr.read_until_close()]
 
             outstr = stdout.decode('utf8')
             outerr = stderr.decode('utf8')
