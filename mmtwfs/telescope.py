@@ -253,8 +253,8 @@ class MMT(object):
         forces that the cell reports were applied.
         """
         frac = 1.0
-        log.info(f"Using command, /mmt/scripts/cell_send_forces {filename}, to apply forces...")
-        pipe = subprocess.Popen(['/mmt/scripts/cell_send_forces', f"{filename}"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        log.info(f"Using command, /home/tim/cell_send_forces {filename}, to apply forces...")
+        pipe = subprocess.Popen(['/home/tim/cell_send_forces', f"{filename}"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         try:
             (stdout, stderr) = pipe.communicate(timeout=10)
