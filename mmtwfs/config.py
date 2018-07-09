@@ -253,7 +253,7 @@ mmt_config = {
             "pix_size": 0.09639 * u.arcsec,  # SBIG STT-8300 with 5.4 um pixels binned 3x3
             "pup_size": 530,  # pupil outer diameter in pixels
             "pup_inner": 75,  # inner obscuration radius in pixels
-            "pup_offset": [0.0, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
+            "pup_offset": [0.3, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 37,  # number of zernike modes to fit
