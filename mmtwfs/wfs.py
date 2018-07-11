@@ -7,6 +7,8 @@ Classes and utilities for operating the wavefront sensors of the MMTO and analyz
 
 import warnings
 
+import pathlib
+
 import numpy as np
 import photutils
 
@@ -71,7 +73,7 @@ def check_wfsdata(data, header=False):
         Validated 2D WFS image
     """
     hdr = None
-    if isinstance(data, str):
+    if isinstance(data, (str, pathlib.PosixPath)):
         # we're a fits file (hopefully)
         try:
             with fits.open(data) as h:
