@@ -553,6 +553,7 @@ class SH_Reference(object):
             Toggle plotting of the reference image and overlayed apertures
         """
         self.data = check_wfsdata(data)
+        data = data - np.median(data)
         self.apertures, self.figure = wfsfind(data, fwhm=fwhm, threshold=threshold, plot=plot)
         if plot:
             self.figure.set_label("Reference Image")
