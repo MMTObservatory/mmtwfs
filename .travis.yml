@@ -81,7 +81,6 @@ matrix:
         # Now try Astropy dev latest 3.x...
         - os: linux
           env: ASTROPY_VERSION=development
-               PIP_DEPENDENCIES='poppy pytest-astropy'
                EVENT_TYPE='pull_request push cron'
 
         # Astropy LTS can no longer be supported because we need the astropy implementation of Lomb-Scargle.
