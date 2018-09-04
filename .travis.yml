@@ -33,13 +33,13 @@ env:
         - MAIN_CMD='python setup.py'
         - SETUP_CMD='test'
         #- PIP_DEPENDENCIES='git+https://github.com/mperrin/poppy#egg=poppy'
-        - PIP_DEPENDENCIES='poppy'
+        - PIP_DEPENDENCIES='poppy git+https://github.com/astropy/astroscrappy.git'
         - EVENT_TYPE='pull_request push'
 
         # For this package-template, we include examples of Cython modules,
         # so Cython is required for testing. If your package does not include
         # Cython code, you can set CONDA_DEPENDENCIES=''
-        - CONDA_DEPENDENCIES='Cython matplotlib scipy photutils scikit-image jupyter nose dnspython astroscrappy ccdproc'
+        - CONDA_DEPENDENCIES='Cython matplotlib scipy photutils scikit-image jupyter nose dnspython ccdproc'
 
         # Conda packages for affiliated packages are hosted in channel
         # "astropy" while builds for astropy LTS with recent numpy versions
@@ -94,6 +94,10 @@ matrix:
         # try 3.6 with stable astropy and numpy
         - os: linux
           env: PYTHON_VERSION=3.6
+
+        # try 3.7 with stable astropy and numpy
+        - os: linux
+          env: PYTHON_VERSION=3.7
 
         # Try numpy pre-release
         - os: linux
