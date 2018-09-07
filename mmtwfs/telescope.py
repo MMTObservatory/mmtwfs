@@ -337,8 +337,8 @@ class MMT(object):
             pipe = subprocess.Popen(['/mmt/scripts/cell_clear_forces'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
             try:
-                (stdout, stderr) = pipe.communicate(timeout=10)
-            except TimeoutExpired:
+                (stdout, stderr) = pipe.communicate(timeout=20)
+            except subprocess.TimeoutExpired:
                 pipe.kill()
                 (stdout, stderr) = pipe.communicate()
 
