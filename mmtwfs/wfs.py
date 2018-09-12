@@ -24,7 +24,7 @@ from astropy.io import ascii
 from astropy import stats, visualization
 from astropy.modeling.models import Gaussian2D, Polynomial2D
 from astropy.modeling.fitting import LevMarLSQFitter
-
+from astropy.table import conf as table_conf
 from astroscrappy import detect_cosmics
 
 from ccdproc.utils.slices import slice_from_string
@@ -39,6 +39,9 @@ import logging
 import logging.handlers
 log = logging.getLogger("WFS")
 log.setLevel(logging.INFO)
+
+warnings.simplefilter(action="ignore", category=FutureWarning)
+table_conf.replace_warnings = ['attributes']
 
 
 __all__ = ['SH_Reference', 'WFS', 'F9', 'NewF9', 'F5', 'Binospec', 'MMIRS', 'WFSFactory', 'wfs_norm', 'check_wfsdata',
