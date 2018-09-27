@@ -12,6 +12,8 @@ Expressions for cartesian derivatives of the Zernike polynomials were adapted fr
 
 import re
 import json
+import numbers
+from collections import MutableMapping
 
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
@@ -19,9 +21,13 @@ import matplotlib.colors as col
 from mpl_toolkits.mplot3d import Axes3D
 
 import numpy as np
-import astropy.units as u
 
-from collections import MutableMapping
+import uncertainties
+
+import astropy.units as u
+from astropy.units import (Unit, dimensionless_unscaled, get_current_unit_registry, UnitBase, UnitsError, UnitTypeError)
+from astropy.utils.misc import isiterable, InheritDocstrings
+
 from scipy.special import factorial as fac
 
 from .custom_exceptions import ZernikeException
@@ -29,7 +35,7 @@ from .custom_exceptions import ZernikeException
 
 __all__ = ['ZernikeVector', 'cart2pol', 'pol2cart', 'R_mn', 'dR_drho', 'theta_m', 'dtheta_dphi', 'zernike', 'dZ_dx', 'dZ_dy',
            'noll_to_zernike', 'zernike_noll', 'zernike_slope_noll', 'noll_normalization_vector', 'norm_coefficient',
-           'noll_coefficient', 'zernike_influence_matrix']
+           'noll_coefficient', 'zernike_influence_matrix', 'UQuantity']
 
 
 def cart2pol(arr):
@@ -482,6 +488,130 @@ def zernike_influence_matrix(pup_coords, nmodes=20, modestart=2):
     return matrices
 
 
+# subclass astropy.units.Quantity to add support for uncertainties.UFloat objects
+class UQuantity(u.Quantity):
+
+    # overload __new__ to fix the various data-type checks...
+    def __new__(cls, value, unit=None, dtype=None, copy=True, order=None,
+            subok=False, ndmin=0):
+
+        if unit is not None:
+            # convert unit first, to avoid multiple string->unit conversions
+            unit = Unit(unit)
+            # if we allow subclasses, allow a class from the unit.
+            if subok:
+                qcls = getattr(unit, '_quantity_class', cls)
+                if issubclass(qcls, cls):
+                    cls = qcls
+
+        # optimize speed for Quantity with no dtype given, copy=False
+        if isinstance(value, (u.Quantity, UQuantity)):
+            if unit is not None and unit is not value.unit:
+                value = value.to(unit)
+                # the above already makes a copy (with float dtype)
+                copy = False
+
+            if type(value) is not cls and not (subok and
+                                               isinstance(value, cls)):
+                value = value.view(cls)
+
+            if dtype is None:
+                if not copy:
+                    return value
+
+                if not np.can_cast(np.float32, value.dtype):
+                    dtype = float
+
+            return np.array(value, dtype=dtype, copy=copy, order=order,
+                            subok=True, ndmin=ndmin)
+
+        # Maybe str, or list/tuple of Quantity? If so, this may set value_unit.
+        # To ensure array remains fast, we short-circuit it.
+        value_unit = None
+        if not isinstance(value, np.ndarray):
+            if isinstance(value, str):
+                # The first part of the regex string matches any integer/float;
+                # the second parts adds possible trailing .+-, which will break
+                # the float function below and ensure things like 1.2.3deg
+                # will not work.
+                pattern = (r'\s*[+-]?'
+                           r'((\d+\.?\d*)|(\.\d+)|([nN][aA][nN])|'
+                           r'([iI][nN][fF]([iI][nN][iI][tT][yY]){0,1}))'
+                           r'([eE][+-]?\d+)?'
+                           r'[.+-]?')
+
+                v = re.match(pattern, value)
+                unit_string = None
+                try:
+                    value = float(v.group())
+
+                except Exception:
+                    raise TypeError('Cannot parse "{0}" as a {1}. It does not '
+                                    'start with a number.'
+                                    .format(value, cls.__name__))
+
+                unit_string = v.string[v.end():].strip()
+                if unit_string:
+                    value_unit = Unit(unit_string)
+                    if unit is None:
+                        unit = value_unit  # signal no conversion needed below.
+
+            elif (isiterable(value) and len(value) > 0 and
+                  all(isinstance(v, Quantity) for v in value)):
+                # Convert all quantities to the same unit.
+                if unit is None:
+                    unit = value[0].unit
+                value = [q.to_value(unit) for q in value]
+                value_unit = unit  # signal below that conversion has been done
+
+        if value_unit is None:
+            # If the value has a `unit` attribute and if not None
+            # (for Columns with uninitialized unit), treat it like a quantity.
+            value_unit = getattr(value, 'unit', None)
+            if value_unit is None:
+                # Default to dimensionless for no (initialized) unit attribute.
+                if unit is None:
+                    unit = cls._default_unit
+                value_unit = unit  # signal below that no conversion is needed
+            else:
+                try:
+                    value_unit = Unit(value_unit)
+                except Exception as exc:
+                    raise TypeError("The unit attribute {0!r} of the input could "
+                                    "not be parsed as an astropy Unit, raising "
+                                    "the following exception:\n{1}"
+                                    .format(value.unit, exc))
+
+                if unit is None:
+                    unit = value_unit
+                elif unit is not value_unit:
+                    copy = False  # copy will be made in conversion at end
+
+        value = np.array(value, dtype=dtype, copy=copy, order=order,
+                         subok=False, ndmin=ndmin)
+
+        # check that array contains numbers or long int objects
+        if (value.dtype.kind in 'OSU' and
+            not (value.dtype.kind == 'O' and
+                 isinstance(value.item(() if value.ndim == 0 else 0),
+                            (numbers.Number, uncertainties.UFloat)))):
+            raise TypeError("The value must be a valid Python or "
+                            "Numpy numeric type.")
+
+        # by default, cast any integer, boolean, etc., to float
+        if dtype is None and (not np.can_cast(np.float32, value.dtype)
+                              or value.dtype.kind == 'O'):
+            value = value.astype(float)
+
+        value = value.view(cls)
+        value._set_unit(value_unit)
+        if unit is value_unit:
+            return value
+        else:
+            # here we had non-Quantity input that had a "unit" attribute
+            # with a unit different from the desired one.  So, convert.
+            return value.to(unit)
+
 class ZernikeVector(MutableMapping):
     """
     Class to wrap and visualize a vector of Zernike polynomial coefficients. We build upon a
@@ -663,7 +793,7 @@ class ZernikeVector(MutableMapping):
             # this is a hacky way to get, say, Z4 to become Z04 to maintain consistency
             mode = self._key_to_l(key)
             key = self._l_to_key(mode)
-            self.coeffs[key] = u.Quantity(item, self.units)
+            self.coeffs[key] = UQuantity(item, self.units)
         else:
             raise KeyError(f"Malformed Zernike mode key, {key}")
 
@@ -880,7 +1010,7 @@ class ZernikeVector(MutableMapping):
         """
         self._units = units
         for k in self.coeffs:
-            self.coeffs[k] = u.Quantity(self.coeffs[k], units)
+            self.coeffs[k] = UQuantity(self.coeffs[k], units)
 
     @property
     def array(self):
@@ -890,11 +1020,11 @@ class ZernikeVector(MutableMapping):
         keys = sorted(self.coeffs.keys())
         last = self._key_to_l(keys[-1])
         arrsize = max(0, last - self.modestart + 1)
-        arr = u.Quantity(np.zeros(arrsize), self.units)
+        arr = UQuantity(np.zeros(arrsize), self.units)
         for k in keys:
             i = self._key_to_l(k) - self.modestart
             if i >= 0:
-                arr[i] = u.Quantity(self.coeffs[k], self.units)
+                arr[i] = UQuantity(self.coeffs[k], self.units)
         return arr
 
     @property
@@ -918,7 +1048,7 @@ class ZernikeVector(MutableMapping):
         Return the peak-to-valley amplitude of the Zernike set.
         """
         x, y, r, p, ph = self.phase_map()
-        return u.Quantity(ph.max() - ph.min(), self.units)
+        return UQuantity(ph.max() - ph.min(), self.units)
 
     @property
     def rms(self):
