@@ -492,8 +492,7 @@ def zernike_influence_matrix(pup_coords, nmodes=20, modestart=2):
 class UQuantity(u.Quantity):
 
     # overload __new__ to fix the various data-type checks...
-    def __new__(cls, value, unit=None, dtype=None, copy=True, order=None,
-            subok=False, ndmin=0):
+    def __new__(cls, value, unit=None, dtype=None, copy=True, order=None, subok=False, ndmin=0):
 
         if unit is not None:
             # convert unit first, to avoid multiple string->unit conversions
@@ -557,7 +556,7 @@ class UQuantity(u.Quantity):
                         unit = value_unit  # signal no conversion needed below.
 
             elif (isiterable(value) and len(value) > 0 and
-                  all(isinstance(v, Quantity) for v in value)):
+                  all(isinstance(v, (u.Quantity, UQuantity)) for v in value)):
                 # Convert all quantities to the same unit.
                 if unit is None:
                     unit = value[0].unit
@@ -601,7 +600,8 @@ class UQuantity(u.Quantity):
         # by default, cast any integer, boolean, etc., to float
         if dtype is None and (not np.can_cast(np.float32, value.dtype)
                               or value.dtype.kind == 'O'):
-            value = value.astype(float)
+            if not isinstance(value.item(() if value.ndim == 0 else 0), uncertainties.UFloat):
+                value = value.astype(float)
 
         value = value.view(cls)
         value._set_unit(value_unit)
