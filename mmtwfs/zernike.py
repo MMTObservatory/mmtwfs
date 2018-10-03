@@ -612,6 +612,56 @@ class UQuantity(u.Quantity):
             # with a unit different from the desired one.  So, convert.
             return value.to(unit)
 
+    def __quantity_subclass__(self, unit):
+        """
+        Overridden by subclasses to change what kind of view is
+        created based on the output unit of an operation.
+
+        Parameters
+        ----------
+        unit : UnitBase
+            The unit for which the appropriate class should be returned
+
+        Returns
+        -------
+        tuple :
+            - `UQuantity` subclass
+            - bool: True if subclasses of the given class are ok
+        """
+        return UQuantity, True
+
+    def _to_own_unit(self, value, check_precision=True):
+        try:
+            _value = value.to_value(self.unit)
+        except AttributeError:
+            # We're not a Quantity, so let's try a more general conversion.
+            # Plain arrays will be converted to dimensionless in the process,
+            # but anything with a unit attribute will use that.
+            try:
+                _value = UQuantity(value).to_value(self.unit)
+            except UnitsError as exc:
+                # last chance: if this was not something with a unit
+                # and is all 0, inf, or nan, we treat it as arbitrary unit.
+                if (not hasattr(value, 'unit') and
+                        can_have_arbitrary_unit(value)):
+                    _value = value
+                else:
+                    raise exc
+
+        if check_precision:
+            value_dtype = getattr(value, 'dtype', None)
+            if self.dtype != value_dtype and not value.dtype.kind == 'O':
+                self_dtype_array = np.array(_value, self.dtype)
+                value_dtype_array = np.array(_value, dtype=value_dtype,
+                                             copy=False)
+                if not np.all(np.logical_or(self_dtype_array ==
+                                            value_dtype_array,
+                                            np.isnan(value_dtype_array))):
+                    raise TypeError("cannot convert value type to array type "
+                                    "without precision loss")
+        return _value
+
+
 class ZernikeVector(MutableMapping):
     """
     Class to wrap and visualize a vector of Zernike polynomial coefficients. We build upon a
