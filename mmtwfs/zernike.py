@@ -606,14 +606,8 @@ class ZernikeVector(MutableMapping):
         # now set the units
         self.units = units
 
-        # python 2.x compatibility hack
-        try:
-            basestring
-        except NameError:
-            basestring = str
-
         # coeffs can be either a list-like or a string which is a JSON filename
-        if isinstance(coeffs, basestring):
+        if isinstance(coeffs, str):
             self.load(filename=coeffs)
         else:
             self.from_array(coeffs, zmap=zmap)
