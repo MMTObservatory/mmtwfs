@@ -18,6 +18,7 @@ import matplotlib.cm as cm
 import matplotlib.colors as col
 from mpl_toolkits.mplot3d import Axes3D
 
+import lmfit
 import numpy as np
 import astropy.units as u
 
@@ -579,7 +580,7 @@ class ZernikeVector(MutableMapping):
         "Z37": "Spher3"
     }
 
-    def __init__(self, coeffs=[], modestart=2, normalized=False, zmap=None, units=u.nm, **kwargs):
+    def __init__(self, coeffs=[], modestart=2, normalized=False, zmap=None, units=u.nm, errorbars={}, **kwargs):
         """
         Parameters
         ----------
@@ -600,6 +601,7 @@ class ZernikeVector(MutableMapping):
 
         self.modestart = modestart
         self.normalized = normalized
+        self.errorbars = errorbars
         self.coeffs = {}
         self.ignored = {}
 
@@ -609,6 +611,8 @@ class ZernikeVector(MutableMapping):
         # coeffs can be either a list-like or a string which is a JSON filename
         if isinstance(coeffs, str):
             self.load(filename=coeffs)
+        elif isinstance(coeffs, lmfit.minimizer.MinimizerResult):
+            self.load_lmfit(coeffs)
         else:
             self.from_array(coeffs, zmap=zmap)
 
@@ -657,6 +661,7 @@ class ZernikeVector(MutableMapping):
             # this is a hacky way to get, say, Z4 to become Z04 to maintain consistency
             mode = self._key_to_l(key)
             key = self._l_to_key(mode)
+
             self.coeffs[key] = u.Quantity(item, self.units)
         else:
             raise KeyError(f"Malformed Zernike mode key, {key}")
@@ -694,11 +699,12 @@ class ZernikeVector(MutableMapping):
                 d[k] = self.__getitem__(k) + zv[k]
         else:
             try:
+                z = u.Quantity(zv, self.units)
                 for k in self.coeffs:
-                    d[k] = self.__getitem__(k) + float(zv) * self.units
+                    d[k] = self.__getitem__(k) + z
             except Exception as e:
                 raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector + operation: zv = {zv} ({e})")
-        return ZernikeVector(**d)
+        return ZernikeVector(units=self.units, **d)
 
     def __radd__(self, zv):
         """
@@ -717,11 +723,12 @@ class ZernikeVector(MutableMapping):
                 d[k] = self.__getitem__(k) - zv[k]
         else:
             try:
+                z = u.Quantity(zv, self.units)
                 for k in self.coeffs:
-                    d[k] = self.__getitem__(k) - float(zv) * self.units
+                    d[k] = self.__getitem__(k) - z
             except Exception as e:
                 raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector - operation: zv = {zv} ({e})")
-        return ZernikeVector(**d)
+        return ZernikeVector(units=self.units, **d)
 
     def __rsub__(self, zv):
         """
@@ -734,8 +741,9 @@ class ZernikeVector(MutableMapping):
                 d[k] = zv[k] - self.__getitem__(k)
         else:
             try:
+                z = u.Quantity(zv, self.units)
                 for k in self.coeffs:
-                    d[k] = float(zv) * self.units - self.__getitem__(k)
+                    d[k] = z - self.__getitem__(k)
             except Exception as e:
                 raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector - operation: zv = {zv} ({e})")
         return ZernikeVector(**d)
@@ -754,8 +762,8 @@ class ZernikeVector(MutableMapping):
         else:
             try:
                 for k in self.coeffs:
-                    d[k] = self.__getitem__(k) * float(zv)
-                outunits = self.units
+                    d[k] = self.__getitem__(k) * zv
+                    outunits = d[k].unit
             except Exception as e:
                 raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector * operation: zv = {zv} ({e})")
         d['units'] = outunits
@@ -816,7 +824,7 @@ class ZernikeVector(MutableMapping):
             try:
                 for k in self.coeffs:
                     d[k] = float(zv) / self.__getitem__(k)
-                outunits = 1.0 / self.units
+                outunits = (1. / self.units).unit
             except Exception as e:
                 raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector / operation: zv = {zv} ({e})")
         d['units'] = outunits
@@ -872,9 +880,9 @@ class ZernikeVector(MutableMapping):
         """
         When units are set, we need to go through each coefficient and perform the unit conversion to match.
         """
-        self._units = units
         for k in self.coeffs:
             self.coeffs[k] = u.Quantity(self.coeffs[k], units)
+        self._units = units
 
     @property
     def array(self):
@@ -944,16 +952,16 @@ class ZernikeVector(MutableMapping):
             for k in keys:
                 if self._key_to_l(k) <= last:
                     if k in self.__zernikelabels:
-                        s += "{0:>4s}: {1:>12s} \t {2:s}".format(k, "{0:0.03g}".format(self.coeffs[k]), self.label(k))
+                        s += "{0:>4s}: {1:>14s} \t {2:s}".format(k, "{0:0.4g}".format(self.coeffs[k]), self.label(k))
                     else:
-                        s += "{0:>4s}: {1:>12s}".format(k, "{0:0.03g}".format(self.coeffs[k]))
+                        s += "{0:>4s}: {1:>14s}".format(k, "{0:0.4g}".format(self.coeffs[k]))
                     s += "\n"
 
             s += "\n"
             if self._key_to_l(keys[-1]) > last:
                 hi_orders = ZernikeVector(modestart=last+1, normalized=self.normalized, units=self.units, **self.coeffs)
-                s += "High Orders RMS: \t {0:0.03g}  {1:>3s} ➞ {2:>3s}\n".format(hi_orders.rms, self._l_to_key(last+1), keys[-1])
-            s += "Total RMS: \t \t {0:0.03g}\n".format(self.rms)
+                s += "High Orders RMS: \t {0:0.4g}  {1:>3s} ➞ {2:>3s}\n".format(hi_orders.rms, self._l_to_key(last+1), keys[-1])
+            s += "Total RMS: \t {0:0.4g}\n".format(self.rms)
 
         return s
 
@@ -961,7 +969,8 @@ class ZernikeVector(MutableMapping):
         """
         Make a new ZernikeVector with the same configuration and coefficients
         """
-        new = ZernikeVector(modestart=self.modestart, normalized=self.normalized, units=self.units, **self.coeffs)
+        new = ZernikeVector(modestart=self.modestart, normalized=self.normalized, errorbars=self.errorbars,
+                            units=self.units, **self.coeffs)
         return new
 
     def save(self, filename="zernike.json"):
@@ -972,9 +981,13 @@ class ZernikeVector(MutableMapping):
         outdict['units'] = self.units.to_string()
         outdict['normalized'] = self.normalized
         outdict['modestart'] = self.modestart
+        outdict['errorbars'] = {}
         outdict['coeffs'] = {}
         for k, c in self.coeffs.items():
             outdict['coeffs'][k] = c.value
+        for k, v in self.errorbars.items():
+            outdict['errorbars'][k] = v.value
+
         with open(filename, 'w') as f:
             json.dump(outdict, f, indent=4, separators=(',', ': '), sort_keys=True)
 
@@ -1003,6 +1016,22 @@ class ZernikeVector(MutableMapping):
             for k, v in json_data['coeffs'].items():
                 self.__setitem__(k, v)
 
+        self.errorbars = {}
+        if 'errorbars' in json_data:
+            for k, v in json_data['coeffs'].items():
+                self.errorbars[k] = u.Quantity(v, self.units)
+
+    def load_lmfit(self, fit_report):
+        """
+        Load information from a lmfit.minimizer.MinimizerResult that is output from a wavefront fit.
+        If there are reported errorbars, populate those, too.
+        """
+        has_errors = fit_report.errorbars
+        for k, v in fit_report.params.items():
+            self.__setitem__(k, v)
+            if has_errors:
+                self.errorbars[k] = u.Quantity(v.stderr, self.units)
+
     def label(self, key):
         """
         If defined, return the descriptive label for mode, 'key'
@@ -1021,12 +1050,14 @@ class ZernikeVector(MutableMapping):
         else:
             return key
 
-    def from_array(self, coeffs, zmap=None, modestart=None, normalized=False):
+    def from_array(self, coeffs, zmap=None, modestart=None, errorbars={}, normalized=False):
         """
         Load coefficients from a provided list/array starting from modestart. Array is assumed to start
         from self.modestart if modestart is not provided.
         """
         self.normalized = normalized
+        self.errorbars = errorbars
+
         if len(coeffs) > 0:
             if modestart is None:
                 modestart = self.modestart
@@ -1052,6 +1083,8 @@ class ZernikeVector(MutableMapping):
                 mode = self._key_to_l(k)
                 noll = noll_coefficient(mode)
                 self.coeffs[k] /= noll
+                if k in self.errorbars:
+                    self.errorbars[k] /= noll
 
     def denormalize(self):
         """
@@ -1063,6 +1096,8 @@ class ZernikeVector(MutableMapping):
                 mode = self._key_to_l(k)
                 noll = noll_coefficient(mode)
                 self.coeffs[k] *= noll
+                if k in self.errorbars:
+                    self.errorbars[k] *= noll
 
     def ignore(self, key):
         """
@@ -1110,7 +1145,10 @@ class ZernikeVector(MutableMapping):
         rot_arr = np.dot(rotm, a)
         # this will take back out the zero terms
         del self.coeffs['Z99']
-        self.from_array(rot_arr)
+
+        # i think it's correct to just pass on the uncertainties unchanged since measurements are done in unrotated space.
+        # might want to consider handling rotations in the pupil coordinates before doing a fit.
+        self.from_array(rot_arr, errorbars=self.errorbars)
 
     def total_phase(self, rho, phi):
         """
