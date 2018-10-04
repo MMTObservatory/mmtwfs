@@ -621,6 +621,11 @@ class ZernikeVector(MutableMapping):
         for k in sorted(input_dict.keys()):
             self.__setitem__(k, input_dict[k])
 
+        # make sure errorbar units are consistent
+        if len(self.errorbars) > 0:
+            for k, v in self.errorbars.items():
+                self.errorbars[k] = u.Quantity(v, self.units)
+
     def __iter__(self):
         """
         If instance is accessed as an iterator, iterate over the dict of coefficients.
@@ -952,9 +957,19 @@ class ZernikeVector(MutableMapping):
             for k in keys:
                 if self._key_to_l(k) <= last:
                     if k in self.__zernikelabels:
-                        s += "{0:>4s}: {1:>14s} \t {2:s}".format(k, "{0:0.4g}".format(self.coeffs[k]), self.label(k))
+                        label = self.label(k)
                     else:
-                        s += "{0:>4s}: {1:>14s}".format(k, "{0:0.4g}".format(self.coeffs[k]))
+                        label = ""
+
+                    if k in self.errorbars:
+                        s += "{0:>4s}: {1:>24s} \t {2:s}".format(
+                            k,
+                            "{0:0.4g} ± {1:6.4g}".format(self.coeffs[k].value, self.errorbars[k]),
+                            label
+                        )
+                    else:
+                        s += "{0:>4s}: {1:>24s} \t {2:s}".format(k, "{0:0.4g}".format(self.coeffs[k]), label)
+
                     s += "\n"
 
             s += "\n"
