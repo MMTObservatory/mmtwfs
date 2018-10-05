@@ -614,7 +614,7 @@ class ZernikeVector(MutableMapping):
         elif isinstance(coeffs, lmfit.minimizer.MinimizerResult):
             self.load_lmfit(coeffs)
         else:
-            self.from_array(coeffs, zmap=zmap)
+            self.from_array(coeffs, zmap=zmap, errorbars=errorbars)
 
         # now load any keyword inputs
         input_dict = dict(**kwargs)
@@ -624,7 +624,7 @@ class ZernikeVector(MutableMapping):
         # make sure errorbar units are consistent
         if len(self.errorbars) > 0:
             for k, v in self.errorbars.items():
-                self.errorbars[k] = u.Quantity(v, self.units)
+                self.errorbars[k].to(self.units)
 
     def __iter__(self):
         """
@@ -698,18 +698,27 @@ class ZernikeVector(MutableMapping):
         Use set() to collect the unique set of keys and self.__getitem__() to use 0.0 as a default.
         """
         d = {}
+        errorbars = {}
         if isinstance(zv, ZernikeVector):
             keys = set(self.coeffs.keys()) | set(zv.coeffs.keys())
             for k in keys:
                 d[k] = self.__getitem__(k) + zv[k]
+                if k in self.errorbars and k in zv.errorbars:
+                    errorbars[k] = np.sqrt(self.errorbars[k]**2 + zv.errorbars[k]**2)
+                elif k in self.errorbars and k not in zv.errorbars:
+                    errorbars[k] = self.errorbars[k]
+                elif k not in self.errorbars and k in zv.errorbars:
+                    errorbars[k] = zv.errorbars[k]
         else:
             try:
                 z = u.Quantity(zv, self.units)
                 for k in self.coeffs:
                     d[k] = self.__getitem__(k) + z
+                    if k in self.errorbars:
+                        errorbars[k] = self.errorbars[k]
             except Exception as e:
                 raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector + operation: zv = {zv} ({e})")
-        return ZernikeVector(units=self.units, **d)
+        return ZernikeVector(units=self.units, errorbars=errorbars, **d)
 
     def __radd__(self, zv):
         """
@@ -722,18 +731,27 @@ class ZernikeVector(MutableMapping):
         Create - operator to substract an instance or a constant to get a new instant. Complement to __add__...
         """
         d = {}
+        errorbars = {}
         if isinstance(zv, ZernikeVector):
             keys = set(self.coeffs.keys()) | set(zv.coeffs.keys())
             for k in keys:
                 d[k] = self.__getitem__(k) - zv[k]
+                if k in self.errorbars and k in zv.errorbars:
+                    errorbars[k] = np.sqrt(self.errorbars[k]**2 + zv.errorbars[k]**2)
+                elif k in self.errorbars and k not in zv.errorbars:
+                    errorbars[k] = self.errorbars[k]
+                elif k not in self.errorbars and k in zv.errorbars:
+                    errorbars[k] = zv.errorbars[k]
         else:
             try:
                 z = u.Quantity(zv, self.units)
                 for k in self.coeffs:
                     d[k] = self.__getitem__(k) - z
+                    if k in self.errorbars:
+                        errorbars[k] = self.errorbars[k]
             except Exception as e:
                 raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector - operation: zv = {zv} ({e})")
-        return ZernikeVector(units=self.units, **d)
+        return ZernikeVector(units=self.units, errorbars=errorbars, **d)
 
     def __rsub__(self, zv):
         """
@@ -744,35 +762,52 @@ class ZernikeVector(MutableMapping):
             keys = set(self.coeffs.keys()) | set(zv.coeffs.keys())
             for k in keys:
                 d[k] = zv[k] - self.__getitem__(k)
+                if k in self.errorbars and k in zv.errorbars:
+                    errorbars[k] = np.sqrt(self.errorbars[k]**2 + zv.errorbars[k]**2)
+                elif k in self.errorbars and k not in zv.errorbars:
+                    errorbars[k] = self.errorbars[k]
+                elif k not in self.errorbars and k in zv.errorbars:
+                    errorbars[k] = zv.errorbars[k]
         else:
             try:
                 z = u.Quantity(zv, self.units)
                 for k in self.coeffs:
                     d[k] = z - self.__getitem__(k)
+                    if k in self.errorbars:
+                        errorbars[k] = self.errorbars[k]
             except Exception as e:
                 raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector - operation: zv = {zv} ({e})")
-        return ZernikeVector(**d)
+        return ZernikeVector(errorbars=errorbars, **d)
 
     def __mul__(self, zv):
         """
         Create * operator to scale ZernikeVector by a constant value or ZernikeVector.
         """
         d = {}
+        errorbars = {}
         if isinstance(zv, ZernikeVector):
             # keys that are in one, but not the other are valid and will result in 0's in the result.
             keys = set(self.coeffs.keys()) | set(zv.coeffs.keys())
+            outunits = self.units * self.units
             for k in keys:
                 d[k] = self.__getitem__(k) * zv[k].to(self.units)
-            outunits = self.units * self.units
+                if k in self.errorbars and k in zv.errorbars:
+                    errorbars[k] = np.abs(d[k]) * np.sqrt((self.errorbars[k]/self.__getitem__(k))**2 +
+                                                          (zv.errorbars[k]/zv[k])**2)
+                elif k in self.errorbars and k not in zv.errorbars:
+                    errorbars[k] = np.abs(d[k]) * np.abs(self.errorbars[k]/self.__getitem__(k))
+                elif k not in self.errorbars and k in zv.errorbars:
+                    errorbars[k] = np.abs(d[k]) * np.abs(zv.errorbars[k]/zv[k])
         else:
             try:
                 for k in self.coeffs:
                     d[k] = self.__getitem__(k) * zv
+                    if k in self.errorbars:
+                        errorbars[k] = np.abs(d[k]/self.__getitem__(k)) * self.errorbars[k]
                     outunits = d[k].unit
             except Exception as e:
                 raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector * operation: zv = {zv} ({e})")
-        d['units'] = outunits
-        return ZernikeVector(**d)
+        return ZernikeVector(units=outunits, errorbars=errorbars, **d)
 
     def __rmul__(self, zv):
         """
@@ -792,21 +827,30 @@ class ZernikeVector(MutableMapping):
         will be divided.
         """
         d = {}
+        errorbars = {}
         if isinstance(zv, ZernikeVector):
             # only meaningful to divide keys that exist in both cases. division by 0 otherwise ok and results in np.inf.
             keys = set(self.coeffs.keys()) & set(zv.coeffs.keys())
+            outunits = u.dimensionless_unscaled
             for k in keys:
                 d[k] = self.__getitem__(k) / zv[k].to(self.units)
-            outunits = u.dimensionless_unscaled
+                if k in self.errorbars and k in zv.errorbars:
+                    errorbars[k] = np.abs(d[k]) * np.sqrt((self.errorbars[k]/self.__getitem__(k))**2 +
+                                                          (zv.errorbars[k]/zv[k])**2)
+                elif k in self.errorbars and k not in zv.errorbars:
+                    errorbars[k] = np.abs(d[k]) * np.abs(self.errorbars[k]/self.__getitem__(k))
+                elif k not in self.errorbars and k in zv.errorbars:
+                    errorbars[k] = np.abs(d[k]) * np.abs(zv.errorbars[k]/zv[k])
         else:
             try:
                 for k in self.coeffs:
                     d[k] = self.__getitem__(k) / float(zv)
+                    if k in self.errorbars:
+                        errorbars[k] = np.abs(d[k]/self.__getitem__(k)) * self.errorbars[k]
                 outunits = self.units
             except Exception as e:
                 raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector / operation: zv = {zv} ({e})")
-        d['units'] = outunits
-        return ZernikeVector(**d)
+        return ZernikeVector(units=outunits, errorbars=errorbars, **d)
 
     def __rdiv__(self, zv):
         """
@@ -819,33 +863,45 @@ class ZernikeVector(MutableMapping):
         Implement __truediv__ for the right side of the operator as well.
         """
         d = {}
+        errorbars = {}
         if isinstance(zv, ZernikeVector):
             # only meaningful to divide keys that exist in both cases. division by 0 otherwise ok and results in np.inf.
             keys = set(self.coeffs.keys()) & set(zv.coeffs.keys())
+            outunits = u.dimensionless_unscaled
             for k in keys:
                 d[k] = zv[k].to(self.units) / self.__getitem__(k)
-            outunits = u.dimensionless_unscaled
+                if k in self.errorbars and k in zv.errorbars:
+                    errorbars[k] = np.abs(d[k]) * np.sqrt((self.errorbars[k]/self.__getitem__(k))**2 +
+                                                          (zv.errorbars[k]/zv[k])**2)
+                elif k in self.errorbars and k not in zv.errorbars:
+                    errorbars[k] = np.abs(d[k]) * np.abs(self.errorbars[k]/self.__getitem__(k))
+                elif k not in self.errorbars and k in zv.errorbars:
+                    errorbars[k] = np.abs(d[k]) * np.abs(zv.errorbars[k]/zv[k])
         else:
             try:
                 for k in self.coeffs:
                     d[k] = float(zv) / self.__getitem__(k)
+                    if k in self.errorbars:
+                        errorbars[k] = np.abs(d[k]/self.__getitem__(k)) * self.errorbars[k]
                 outunits = (1. / self.units).unit
             except Exception as e:
                 raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector / operation: zv = {zv} ({e})")
-        d['units'] = outunits
-        return ZernikeVector(**d)
+        return ZernikeVector(units=outunits, errorbars=errorbars, **d)
 
     def __pow__(self, n):
         """
         Implement the pow() method and ** operator.
         """
         d = {}
+        errorbars = {}
         try:
             for k in self.coeffs:
-                d[k] = self.__getitem__(k).value ** float(n) * self.units
+                d[k] = self.__getitem__(k).value ** float(n)
+                if k in self.errorbars:
+                    errorbars[k] = np.abs(d[k] * n / self.__getitem__(k).value) * self.errorbars[k]
         except Exception as e:
             raise ZernikeException(f"Invalid data-type, {type(n)}, for ZernikeVector ** operation: n = {n} ({e})")
-        return ZernikeVector(**d)
+        return ZernikeVector(errorbars=errorbars, **d)
 
     def _valid_key(self, key):
         """
@@ -887,6 +943,8 @@ class ZernikeVector(MutableMapping):
         """
         for k in self.coeffs:
             self.coeffs[k] = u.Quantity(self.coeffs[k], units)
+            if k in self.errorbars:
+                self.errorbars[k] = u.Quantity(self.errorbars[k], units)
         self._units = units
 
     @property
@@ -964,18 +1022,18 @@ class ZernikeVector(MutableMapping):
                     if k in self.errorbars:
                         s += "{0:>4s}: {1:>24s} \t {2:s}".format(
                             k,
-                            "{0:0.4g} ± {1:6.4g}".format(self.coeffs[k].value, self.errorbars[k]),
+                            "{0:8.4g} ± {1:5.3g}".format(self.coeffs[k].value, self.errorbars[k]),
                             label
                         )
                     else:
-                        s += "{0:>4s}: {1:>24s} \t {2:s}".format(k, "{0:0.4g}".format(self.coeffs[k]), label)
+                        s += "{0:>4s}: {1:>14s} \t {2:s}".format(k, "{0:0.4g}".format(self.coeffs[k]), label)
 
                     s += "\n"
 
             s += "\n"
             if self._key_to_l(keys[-1]) > last:
                 hi_orders = ZernikeVector(modestart=last+1, normalized=self.normalized, units=self.units, **self.coeffs)
-                s += "High Orders RMS: \t {0:0.4g}  {1:>3s} ➞ {2:>3s}\n".format(hi_orders.rms, self._l_to_key(last+1), keys[-1])
+                s += "High Orders RMS: \t {0:0.3g}  {1:>3s} ➞ {2:>3s}\n".format(hi_orders.rms, self._l_to_key(last+1), keys[-1])
             s += "Total RMS: \t {0:0.4g}\n".format(self.rms)
 
         return s
