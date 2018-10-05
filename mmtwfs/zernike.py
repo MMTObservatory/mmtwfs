@@ -896,13 +896,14 @@ class ZernikeVector(MutableMapping):
         d = {}
         errorbars = {}
         try:
+            outunits = (self.units) ** n
             for k in self.coeffs:
-                d[k] = self.__getitem__(k).value ** float(n)
+                d[k] = self.__getitem__(k) ** n
                 if k in self.errorbars:
-                    errorbars[k] = np.abs(d[k] * n / self.__getitem__(k).value) * self.errorbars[k]
+                    errorbars[k] = np.abs(d[k] * n / self.__getitem__(k)) * self.errorbars[k]
         except Exception as e:
             raise ZernikeException(f"Invalid data-type, {type(n)}, for ZernikeVector ** operation: n = {n} ({e})")
-        return ZernikeVector(errorbars=errorbars, **d)
+        return ZernikeVector(units=outunits, errorbars=errorbars, **d)
 
     def _valid_key(self, key):
         """
@@ -1027,7 +1028,7 @@ class ZernikeVector(MutableMapping):
                             label
                         )
                     else:
-                        s += "{0:>4s}: {1:>14s} \t {2:s}".format(k, "{0:0.4g}".format(self.coeffs[k]), label)
+                        s += "{0:>4s}: {1:>24s} \t {2:s}".format(k, "{0:0.4g}".format(self.coeffs[k]), label)
 
                     s += "\n"
 
