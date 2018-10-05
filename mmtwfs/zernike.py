@@ -758,6 +758,7 @@ class ZernikeVector(MutableMapping):
         Complement to __sub__ so ZernikeVector can work on both sides of - operator.
         """
         d = {}
+        errorbars = {}
         if isinstance(zv, ZernikeVector):
             keys = set(self.coeffs.keys()) | set(zv.coeffs.keys())
             for k in keys:
