@@ -1272,19 +1272,23 @@ class ZernikeVector(MutableMapping):
 
         if self.normalized:
             coeffs = [self.__getitem__(m).value * noll_coefficient(self._key_to_l(m)) for m in modes]
+            errorbars = [self.errorbars.get(m, 0.0 * self.units).value * noll_coefficient(self._key_to_l(m)) for m in modes]
         else:
             coeffs = [self.__getitem__(m).value for m in modes]
+            errorbars = [self.errorbars.get(m, 0.0 * self.units).value for m in modes]
 
         # lump higher order terms into one RMS bin.
         if last_coeff > last_label:
             hi_orders = ZernikeVector(modestart=last_label+1, normalized=self.normalized, units=self.units, **self.coeffs)
             labels.append("Hi Ord RMS")
             coeffs.append(hi_orders.rms.value)
+            errorbars.append(0.0)
 
         # add total RMS
         if total:
             labels.append("Total RMS")
             coeffs.append(self.rms.value)
+            errorbars.append(0.0)
 
         max_c = u.Quantity(max_c, self.units).value
         cmap = cm.ScalarMappable(col.Normalize(-max_c, max_c), cm.coolwarm_r)
@@ -1292,7 +1296,7 @@ class ZernikeVector(MutableMapping):
         ind = np.arange(len(labels))
         fig, ax = plt.subplots(figsize=(11, 5))
         fig.set_label("Fringe Wavefront Amplitude per Zernike Mode")
-        ax.bar(ind, coeffs, color=cmap.to_rgba(coeffs))
+        ax.bar(ind, coeffs, color=cmap.to_rgba(coeffs), yerr=errorbars)
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
         ax.yaxis.grid(color='gray', linestyle='dotted')
