@@ -18,6 +18,8 @@ import matplotlib.cm as cm
 from skimage import feature
 from scipy import ndimage, optimize
 
+import lmfit
+
 import astropy.units as u
 from astropy.io import fits
 from astropy.io import ascii
@@ -46,7 +48,7 @@ table_conf.replace_warnings = ['attributes']
 
 __all__ = ['SH_Reference', 'WFS', 'F9', 'NewF9', 'F5', 'Binospec', 'MMIRS', 'WFSFactory', 'wfs_norm', 'check_wfsdata',
            'wfsfind', 'grid_spacing', 'center_pupil', 'get_apertures', 'match_apertures', 'aperture_distance', 'fit_apertures',
-           'get_slopes']
+           'get_slopes', 'make_init_pars', 'zernike_slopes', 'slope_chisq']
 
 
 def wfs_norm(data, interval=visualization.ZScaleInterval(contrast=0.05), stretch=visualization.LinearStretch()):
@@ -533,6 +535,41 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
         "grid_fit": fit_results
     }
     return results
+
+
+def make_init_pars(nmodes=21, modestart=2, init_zv=None):
+    """
+    Make a set of initial parameters that can be used with `~lmfit.minimize` to make a wavefront fit with
+    parameter names that are compatible with ZernikeVector'sself.
+
+    Parameters
+    ----------
+    nmodes: int (default: 21)
+        Number of Zernike modes to fit.
+    modestart: int (default: 2)
+        First Zernike mode to be used.
+    init_zv: ZernikeVector (default: None)
+        ZernikeVector containing initial values for the fit.
+
+    Returns
+    -------
+    params: `~lmfit.Parameters` instance
+        Initial parameters in form that can be passed to `~lmfit.minimize`.
+    """
+    pars = []
+    for i in range(modestart, modestart+nmodes, 1):
+        key = "Z{:02d}".format(i)
+        if init_zv is not None:
+            val = init_zv[key].value
+            if val < 1.e-4:
+                val = 0.0
+        else:
+            val = 0.0
+        zpar = (key, val)
+        pars.append(zpar)
+    params = lmfit.Parameters()
+    params.add_many(*pars)
+    return params
 
 
 class SH_Reference(object):
