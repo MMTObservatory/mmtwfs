@@ -650,13 +650,10 @@ class ZernikeVector(MutableMapping):
         Overload __getitem__ so that coefficients can be accessed in a dict-like manner. Add logic to validate
         keys and return amplitude of 0 if key is valid, but term not set in self.coeffs.
         """
-        if key in self.coeffs:
-            return self.coeffs[key]
+        if self._valid_key(key):
+            return self.coeffs.get(key, 0.0 * self.units)
         else:
-            if self._valid_key(key):
-                return 0.0 * self.units
-            else:
-                raise KeyError(f"Invalid Zernike term, {key}")
+            raise KeyError(f"Invalid Zernike term, {key}")
 
     def __setitem__(self, key, item):
         """
