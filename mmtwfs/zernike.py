@@ -29,8 +29,8 @@ from .custom_exceptions import ZernikeException
 
 
 __all__ = ['ZernikeVector', 'cart2pol', 'pol2cart', 'R_mn', 'dR_drho', 'theta_m', 'dtheta_dphi', 'zernike', 'dZ_dx', 'dZ_dy',
-           'noll_to_zernike', 'zernike_noll', 'zernike_slope_noll', 'noll_normalization_vector', 'norm_coefficient',
-           'noll_coefficient', 'zernike_influence_matrix']
+           'noll_to_zernike', 'zernike_noll', 'zernike_slope_noll', 'zernike_slopes', 'noll_normalization_vector',
+           'norm_coefficient', 'noll_coefficient', 'zernike_influence_matrix']
 
 
 def cart2pol(arr):
@@ -365,9 +365,9 @@ def zernike_slope_noll(j, rho, phi, norm=False):
     ----------
     j : int
         j-th Noll Zernike index
-    rho : 2D `~numpy.ndarray`
+    rho : `~numpy.ndarray`
         Radial coordinate grid
-    phi : 2D `~numpy.ndarray`
+    phi : `~numpy.ndarray`
         Azimuthal coordinate grid
     norm : bool (default: True)
         Normalize modes to unit variance (i.e. Noll coefficients)
@@ -381,6 +381,36 @@ def zernike_slope_noll(j, rho, phi, norm=False):
     dwx = dZ_dx(m, n, rho, phi, norm=norm)
     dwy = dZ_dy(m, n, rho, phi, norm=norm)
     return dwx, dwy
+
+
+def zernike_slopes(zv, rho, phi, norm=False):
+    """
+    Calculate total slope of a set of Zernike modes on a polar coordinate grid, (rho, phi).
+
+    Parameters
+    ----------
+    zv: dict-like or ZernikeVector
+        ZernikeVector or dict-like with Zernikevector-compatible key naming scheme containing zernike polynomial coefficients.
+    rho : `~numpy.ndarray`
+        Radial coordinate grid
+    phi : `~numpy.ndarray`
+        Azimuthal coordinate grid
+    norm : bool (default: True)
+        Normalize modes to unit variance (i.e. Noll coefficients)
+
+    Returns
+    -------
+    xslope, yslope: `~numpy.ndarray`, `~numpy.ndarray`
+        Total X and Y slopes of zv at each (rho, phi) point. Same shapes as **rho** and **phi**.
+    """
+    xslope = 0.
+    yslope = 0.
+    for k, v in zv.items():
+        l = int(k.replace("Z", ""))
+        dwx, dwy = zernike_slope_noll(l, rho, phi, norm=norm)
+        xslope += v * dwx
+        yslope += v * dwy
+    return xslope, yslope
 
 
 def noll_normalization_vector(nmodes=30):
