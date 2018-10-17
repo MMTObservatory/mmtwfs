@@ -48,7 +48,7 @@ table_conf.replace_warnings = ['attributes']
 
 __all__ = ['SH_Reference', 'WFS', 'F9', 'NewF9', 'F5', 'Binospec', 'MMIRS', 'WFSFactory', 'wfs_norm', 'check_wfsdata',
            'wfsfind', 'grid_spacing', 'center_pupil', 'get_apertures', 'match_apertures', 'aperture_distance', 'fit_apertures',
-           'get_slopes', 'make_init_pars', 'zernike_slopes', 'slope_chisq']
+           'get_slopes', 'make_init_pars', 'slope_diff']
 
 
 def wfs_norm(data, interval=visualization.ZScaleInterval(contrast=0.05), stretch=visualization.LinearStretch()):
@@ -540,7 +540,7 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
 def make_init_pars(nmodes=21, modestart=2, init_zv=None):
     """
     Make a set of initial parameters that can be used with `~lmfit.minimize` to make a wavefront fit with
-    parameter names that are compatible with ZernikeVector'sself.
+    parameter names that are compatible with ZernikeVectors.
 
     Parameters
     ----------
@@ -561,7 +561,7 @@ def make_init_pars(nmodes=21, modestart=2, init_zv=None):
         key = "Z{:02d}".format(i)
         if init_zv is not None:
             val = init_zv[key].value
-            if val < 1.e-4:
+            if val < 2. * np.finfo(float).eps:
                 val = 0.0
         else:
             val = 0.0
@@ -570,6 +570,20 @@ def make_init_pars(nmodes=21, modestart=2, init_zv=None):
     params = lmfit.Parameters()
     params.add_many(*pars)
     return params
+
+
+def slope_diff(pars, coords, slopes, norm=False):
+    """
+    For a given set of wavefront fit parameters, calculate the "distance" between the predicted and measured wavefront
+    slopes. This function is used by `~lmfit.minimize` which expects the sqrt to be applied rather than a chi-squared,
+    """
+    parsdict = pars.valuesdict()
+    rho, phi = cart2pol(coords)
+    xslope = slopes[0]
+    yslope = slopes[1]
+    pred_xslope, pred_yslope = zernike_slopes(parsdict, rho, phi, norm=norm)
+    dist = np.sqrt((xslope - pred_xslope)**2 + (yslope - pred_yslope)**2)
+    return dist
 
 
 class SH_Reference(object):
