@@ -34,7 +34,7 @@ from ccdproc.utils.slices import slice_from_string
 from .config import recursive_subclasses, merge_config, mmt_config
 from .telescope import MMT
 from .f9topbox import CompMirror
-from .zernike import ZernikeVector, zernike_slopes, cart2pol, pol2cart
+from .zernike import zernike_influence_matrix, ZernikeVector, cart2pol, pol2cart
 from .custom_exceptions import WFSConfigException, WFSAnalysisFailed
 
 import logging
@@ -484,6 +484,11 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
     spacing = np.max([xspacing, yspacing])
     ref_mask, src_mask = match_apertures(refx, refy, srcs['xcentroid'], srcs['ycentroid'], max_dist=spacing/2.)
 
+    # now use RANSAC to fine tune the X, Y offset of the aperture pattern
+    # fine_src = np.array((refx[ref_mask], refy[ref_mask])).transpose()
+    # fine_dst = np.array((srcs['xcentroid'][src_mask], srcs['ycentroid'][src_mask])).transpose()
+    # model, inliers = ransac((fine_src, fine_dst), AffineTransform, min_samples=3, residual_threshold=spacing, max_trials=100)
+
     # these are unscaled so that the slope includes defocus
     trim_refx = ref.masked_apertures['xcentroid'][ref_mask] + fit_results['xcen']
     trim_refy = ref.masked_apertures['ycentroid'][ref_mask] + fit_results['ycen']
@@ -903,6 +908,18 @@ class WFS(object):
         # apply pupil to the reference
         self.modes[mode]['reference'].apply_pupil(self.pup_inner, self.pup_size/2.)
 
+        # get pupil coords
+        ref_pup_coords = self.modes[mode]['reference'].pup_coords(self.pup_size/2.)
+
+        # use the inverse influence matrix to calculate slopes due to reference aberrations
+        zernike_matrix = zernike_influence_matrix(
+            pup_coords=ref_pup_coords,
+            nmodes=self.nzern,
+            modestart=2  # ignore the piston term
+        )
+        infmat = zernike_matrix[0]
+        inverse_infmat = zernike_matrix[1]
+
         ref_zv = self.reference_aberrations(mode, hdr=hdr)
         zref = ref_zv.array
         if len(zref) < self.nzern:
@@ -920,14 +937,11 @@ class WFS(object):
             )
             slopes = slope_results['slopes']
             coords = slope_results['pup_coords']
-            ref_pup_coords = self.modes[mode]['reference'].pup_coords(self.pup_size/2.)
-
-            rho, phi = cart2pol(ref_pup_coords)
-            ref_slopes = -(1. / self.tiltfactor) * np.array(zernike_slopes(ref_zv, rho, phi))
             aps = slope_results['src_aps']
             ref_mask = slope_results['ref_mask']
             src_mask = slope_results['src_mask']
             figures = slope_results['figures']
+            ref_slopes = -(1. / self.tiltfactor) * np.dot(zref, inverse_infmat).reshape(2, slopes.shape[1])
         except WFSAnalysisFailed as e:
             log.warning(f"Wavefront slope measurement failed: {e}")
             slope_fig = None
@@ -974,14 +988,14 @@ class WFS(object):
             ax.set_title("Seeing: %.2f\" (%.2f\" @ zenith)" % (raw_seeing.value, seeing.value))
 
         results = {}
+        results['infmat'] = infmat
+        results['inverse_infmat'] = inverse_infmat
         results['seeing'] = seeing
         results['raw_seeing'] = raw_seeing
         results['slopes'] = slopes
         results['ref_slopes'] = ref_slopes
-        results['ref_zv'] = ref_zv
         results['spots'] = slope_results['spots']
         results['pup_coords'] = coords
-        results['ref_pup_coords'] = ref_pup_coords
         results['apertures'] = aps
         results['xspacing'] = slope_results['spacing'][0]
         results['yspacing'] = slope_results['spacing'][1]
@@ -1008,34 +1022,32 @@ class WFS(object):
         if slope_results['slopes'] is not None:
             results = {}
             mode = slope_results['mode']
-            slopes = -self.tiltfactor * slope_results['slopes']
-            coords = slope_results['ref_pup_coords']
-            rho, phi = cart2pol(coords)
+            infmat = slope_results['infmat']
+            inverse_infmat = slope_results['inverse_infmat']
+            slopes = slope_results['slopes']
+            slope_vec = -self.tiltfactor * slopes.ravel()  # convert arcsec to radians
+            zfit = np.dot(slope_vec, infmat)
 
-            zref = slope_results['ref_zv']
-            params = make_init_pars(nmodes=self.nzern, init_zv=zref)
-            results['fit_report'] = lmfit.minimize(slope_diff, params, args=(coords, slopes))
-            zfit = ZernikeVector(coeffs=results['fit_report'])
-
-            results['raw_zernike'] = zfit
+            results['raw_zernike'] = ZernikeVector(coeffs=zfit)
 
             # derotate the zernike solution to match the primary mirror coordinate system
             total_rotation = self.rotation - slope_results['rotator']
-            zv_rot = ZernikeVector(coeffs=results['fit_report'])
+            zv_rot = ZernikeVector(coeffs=zfit)
             zv_rot.rotate(angle=-total_rotation)
             results['rot_zernike'] = zv_rot
 
             # subtract the reference aberrations
+            zref = self.reference_aberrations(mode, hdr=slope_results['header'])
             zsub = zv_rot - zref
             results['ref_zernike'] = zref
             results['zernike'] = zsub
 
-            pred_slopes = np.array(zernike_slopes(zfit, rho, phi))
+            pred = np.dot(zfit, inverse_infmat)
+            pred_slopes = -(1. / self.tiltfactor) * pred.reshape(2, slopes.shape[1])
             diff = slopes - pred_slopes
-            diff_pix = diff / self.tiltfactor
-            rms = np.sqrt((diff[0]**2 + diff[1]**2).mean())
-            results['residual_rms_asec'] = rms / self.telescope.nmperasec * u.arcsec
-            results['residual_rms'] = rms * zsub.units
+            rms = self.pix_size * np.sqrt((diff[0]**2 + diff[1]**2).mean())
+            results['residual_rms_asec'] = rms.to(u.arcsec)
+            results['residual_rms'] = rms.to(u.arcsec).value * self.tiltfactor * zsub.units
             results['zernike_rms'] = zsub.rms
             results['zernike_p2v'] = zsub.peak2valley
 
@@ -1050,8 +1062,7 @@ class WFS(object):
                 ax.imshow(im, cmap='Greys', origin='lower', norm=gnorm, interpolation='None')
                 x = slope_results['apertures'].positions.transpose()[0][src_mask]
                 y = slope_results['apertures'].positions.transpose()[1][src_mask]
-                ax.quiver(x, y, diff_pix[0][ref_mask], diff_pix[1][ref_mask], scale_units='xy',
-                          scale=0.05, pivot='tip', color='red')
+                ax.quiver(x, y, diff[0][ref_mask], diff[1][ref_mask], scale_units='xy', scale=0.05, pivot='tip', color='red')
                 xl = [50.0]
                 yl = [im.shape[0]-30]
                 ul = [0.2/self.pix_size.value]
