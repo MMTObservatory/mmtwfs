@@ -964,13 +964,13 @@ class WFS(object):
             ax.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
             aps.plot(color='blue', ax=ax)
             ax.quiver(x, y, uu, vv, scale_units='xy', scale=0.2, pivot='tip', color='red')
-            xl = [60.0]
-            yl = [data.shape[0]-30]
+            xl = [0.1*data.shape[1]]
+            yl = [0.95*data.shape[0]]
             ul = [1.0/self.pix_size.value]
             vl = [0.0]
             ax.quiver(xl, yl, ul, vl, scale_units='xy', scale=0.2, pivot='tip', color='red')
             ax.scatter([slope_results['center'][0]], [slope_results['center'][1]])
-            ax.text(60, data.shape[0]-30, "1\"", verticalalignment='center')
+            ax.text(0.12*data.shape[1], 0.95*data.shape[0], "1{0:unicode}".format(u.arcsec), verticalalignment='center')
             ax.set_title("Seeing: %.2f\" (%.2f\" @ zenith)" % (raw_seeing.value, seeing.value))
 
         results = {}
@@ -1052,13 +1052,22 @@ class WFS(object):
                 y = slope_results['apertures'].positions.transpose()[1][src_mask]
                 ax.quiver(x, y, diff_pix[0][ref_mask], diff_pix[1][ref_mask], scale_units='xy',
                           scale=0.05, pivot='tip', color='red')
-                xl = [50.0]
-                yl = [im.shape[0]-30]
+                xl = [0.1*im.shape[1]]
+                yl = [0.95*im.shape[0]]
                 ul = [0.2/self.pix_size.value]
                 vl = [0.0]
                 ax.quiver(xl, yl, ul, vl, scale_units='xy', scale=0.05, pivot='tip', color='red')
-                ax.text(60, im.shape[0]-30, "0.2\"", verticalalignment='center')
-                ax.set_title("Residual RMS: {0:0.4g} ({1:0.2f})".format(results['residual_rms'], results['residual_rms_asec']))
+                ax.text(0.12*im.shape[1], 0.95*im.shape[0], "0.2{0:unicode}".format(u.arcsec), verticalalignment='center')
+                ax.text(
+                    0.95*im.shape[1],
+                    0.95*im.shape[0],
+                    "Residual RMS: {0.value:0.2f}{0.unit:unicode}".format(results['residual_rms_asec']),
+                    verticalalignment='center',
+                    horizontalalignment='right'
+                )
+                iq = np.sqrt(results['residual_rms_asec']**2 +
+                            (results['zernike_rms'].value / self.telescope.nmperasec * u.arcsec)**2)
+                ax.set_title("Image Quality: {0.value:0.2f}{0.unit:unicode}".format(iq))
 
             results['resid_plot'] = fig
         else:
@@ -1086,6 +1095,12 @@ class WFS(object):
                 log.debug(f"{z}: Bad")
         zv_masked.denormalize()  # need to assure we're using fringe coeffs
         log.debug(f"\nInput masked: {zv_masked}")
+
+        # now use any available error bars to mask down to 1 sigma below amplitude or 0 if error bars are larger than amplitude.
+        for z in zv_masked:
+            frac_err = 1. - min(zv_masked.frac_error(key=z), 1.)
+            zv_masked[z] *= frac_error
+        log.debug(f"\nErrorbar masked: {zv_masked}")
         forces, m1focus, zv_allmasked = self.telescope.calculate_primary_corrections(zv=zv_masked, mask=mask, gain=self.m1_gain)
         log.debug(f"\nAll masked: {zv_allmasked}")
         return forces, m1focus, zv_allmasked
@@ -1096,7 +1111,8 @@ class WFS(object):
         """
         z_denorm = zv.copy()
         z_denorm.denormalize()  # need to assure we're using fringe coeffs
-        foc_corr = -self.m2_gain * z_denorm['Z04'] / self.secondary.focus_trans
+        frac_err = 1. - min(z_denorm.frac_error(key='Z04'), 1.)
+        foc_corr = -self.m2_gain * frac_err * z_denorm['Z04'] / self.secondary.focus_trans
 
         return foc_corr.round(2)
 
@@ -1108,8 +1124,10 @@ class WFS(object):
         z_denorm.denormalize()  # need to assure we're using fringe coeffs
 
         # fix coma using tilts around the M2 center of curvature.
-        cc_y_corr = -self.m2_gain * z_denorm['Z07'] / self.secondary.theta_cc
-        cc_x_corr = -self.m2_gain * z_denorm['Z08'] / self.secondary.theta_cc
+        y_frac_err = 1. - min(z_denorm.frac_error(key='Z07'), 1.)
+        x_frac_err = 1. - min(z_denorm.frac_error(key='Z08'), 1.)
+        cc_y_corr = -self.m2_gain * y_frac_err * z_denorm['Z07'] / self.secondary.theta_cc
+        cc_x_corr = -self.m2_gain * x_frac_err * z_denorm['Z08'] / self.secondary.theta_cc
 
         return cc_x_corr.round(3), cc_y_corr.round(3)
 
