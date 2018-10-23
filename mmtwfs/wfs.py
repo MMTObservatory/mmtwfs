@@ -1099,7 +1099,7 @@ class WFS(object):
         # now use any available error bars to mask down to 1 sigma below amplitude or 0 if error bars are larger than amplitude.
         for z in zv_masked:
             frac_err = 1. - min(zv_masked.frac_error(key=z), 1.)
-            zv_masked[z] *= frac_error
+            zv_masked[z] *= frac_err
         log.debug(f"\nErrorbar masked: {zv_masked}")
         forces, m1focus, zv_allmasked = self.telescope.calculate_primary_corrections(zv=zv_masked, mask=mask, gain=self.m1_gain)
         log.debug(f"\nAll masked: {zv_allmasked}")
