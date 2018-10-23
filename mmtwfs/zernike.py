@@ -1175,6 +1175,15 @@ class ZernikeVector(MutableMapping):
                     if c != 0.0:
                         self.__setitem__(key, c)
 
+    def frac_error(self, key=None):
+        """
+        Calculate fractional size of the error bar for mode, key.
+        """
+        err = 0.0
+        if key is not None and key in self.coeffs:
+            err = np.abs(self.errorbars.get(key, 0.0 * self.units).value / self.coeffs[key].value)
+        return err
+
     def normalize(self):
         """
         Normalize coefficients to unit variance for each mode.
@@ -1291,7 +1300,7 @@ class ZernikeVector(MutableMapping):
             last_label = last_mode
         last_coeff = self._key_to_l(sorted(self.coeffs.keys())[-1])
 
-        if last_coeff < 21:
+        if last_coeff < 22:
             modes = label_keys[3:last_coeff]  # ignore piston and tilts in bar plot
         else:
             modes = label_keys[3:22]
@@ -1351,7 +1360,7 @@ class ZernikeVector(MutableMapping):
             last_label = last_mode
 
         last_coeff = self._key_to_l(sorted(self.coeffs.keys())[-1])
-        if last_coeff < 21:
+        if last_coeff < 22:
             modes = label_keys[3:last_coeff]  # ignore piston and tilts in bar plot
         else:
             modes = label_keys[3:22]
