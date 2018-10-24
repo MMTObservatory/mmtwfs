@@ -7,7 +7,7 @@ import astropy.units as u
 
 from matplotlib.testing.decorators import cleanup
 
-from ..zernike import ZernikeVector, noll_normalization_vector, noll_coefficient, R_mn
+from ..zernike import *
 from ..custom_exceptions import ZernikeException
 
 

@@ -1007,7 +1007,6 @@ class WFS(object):
         plot = plot and self.plot
         if slope_results['slopes'] is not None:
             results = {}
-            mode = slope_results['mode']
             slopes = -self.tiltfactor * slope_results['slopes']
             coords = slope_results['ref_pup_coords']
             rho, phi = cart2pol(coords)
@@ -1066,7 +1065,7 @@ class WFS(object):
                     horizontalalignment='right'
                 )
                 iq = np.sqrt(results['residual_rms_asec']**2 +
-                            (results['zernike_rms'].value / self.telescope.nmperasec * u.arcsec)**2)
+                             (results['zernike_rms'].value / self.telescope.nmperasec * u.arcsec)**2)
                 ax.set_title("Image Quality: {0.value:0.2f}{0.unit:unicode}".format(iq))
 
             results['resid_plot'] = fig

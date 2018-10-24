@@ -406,8 +406,8 @@ def zernike_slopes(zv, rho, phi, norm=False):
     xslope = 0.
     yslope = 0.
     for k, v in zv.items():
-        l = int(k.replace("Z", ""))
-        dwx, dwy = zernike_slope_noll(l, rho, phi, norm=norm)
+        mode = int(k.replace("Z", ""))
+        dwx, dwy = zernike_slope_noll(mode, rho, phi, norm=norm)
         xslope += v * dwx
         yslope += v * dwy
     return xslope, yslope
