@@ -1,13 +1,19 @@
 # -*- coding: utf-8 -*-
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 
+import numpy as np
+
 import astropy.units as u
 
 from matplotlib.testing.decorators import cleanup
 
-from ..zernike import ZernikeVector, noll_normalization_vector, noll_coefficient
+from ..zernike import ZernikeVector, noll_normalization_vector, noll_coefficient, R_mn
 from ..custom_exceptions import ZernikeException
 
+
+def test_R_mn():
+    r = R_mn(2, 1, np.ones(25).reshape((5, 5)))
+    assert(r == 0.0)
 
 def test_bogus_coefficient():
     try:
