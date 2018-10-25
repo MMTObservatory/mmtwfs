@@ -22,7 +22,7 @@ import lmfit
 import numpy as np
 import astropy.units as u
 
-from collections import MutableMapping
+from collections.abc import MutableMapping
 from scipy.special import factorial as fac
 
 from .custom_exceptions import ZernikeException
@@ -475,44 +475,6 @@ def noll_coefficient(l):
     return norm_coeff
 
 
-def zernike_influence_matrix(pup_coords, nmodes=20, modestart=2):
-    """
-    Calculate matrices to convert wavefront slopes to Zernike coefficients and to convert Zernike coefficients to
-    wavefront slopes.  This method analytic derivatives to calculate the slopes for Zernike mode.  Adapting this methods
-    for other basis sets would also require calculating the analytic derivatives for those sets.  This method also currently
-    only calculates the slope at the aperture center.  It would be more correct to average over the aperture, but this isn't
-    hugely important for the lower order modes we're most interested in.
-
-    Parameters
-    ----------
-    pup_coords : 2-element tuple
-        Pupil coordinates of the aperture centers.
-    nmodes : int (default: 20)
-        Number of Zernike modes to fit.
-    modestart : int (default: 2)
-        First mode to include in the set to fit.
-
-    Returns
-    -------
-    matrices : tuple (2D `~numpy.ndarray`, 2D `~numpy.ndarray`)
-        (slopes-to-zernike matrix, zernike-to-slope matrix)
-    """
-    x = pup_coords[0]
-    y = pup_coords[1]
-    rho, phi = cart2pol([x, y])
-    zern_slopes = [zernike_slope_noll(zmode, rho, phi) for zmode in range(modestart, nmodes+modestart)]
-    zern_slopes_mat = np.r_[zern_slopes].reshape(nmodes, -1)  # X slopes and then Y slopes for each mode
-
-    # use SVD to set up optimized conversion matrices
-    U, s, Vh = np.linalg.svd(zern_slopes_mat, full_matrices=False)
-
-    # don't need to trim singular values for reasonable numbers of modes so fit all requested modes.
-    zern_inv_mat = np.dot(Vh.T, np.dot(np.diag(1./s), U.T))
-
-    matrices = (zern_inv_mat, zern_slopes_mat)
-    return matrices
-
-
 class ZernikeVector(MutableMapping):
     """
     Class to wrap and visualize a vector of Zernike polynomial coefficients. We build upon a
@@ -654,7 +616,7 @@ class ZernikeVector(MutableMapping):
         # make sure errorbar units are consistent
         if len(self.errorbars) > 0:
             for k, v in self.errorbars.items():
-                self.errorbars[k].to(self.units)
+                self.errorbars[k] = u.Quantity(self.errorbars[k], self.units)
 
     def __iter__(self):
         """
