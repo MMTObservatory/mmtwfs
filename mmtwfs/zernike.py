@@ -30,7 +30,7 @@ from .custom_exceptions import ZernikeException
 
 __all__ = ['ZernikeVector', 'cart2pol', 'pol2cart', 'R_mn', 'dR_drho', 'theta_m', 'dtheta_dphi', 'zernike', 'dZ_dx', 'dZ_dy',
            'noll_to_zernike', 'zernike_noll', 'zernike_slope_noll', 'zernike_slopes', 'noll_normalization_vector',
-           'norm_coefficient', 'noll_coefficient', 'zernike_influence_matrix']
+           'norm_coefficient', 'noll_coefficient']
 
 
 def cart2pol(arr):
