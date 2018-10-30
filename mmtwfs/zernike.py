@@ -12,6 +12,7 @@ Expressions for cartesian derivatives of the Zernike polynomials were adapted fr
 
 import re
 import json
+import copy
 
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
@@ -1033,7 +1034,7 @@ class ZernikeVector(MutableMapping):
         """
         Make a new ZernikeVector with the same configuration and coefficients
         """
-        new = ZernikeVector(modestart=self.modestart, normalized=self.normalized, errorbars=self.errorbars,
+        new = ZernikeVector(modestart=self.modestart, normalized=self.normalized, errorbars=copy.deepcopy(self.errorbars),
                             units=self.units, **self.coeffs)
         return new
 
