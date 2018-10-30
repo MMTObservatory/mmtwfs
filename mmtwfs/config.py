@@ -142,7 +142,7 @@ mmt_config = {
             "name": "Hecto WFS",
             "secondary": "f5",  # secondary used with WFS system
             "default_mode": "hecto",
-            "cor_coords": [255.0, 255.0],  # image coordinates of the center of rotation
+            "cor_coords": [242.0, 255.0],  # image coordinates of the center of rotation
             "find_fwhm": 9.0,  # FWHM for DAOfind kernel
             "find_thresh": 5.0,  # threshold for DAOfind
             "rotation": 234.0 * u.deg,  # rotation of aperture locations w.r.t. the primary mirror
