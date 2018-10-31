@@ -149,7 +149,6 @@ class MMT(object):
         # pop detector out to reuse, pop old wavefront error out to make way for new
         det = self.osys.planes.pop()
         fov = det.fov_arcsec.value
-        old_wfe = self.osys.planes.pop()
 
         # add new wavefront error and put detector back in place
         wfe = poppy.ZernikeWFE(radius=self.radius.to(u.m).value, coefficients=coeffs)
@@ -258,7 +257,7 @@ class MMT(object):
 
         try:
             (stdout, stderr) = pipe.communicate(timeout=10)
-        except TimeoutExpired:
+        except subprocess.TimeoutExpired:
             pipe.kill()
             (stdout, stderr) = pipe.communicate()
 

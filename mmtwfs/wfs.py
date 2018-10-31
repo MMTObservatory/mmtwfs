@@ -18,13 +18,15 @@ import matplotlib.cm as cm
 from skimage import feature
 from scipy import ndimage, optimize
 
+import lmfit
+
 import astropy.units as u
 from astropy.io import fits
 from astropy.io import ascii
 from astropy import stats, visualization
 from astropy.modeling.models import Gaussian2D, Polynomial2D
 from astropy.modeling.fitting import LevMarLSQFitter
-
+from astropy.table import conf as table_conf
 from astroscrappy import detect_cosmics
 
 from ccdproc.utils.slices import slice_from_string
@@ -32,7 +34,7 @@ from ccdproc.utils.slices import slice_from_string
 from .config import recursive_subclasses, merge_config, mmt_config
 from .telescope import MMT
 from .f9topbox import CompMirror
-from .zernike import zernike_influence_matrix, ZernikeVector, cart2pol, pol2cart
+from .zernike import ZernikeVector, zernike_slopes, cart2pol, pol2cart
 from .custom_exceptions import WFSConfigException, WFSAnalysisFailed
 
 import logging
@@ -40,10 +42,13 @@ import logging.handlers
 log = logging.getLogger("WFS")
 log.setLevel(logging.INFO)
 
+warnings.simplefilter(action="ignore", category=FutureWarning)
+table_conf.replace_warnings = ['attributes']
+
 
 __all__ = ['SH_Reference', 'WFS', 'F9', 'NewF9', 'F5', 'Binospec', 'MMIRS', 'WFSFactory', 'wfs_norm', 'check_wfsdata',
            'wfsfind', 'grid_spacing', 'center_pupil', 'get_apertures', 'match_apertures', 'aperture_distance', 'fit_apertures',
-           'get_slopes']
+           'get_slopes', 'make_init_pars', 'slope_diff']
 
 
 def wfs_norm(data, interval=visualization.ZScaleInterval(contrast=0.05), stretch=visualization.LinearStretch()):
@@ -479,11 +484,6 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
     spacing = np.max([xspacing, yspacing])
     ref_mask, src_mask = match_apertures(refx, refy, srcs['xcentroid'], srcs['ycentroid'], max_dist=spacing/2.)
 
-    # now use RANSAC to fine tune the X, Y offset of the aperture pattern
-    # fine_src = np.array((refx[ref_mask], refy[ref_mask])).transpose()
-    # fine_dst = np.array((srcs['xcentroid'][src_mask], srcs['ycentroid'][src_mask])).transpose()
-    # model, inliers = ransac((fine_src, fine_dst), AffineTransform, min_samples=3, residual_threshold=spacing, max_trials=100)
-
     # these are unscaled so that the slope includes defocus
     trim_refx = ref.masked_apertures['xcentroid'][ref_mask] + fit_results['xcen']
     trim_refy = ref.masked_apertures['ycentroid'][ref_mask] + fit_results['ycen']
@@ -530,6 +530,55 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
         "grid_fit": fit_results
     }
     return results
+
+
+def make_init_pars(nmodes=21, modestart=2, init_zv=None):
+    """
+    Make a set of initial parameters that can be used with `~lmfit.minimize` to make a wavefront fit with
+    parameter names that are compatible with ZernikeVectors.
+
+    Parameters
+    ----------
+    nmodes: int (default: 21)
+        Number of Zernike modes to fit.
+    modestart: int (default: 2)
+        First Zernike mode to be used.
+    init_zv: ZernikeVector (default: None)
+        ZernikeVector containing initial values for the fit.
+
+    Returns
+    -------
+    params: `~lmfit.Parameters` instance
+        Initial parameters in form that can be passed to `~lmfit.minimize`.
+    """
+    pars = []
+    for i in range(modestart, modestart+nmodes, 1):
+        key = "Z{:02d}".format(i)
+        if init_zv is not None:
+            val = init_zv[key].value
+            if val < 2. * np.finfo(float).eps:
+                val = 0.0
+        else:
+            val = 0.0
+        zpar = (key, val)
+        pars.append(zpar)
+    params = lmfit.Parameters()
+    params.add_many(*pars)
+    return params
+
+
+def slope_diff(pars, coords, slopes, norm=False):
+    """
+    For a given set of wavefront fit parameters, calculate the "distance" between the predicted and measured wavefront
+    slopes. This function is used by `~lmfit.minimize` which expects the sqrt to be applied rather than a chi-squared,
+    """
+    parsdict = pars.valuesdict()
+    rho, phi = cart2pol(coords)
+    xslope = slopes[0]
+    yslope = slopes[1]
+    pred_xslope, pred_yslope = zernike_slopes(parsdict, rho, phi, norm=norm)
+    dist = np.sqrt((xslope - pred_xslope)**2 + (yslope - pred_yslope)**2)
+    return dist
 
 
 class SH_Reference(object):
@@ -854,18 +903,6 @@ class WFS(object):
         # apply pupil to the reference
         self.modes[mode]['reference'].apply_pupil(self.pup_inner, self.pup_size/2.)
 
-        # get pupil coords
-        ref_pup_coords = self.modes[mode]['reference'].pup_coords(self.pup_size/2.)
-
-        # use the inverse influence matrix to calculate slopes due to reference aberrations
-        zernike_matrix = zernike_influence_matrix(
-            pup_coords=ref_pup_coords,
-            nmodes=self.nzern,
-            modestart=2  # ignore the piston term
-        )
-        infmat = zernike_matrix[0]
-        inverse_infmat = zernike_matrix[1]
-
         ref_zv = self.reference_aberrations(mode, hdr=hdr)
         zref = ref_zv.array
         if len(zref) < self.nzern:
@@ -883,11 +920,14 @@ class WFS(object):
             )
             slopes = slope_results['slopes']
             coords = slope_results['pup_coords']
+            ref_pup_coords = self.modes[mode]['reference'].pup_coords(self.pup_size/2.)
+
+            rho, phi = cart2pol(ref_pup_coords)
+            ref_slopes = -(1. / self.tiltfactor) * np.array(zernike_slopes(ref_zv, rho, phi))
             aps = slope_results['src_aps']
             ref_mask = slope_results['ref_mask']
             src_mask = slope_results['src_mask']
             figures = slope_results['figures']
-            ref_slopes = -(1. / self.tiltfactor) * np.dot(zref, inverse_infmat).reshape(2, slopes.shape[1])
         except WFSAnalysisFailed as e:
             log.warning(f"Wavefront slope measurement failed: {e}")
             slope_fig = None
@@ -924,24 +964,24 @@ class WFS(object):
             ax.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
             aps.plot(color='blue', ax=ax)
             ax.quiver(x, y, uu, vv, scale_units='xy', scale=0.2, pivot='tip', color='red')
-            xl = [60.0]
-            yl = [data.shape[0]-30]
+            xl = [0.1*data.shape[1]]
+            yl = [0.95*data.shape[0]]
             ul = [1.0/self.pix_size.value]
             vl = [0.0]
             ax.quiver(xl, yl, ul, vl, scale_units='xy', scale=0.2, pivot='tip', color='red')
             ax.scatter([slope_results['center'][0]], [slope_results['center'][1]])
-            ax.text(60, data.shape[0]-30, "1\"", verticalalignment='center')
+            ax.text(0.12*data.shape[1], 0.95*data.shape[0], "1{0:unicode}".format(u.arcsec), verticalalignment='center')
             ax.set_title("Seeing: %.2f\" (%.2f\" @ zenith)" % (raw_seeing.value, seeing.value))
 
         results = {}
-        results['infmat'] = infmat
-        results['inverse_infmat'] = inverse_infmat
         results['seeing'] = seeing
         results['raw_seeing'] = raw_seeing
         results['slopes'] = slopes
         results['ref_slopes'] = ref_slopes
+        results['ref_zv'] = ref_zv
         results['spots'] = slope_results['spots']
         results['pup_coords'] = coords
+        results['ref_pup_coords'] = ref_pup_coords
         results['apertures'] = aps
         results['xspacing'] = slope_results['spacing'][0]
         results['yspacing'] = slope_results['spacing'][1]
@@ -967,33 +1007,34 @@ class WFS(object):
         plot = plot and self.plot
         if slope_results['slopes'] is not None:
             results = {}
-            mode = slope_results['mode']
-            infmat = slope_results['infmat']
-            inverse_infmat = slope_results['inverse_infmat']
-            slopes = slope_results['slopes']
-            slope_vec = -self.tiltfactor * slopes.ravel()  # convert arcsec to radians
-            zfit = np.dot(slope_vec, infmat)
+            slopes = -self.tiltfactor * slope_results['slopes']
+            coords = slope_results['ref_pup_coords']
+            rho, phi = cart2pol(coords)
 
-            results['raw_zernike'] = ZernikeVector(coeffs=zfit)
+            zref = slope_results['ref_zv']
+            params = make_init_pars(nmodes=self.nzern, init_zv=zref)
+            results['fit_report'] = lmfit.minimize(slope_diff, params, args=(coords, slopes))
+            zfit = ZernikeVector(coeffs=results['fit_report'])
+
+            results['raw_zernike'] = zfit
 
             # derotate the zernike solution to match the primary mirror coordinate system
             total_rotation = self.rotation - slope_results['rotator']
-            zv_rot = ZernikeVector(coeffs=zfit)
+            zv_rot = ZernikeVector(coeffs=results['fit_report'])
             zv_rot.rotate(angle=-total_rotation)
             results['rot_zernike'] = zv_rot
 
             # subtract the reference aberrations
-            zref = self.reference_aberrations(mode, hdr=slope_results['header'])
             zsub = zv_rot - zref
             results['ref_zernike'] = zref
             results['zernike'] = zsub
 
-            pred = np.dot(zfit, inverse_infmat)
-            pred_slopes = -(1. / self.tiltfactor) * pred.reshape(2, slopes.shape[1])
+            pred_slopes = np.array(zernike_slopes(zfit, rho, phi))
             diff = slopes - pred_slopes
-            rms = self.pix_size * np.sqrt((diff[0]**2 + diff[1]**2).mean())
-            results['residual_rms_asec'] = rms.to(u.arcsec)
-            results['residual_rms'] = rms.to(u.arcsec).value * self.tiltfactor * zsub.units
+            diff_pix = diff / self.tiltfactor
+            rms = np.sqrt((diff[0]**2 + diff[1]**2).mean())
+            results['residual_rms_asec'] = rms / self.telescope.nmperasec * u.arcsec
+            results['residual_rms'] = rms * zsub.units
             results['zernike_rms'] = zsub.rms
             results['zernike_p2v'] = zsub.peak2valley
 
@@ -1008,14 +1049,24 @@ class WFS(object):
                 ax.imshow(im, cmap='Greys', origin='lower', norm=gnorm, interpolation='None')
                 x = slope_results['apertures'].positions.transpose()[0][src_mask]
                 y = slope_results['apertures'].positions.transpose()[1][src_mask]
-                ax.quiver(x, y, diff[0][ref_mask], diff[1][ref_mask], scale_units='xy', scale=0.05, pivot='tip', color='red')
-                xl = [50.0]
-                yl = [im.shape[0]-30]
+                ax.quiver(x, y, diff_pix[0][ref_mask], diff_pix[1][ref_mask], scale_units='xy',
+                          scale=0.05, pivot='tip', color='red')
+                xl = [0.1*im.shape[1]]
+                yl = [0.95*im.shape[0]]
                 ul = [0.2/self.pix_size.value]
                 vl = [0.0]
                 ax.quiver(xl, yl, ul, vl, scale_units='xy', scale=0.05, pivot='tip', color='red')
-                ax.text(60, im.shape[0]-30, "0.2\"", verticalalignment='center')
-                ax.set_title("Residual RMS: {0:0.4g} ({1:0.2f})".format(results['residual_rms'], results['residual_rms_asec']))
+                ax.text(0.12*im.shape[1], 0.95*im.shape[0], "0.2{0:unicode}".format(u.arcsec), verticalalignment='center')
+                ax.text(
+                    0.95*im.shape[1],
+                    0.95*im.shape[0],
+                    "Residual RMS: {0.value:0.2f}{0.unit:unicode}".format(results['residual_rms_asec']),
+                    verticalalignment='center',
+                    horizontalalignment='right'
+                )
+                iq = np.sqrt(results['residual_rms_asec']**2 +
+                             (results['zernike_rms'].value / self.telescope.nmperasec * u.arcsec)**2)
+                ax.set_title("Image Quality: {0.value:0.2f}{0.unit:unicode}".format(iq))
 
             results['resid_plot'] = fig
         else:
@@ -1043,6 +1094,12 @@ class WFS(object):
                 log.debug(f"{z}: Bad")
         zv_masked.denormalize()  # need to assure we're using fringe coeffs
         log.debug(f"\nInput masked: {zv_masked}")
+
+        # now use any available error bars to mask down to 1 sigma below amplitude or 0 if error bars are larger than amplitude.
+        for z in zv_masked:
+            frac_err = 1. - min(zv_masked.frac_error(key=z), 1.)
+            zv_masked[z] *= frac_err
+        log.debug(f"\nErrorbar masked: {zv_masked}")
         forces, m1focus, zv_allmasked = self.telescope.calculate_primary_corrections(zv=zv_masked, mask=mask, gain=self.m1_gain)
         log.debug(f"\nAll masked: {zv_allmasked}")
         return forces, m1focus, zv_allmasked
@@ -1053,7 +1110,8 @@ class WFS(object):
         """
         z_denorm = zv.copy()
         z_denorm.denormalize()  # need to assure we're using fringe coeffs
-        foc_corr = -self.m2_gain * z_denorm['Z04'] / self.secondary.focus_trans
+        frac_err = 1. - min(z_denorm.frac_error(key='Z04'), 1.)
+        foc_corr = -self.m2_gain * frac_err * z_denorm['Z04'] / self.secondary.focus_trans
 
         return foc_corr.round(2)
 
@@ -1065,8 +1123,10 @@ class WFS(object):
         z_denorm.denormalize()  # need to assure we're using fringe coeffs
 
         # fix coma using tilts around the M2 center of curvature.
-        cc_y_corr = -self.m2_gain * z_denorm['Z07'] / self.secondary.theta_cc
-        cc_x_corr = -self.m2_gain * z_denorm['Z08'] / self.secondary.theta_cc
+        y_frac_err = 1. - min(z_denorm.frac_error(key='Z07'), 1.)
+        x_frac_err = 1. - min(z_denorm.frac_error(key='Z08'), 1.)
+        cc_y_corr = -self.m2_gain * y_frac_err * z_denorm['Z07'] / self.secondary.theta_cc
+        cc_x_corr = -self.m2_gain * x_frac_err * z_denorm['Z08'] / self.secondary.theta_cc
 
         return cc_x_corr.round(3), cc_y_corr.round(3)
 

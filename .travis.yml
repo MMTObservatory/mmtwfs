@@ -33,7 +33,7 @@ env:
         - MAIN_CMD='python setup.py'
         - SETUP_CMD='test'
         #- PIP_DEPENDENCIES='git+https://github.com/mperrin/poppy#egg=poppy'
-        - PIP_DEPENDENCIES='poppy ccdproc git+https://github.com/astropy/astroscrappy.git'
+        - PIP_DEPENDENCIES='lmfit poppy ccdproc git+https://github.com/astropy/astroscrappy.git'
         - EVENT_TYPE='pull_request push'
 
         # For this package-template, we include examples of Cython modules,

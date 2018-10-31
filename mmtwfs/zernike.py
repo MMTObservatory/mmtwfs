@@ -12,24 +12,26 @@ Expressions for cartesian derivatives of the Zernike polynomials were adapted fr
 
 import re
 import json
+import copy
 
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import matplotlib.colors as col
 from mpl_toolkits.mplot3d import Axes3D
 
+import lmfit
 import numpy as np
 import astropy.units as u
 
-from collections import MutableMapping
-from scipy.special import factorial as fac
+from collections.abc import MutableMapping
+from math import factorial as fac
 
 from .custom_exceptions import ZernikeException
 
 
 __all__ = ['ZernikeVector', 'cart2pol', 'pol2cart', 'R_mn', 'dR_drho', 'theta_m', 'dtheta_dphi', 'zernike', 'dZ_dx', 'dZ_dy',
-           'noll_to_zernike', 'zernike_noll', 'zernike_slope_noll', 'noll_normalization_vector', 'norm_coefficient',
-           'noll_coefficient', 'zernike_influence_matrix']
+           'noll_to_zernike', 'zernike_noll', 'zernike_slope_noll', 'zernike_slopes', 'noll_normalization_vector',
+           'norm_coefficient', 'noll_coefficient']
 
 
 def cart2pol(arr):
@@ -364,9 +366,9 @@ def zernike_slope_noll(j, rho, phi, norm=False):
     ----------
     j : int
         j-th Noll Zernike index
-    rho : 2D `~numpy.ndarray`
+    rho : `~numpy.ndarray`
         Radial coordinate grid
-    phi : 2D `~numpy.ndarray`
+    phi : `~numpy.ndarray`
         Azimuthal coordinate grid
     norm : bool (default: True)
         Normalize modes to unit variance (i.e. Noll coefficients)
@@ -380,6 +382,36 @@ def zernike_slope_noll(j, rho, phi, norm=False):
     dwx = dZ_dx(m, n, rho, phi, norm=norm)
     dwy = dZ_dy(m, n, rho, phi, norm=norm)
     return dwx, dwy
+
+
+def zernike_slopes(zv, rho, phi, norm=False):
+    """
+    Calculate total slope of a set of Zernike modes on a polar coordinate grid, (rho, phi).
+
+    Parameters
+    ----------
+    zv: dict-like or ZernikeVector
+        ZernikeVector or dict-like with Zernikevector-compatible key naming scheme containing zernike polynomial coefficients.
+    rho : `~numpy.ndarray`
+        Radial coordinate grid
+    phi : `~numpy.ndarray`
+        Azimuthal coordinate grid
+    norm : bool (default: True)
+        Normalize modes to unit variance (i.e. Noll coefficients)
+
+    Returns
+    -------
+    xslope, yslope: `~numpy.ndarray`, `~numpy.ndarray`
+        Total X and Y slopes of zv at each (rho, phi) point. Same shapes as **rho** and **phi**.
+    """
+    xslope = 0.
+    yslope = 0.
+    for k, v in zv.items():
+        mode = int(k.replace("Z", ""))
+        dwx, dwy = zernike_slope_noll(mode, rho, phi, norm=norm)
+        xslope += v * dwx
+        yslope += v * dwy
+    return xslope, yslope
 
 
 def noll_normalization_vector(nmodes=30):
@@ -442,44 +474,6 @@ def noll_coefficient(l):
     n, m = noll_to_zernike(l)
     norm_coeff = norm_coefficient(m, n)
     return norm_coeff
-
-
-def zernike_influence_matrix(pup_coords, nmodes=20, modestart=2):
-    """
-    Calculate matrices to convert wavefront slopes to Zernike coefficients and to convert Zernike coefficients to
-    wavefront slopes.  This method analytic derivatives to calculate the slopes for Zernike mode.  Adapting this methods
-    for other basis sets would also require calculating the analytic derivatives for those sets.  This method also currently
-    only calculates the slope at the aperture center.  It would be more correct to average over the aperture, but this isn't
-    hugely important for the lower order modes we're most interested in.
-
-    Parameters
-    ----------
-    pup_coords : 2-element tuple
-        Pupil coordinates of the aperture centers.
-    nmodes : int (default: 20)
-        Number of Zernike modes to fit.
-    modestart : int (default: 2)
-        First mode to include in the set to fit.
-
-    Returns
-    -------
-    matrices : tuple (2D `~numpy.ndarray`, 2D `~numpy.ndarray`)
-        (slopes-to-zernike matrix, zernike-to-slope matrix)
-    """
-    x = pup_coords[0]
-    y = pup_coords[1]
-    rho, phi = cart2pol([x, y])
-    zern_slopes = [zernike_slope_noll(zmode, rho, phi) for zmode in range(modestart, nmodes+modestart)]
-    zern_slopes_mat = np.r_[zern_slopes].reshape(nmodes, -1)  # X slopes and then Y slopes for each mode
-
-    # use SVD to set up optimized conversion matrices
-    U, s, Vh = np.linalg.svd(zern_slopes_mat, full_matrices=False)
-
-    # don't need to trim singular values for reasonable numbers of modes so fit all requested modes.
-    zern_inv_mat = np.dot(Vh.T, np.dot(np.diag(1./s), U.T))
-
-    matrices = (zern_inv_mat, zern_slopes_mat)
-    return matrices
 
 
 class ZernikeVector(MutableMapping):
@@ -579,7 +573,7 @@ class ZernikeVector(MutableMapping):
         "Z37": "Spher3"
     }
 
-    def __init__(self, coeffs=[], modestart=2, normalized=False, zmap=None, units=u.nm, **kwargs):
+    def __init__(self, coeffs=[], modestart=2, normalized=False, zmap=None, units=u.nm, errorbars={}, **kwargs):
         """
         Parameters
         ----------
@@ -600,28 +594,30 @@ class ZernikeVector(MutableMapping):
 
         self.modestart = modestart
         self.normalized = normalized
+        self.errorbars = errorbars
         self.coeffs = {}
         self.ignored = {}
 
         # now set the units
         self.units = units
 
-        # python 2.x compatibility hack
-        try:
-            basestring
-        except NameError:
-            basestring = str
-
         # coeffs can be either a list-like or a string which is a JSON filename
-        if isinstance(coeffs, basestring):
+        if isinstance(coeffs, str):
             self.load(filename=coeffs)
+        elif isinstance(coeffs, lmfit.minimizer.MinimizerResult):
+            self.load_lmfit(coeffs)
         else:
-            self.from_array(coeffs, zmap=zmap)
+            self.from_array(coeffs, zmap=zmap, errorbars=errorbars)
 
         # now load any keyword inputs
         input_dict = dict(**kwargs)
         for k in sorted(input_dict.keys()):
             self.__setitem__(k, input_dict[k])
+
+        # make sure errorbar units are consistent
+        if len(self.errorbars) > 0:
+            for k, v in self.errorbars.items():
+                self.errorbars[k] = u.Quantity(self.errorbars[k], self.units)
 
     def __iter__(self):
         """
@@ -647,13 +643,10 @@ class ZernikeVector(MutableMapping):
         Overload __getitem__ so that coefficients can be accessed in a dict-like manner. Add logic to validate
         keys and return amplitude of 0 if key is valid, but term not set in self.coeffs.
         """
-        if key in self.coeffs:
-            return self.coeffs[key]
+        if self._valid_key(key):
+            return self.coeffs.get(key, 0.0 * self.units)
         else:
-            if self._valid_key(key):
-                return 0.0 * self.units
-            else:
-                raise KeyError(f"Invalid Zernike term, {key}")
+            raise KeyError(f"Invalid Zernike term, {key}")
 
     def __setitem__(self, key, item):
         """
@@ -663,6 +656,7 @@ class ZernikeVector(MutableMapping):
             # this is a hacky way to get, say, Z4 to become Z04 to maintain consistency
             mode = self._key_to_l(key)
             key = self._l_to_key(mode)
+
             self.coeffs[key] = u.Quantity(item, self.units)
         else:
             raise KeyError(f"Malformed Zernike mode key, {key}")
@@ -694,17 +688,27 @@ class ZernikeVector(MutableMapping):
         Use set() to collect the unique set of keys and self.__getitem__() to use 0.0 as a default.
         """
         d = {}
+        errorbars = {}
         if isinstance(zv, ZernikeVector):
             keys = set(self.coeffs.keys()) | set(zv.coeffs.keys())
             for k in keys:
                 d[k] = self.__getitem__(k) + zv[k]
+                if k in self.errorbars and k in zv.errorbars:
+                    errorbars[k] = np.sqrt(self.errorbars[k]**2 + zv.errorbars[k]**2)
+                elif k in self.errorbars and k not in zv.errorbars:
+                    errorbars[k] = self.errorbars[k]
+                elif k not in self.errorbars and k in zv.errorbars:
+                    errorbars[k] = zv.errorbars[k]
         else:
             try:
+                z = u.Quantity(zv, self.units)
                 for k in self.coeffs:
-                    d[k] = self.__getitem__(k) + float(zv) * self.units
+                    d[k] = self.__getitem__(k) + z
+                    if k in self.errorbars:
+                        errorbars[k] = self.errorbars[k]
             except Exception as e:
                 raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector + operation: zv = {zv} ({e})")
-        return ZernikeVector(**d)
+        return ZernikeVector(units=self.units, errorbars=errorbars, **d)
 
     def __radd__(self, zv):
         """
@@ -717,55 +721,84 @@ class ZernikeVector(MutableMapping):
         Create - operator to substract an instance or a constant to get a new instant. Complement to __add__...
         """
         d = {}
+        errorbars = {}
         if isinstance(zv, ZernikeVector):
             keys = set(self.coeffs.keys()) | set(zv.coeffs.keys())
             for k in keys:
                 d[k] = self.__getitem__(k) - zv[k]
+                if k in self.errorbars and k in zv.errorbars:
+                    errorbars[k] = np.sqrt(self.errorbars[k]**2 + zv.errorbars[k]**2)
+                elif k in self.errorbars and k not in zv.errorbars:
+                    errorbars[k] = self.errorbars[k]
+                elif k not in self.errorbars and k in zv.errorbars:
+                    errorbars[k] = zv.errorbars[k]
         else:
             try:
+                z = u.Quantity(zv, self.units)
                 for k in self.coeffs:
-                    d[k] = self.__getitem__(k) - float(zv) * self.units
+                    d[k] = self.__getitem__(k) - z
+                    if k in self.errorbars:
+                        errorbars[k] = self.errorbars[k]
             except Exception as e:
                 raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector - operation: zv = {zv} ({e})")
-        return ZernikeVector(**d)
+        return ZernikeVector(units=self.units, errorbars=errorbars, **d)
 
     def __rsub__(self, zv):
         """
         Complement to __sub__ so ZernikeVector can work on both sides of - operator.
         """
         d = {}
+        errorbars = {}
         if isinstance(zv, ZernikeVector):
             keys = set(self.coeffs.keys()) | set(zv.coeffs.keys())
             for k in keys:
                 d[k] = zv[k] - self.__getitem__(k)
+                if k in self.errorbars and k in zv.errorbars:
+                    errorbars[k] = np.sqrt(self.errorbars[k]**2 + zv.errorbars[k]**2)
+                elif k in self.errorbars and k not in zv.errorbars:
+                    errorbars[k] = self.errorbars[k]
+                elif k not in self.errorbars and k in zv.errorbars:
+                    errorbars[k] = zv.errorbars[k]
         else:
             try:
+                z = u.Quantity(zv, self.units)
                 for k in self.coeffs:
-                    d[k] = float(zv) * self.units - self.__getitem__(k)
+                    d[k] = z - self.__getitem__(k)
+                    if k in self.errorbars:
+                        errorbars[k] = self.errorbars[k]
             except Exception as e:
                 raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector - operation: zv = {zv} ({e})")
-        return ZernikeVector(**d)
+        return ZernikeVector(errorbars=errorbars, **d)
 
     def __mul__(self, zv):
         """
         Create * operator to scale ZernikeVector by a constant value or ZernikeVector.
         """
         d = {}
+        errorbars = {}
         if isinstance(zv, ZernikeVector):
             # keys that are in one, but not the other are valid and will result in 0's in the result.
             keys = set(self.coeffs.keys()) | set(zv.coeffs.keys())
+            outunits = self.units * self.units
             for k in keys:
                 d[k] = self.__getitem__(k) * zv[k].to(self.units)
-            outunits = self.units * self.units
+                if k in self.errorbars and k in zv.errorbars:
+                    errorbars[k] = np.abs(d[k]) * np.sqrt((self.errorbars[k]/self.__getitem__(k))**2 +
+                                                          (zv.errorbars[k]/zv[k])**2)
+                elif k in self.errorbars and k not in zv.errorbars:
+                    errorbars[k] = np.abs(d[k]) * np.abs(self.errorbars[k]/self.__getitem__(k))
+                elif k not in self.errorbars and k in zv.errorbars:
+                    errorbars[k] = np.abs(d[k]) * np.abs(zv.errorbars[k]/zv[k])
         else:
             try:
                 for k in self.coeffs:
-                    d[k] = self.__getitem__(k) * float(zv)
-                outunits = self.units
+                    d[k] = self.__getitem__(k) * zv
+                    if k in self.errorbars:
+                        errorbars[k] = np.abs(d[k]/self.__getitem__(k)) * self.errorbars[k]
+                    outunits = d[k].unit
             except Exception as e:
                 raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector * operation: zv = {zv} ({e})")
-        d['units'] = outunits
-        return ZernikeVector(**d)
+        return ZernikeVector(units=outunits, errorbars=errorbars, **d)
 
     def __rmul__(self, zv):
         """
@@ -785,21 +818,30 @@ class ZernikeVector(MutableMapping):
         will be divided.
         """
         d = {}
+        errorbars = {}
         if isinstance(zv, ZernikeVector):
             # only meaningful to divide keys that exist in both cases. division by 0 otherwise ok and results in np.inf.
             keys = set(self.coeffs.keys()) & set(zv.coeffs.keys())
+            outunits = u.dimensionless_unscaled
             for k in keys:
                 d[k] = self.__getitem__(k) / zv[k].to(self.units)
-            outunits = u.dimensionless_unscaled
+                if k in self.errorbars and k in zv.errorbars:
+                    errorbars[k] = np.abs(d[k]) * np.sqrt((self.errorbars[k]/self.__getitem__(k))**2 +
+                                                          (zv.errorbars[k]/zv[k])**2)
+                elif k in self.errorbars and k not in zv.errorbars:
+                    errorbars[k] = np.abs(d[k]) * np.abs(self.errorbars[k]/self.__getitem__(k))
+                elif k not in self.errorbars and k in zv.errorbars:
+                    errorbars[k] = np.abs(d[k]) * np.abs(zv.errorbars[k]/zv[k])
         else:
             try:
                 for k in self.coeffs:
                     d[k] = self.__getitem__(k) / float(zv)
+                    if k in self.errorbars:
+                        errorbars[k] = np.abs(d[k]/self.__getitem__(k)) * self.errorbars[k]
                 outunits = self.units
             except Exception as e:
                 raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector / operation: zv = {zv} ({e})")
-        d['units'] = outunits
-        return ZernikeVector(**d)
+        return ZernikeVector(units=outunits, errorbars=errorbars, **d)
 
     def __rdiv__(self, zv):
         """
@@ -812,33 +854,46 @@ class ZernikeVector(MutableMapping):
         Implement __truediv__ for the right side of the operator as well.
         """
         d = {}
+        errorbars = {}
         if isinstance(zv, ZernikeVector):
             # only meaningful to divide keys that exist in both cases. division by 0 otherwise ok and results in np.inf.
             keys = set(self.coeffs.keys()) & set(zv.coeffs.keys())
+            outunits = u.dimensionless_unscaled
             for k in keys:
                 d[k] = zv[k].to(self.units) / self.__getitem__(k)
-            outunits = u.dimensionless_unscaled
+                if k in self.errorbars and k in zv.errorbars:
+                    errorbars[k] = np.abs(d[k]) * np.sqrt((self.errorbars[k]/self.__getitem__(k))**2 +
+                                                          (zv.errorbars[k]/zv[k])**2)
+                elif k in self.errorbars and k not in zv.errorbars:
+                    errorbars[k] = np.abs(d[k]) * np.abs(self.errorbars[k]/self.__getitem__(k))
+                elif k not in self.errorbars and k in zv.errorbars:
+                    errorbars[k] = np.abs(d[k]) * np.abs(zv.errorbars[k]/zv[k])
         else:
             try:
                 for k in self.coeffs:
                     d[k] = float(zv) / self.__getitem__(k)
-                outunits = 1.0 / self.units
+                    if k in self.errorbars:
+                        errorbars[k] = np.abs(d[k]/self.__getitem__(k)) * self.errorbars[k]
+                outunits = (1. / self.units).unit
             except Exception as e:
                 raise ZernikeException(f"Invalid data-type, {type(zv)}, for ZernikeVector / operation: zv = {zv} ({e})")
-        d['units'] = outunits
-        return ZernikeVector(**d)
+        return ZernikeVector(units=outunits, errorbars=errorbars, **d)
 
     def __pow__(self, n):
         """
         Implement the pow() method and ** operator.
         """
         d = {}
+        errorbars = {}
         try:
+            outunits = (self.units) ** n
             for k in self.coeffs:
-                d[k] = self.__getitem__(k).value ** float(n) * self.units
+                d[k] = self.__getitem__(k) ** n
+                if k in self.errorbars:
+                    errorbars[k] = np.abs(d[k] * n / self.__getitem__(k)) * self.errorbars[k]
         except Exception as e:
             raise ZernikeException(f"Invalid data-type, {type(n)}, for ZernikeVector ** operation: n = {n} ({e})")
-        return ZernikeVector(**d)
+        return ZernikeVector(units=outunits, errorbars=errorbars, **d)
 
     def _valid_key(self, key):
         """
@@ -878,9 +933,11 @@ class ZernikeVector(MutableMapping):
         """
         When units are set, we need to go through each coefficient and perform the unit conversion to match.
         """
-        self._units = units
         for k in self.coeffs:
             self.coeffs[k] = u.Quantity(self.coeffs[k], units)
+            if k in self.errorbars:
+                self.errorbars[k] = u.Quantity(self.errorbars[k], units)
+        self._units = units
 
     @property
     def array(self):
@@ -950,16 +1007,26 @@ class ZernikeVector(MutableMapping):
             for k in keys:
                 if self._key_to_l(k) <= last:
                     if k in self.__zernikelabels:
-                        s += "{0:>4s}: {1:>12s} \t {2:s}".format(k, "{0:0.03g}".format(self.coeffs[k]), self.label(k))
+                        label = self.label(k)
                     else:
-                        s += "{0:>4s}: {1:>12s}".format(k, "{0:0.03g}".format(self.coeffs[k]))
+                        label = ""
+
+                    if k in self.errorbars:
+                        s += "{0:>4s}: {1:>24s} \t {2:s}".format(
+                            k,
+                            "{0:8.4g} ± {1:5.3g}".format(self.coeffs[k].value, self.errorbars[k]),
+                            label
+                        )
+                    else:
+                        s += "{0:>4s}: {1:>24s} \t {2:s}".format(k, "{0:0.4g}".format(self.coeffs[k]), label)
+
                     s += "\n"
 
             s += "\n"
             if self._key_to_l(keys[-1]) > last:
                 hi_orders = ZernikeVector(modestart=last+1, normalized=self.normalized, units=self.units, **self.coeffs)
-                s += "High Orders RMS: \t {0:0.03g}  {1:>3s} ➞ {2:>3s}\n".format(hi_orders.rms, self._l_to_key(last+1), keys[-1])
-            s += "Total RMS: \t \t {0:0.03g}\n".format(self.rms)
+                s += "High Orders RMS: \t {0:0.3g}  {1:>3s} ➞ {2:>3s}\n".format(hi_orders.rms, self._l_to_key(last+1), keys[-1])
+            s += "Total RMS: \t {0:0.4g}\n".format(self.rms)
 
         return s
 
@@ -967,7 +1034,8 @@ class ZernikeVector(MutableMapping):
         """
         Make a new ZernikeVector with the same configuration and coefficients
         """
-        new = ZernikeVector(modestart=self.modestart, normalized=self.normalized, units=self.units, **self.coeffs)
+        new = ZernikeVector(modestart=self.modestart, normalized=self.normalized, errorbars=copy.deepcopy(self.errorbars),
+                            units=self.units, **self.coeffs)
         return new
 
     def save(self, filename="zernike.json"):
@@ -978,9 +1046,13 @@ class ZernikeVector(MutableMapping):
         outdict['units'] = self.units.to_string()
         outdict['normalized'] = self.normalized
         outdict['modestart'] = self.modestart
+        outdict['errorbars'] = {}
         outdict['coeffs'] = {}
         for k, c in self.coeffs.items():
             outdict['coeffs'][k] = c.value
+        for k, v in self.errorbars.items():
+            outdict['errorbars'][k] = v.value
+
         with open(filename, 'w') as f:
             json.dump(outdict, f, indent=4, separators=(',', ': '), sort_keys=True)
 
@@ -1009,6 +1081,22 @@ class ZernikeVector(MutableMapping):
             for k, v in json_data['coeffs'].items():
                 self.__setitem__(k, v)
 
+        self.errorbars = {}
+        if 'errorbars' in json_data:
+            for k, v in json_data['coeffs'].items():
+                self.errorbars[k] = u.Quantity(v, self.units)
+
+    def load_lmfit(self, fit_report):
+        """
+        Load information from a lmfit.minimizer.MinimizerResult that is output from a wavefront fit.
+        If there are reported errorbars, populate those, too.
+        """
+        has_errors = fit_report.errorbars
+        for k, v in fit_report.params.items():
+            self.__setitem__(k, v)
+            if has_errors:
+                self.errorbars[k] = u.Quantity(v.stderr, self.units)
+
     def label(self, key):
         """
         If defined, return the descriptive label for mode, 'key'
@@ -1027,12 +1115,14 @@ class ZernikeVector(MutableMapping):
         else:
             return key
 
-    def from_array(self, coeffs, zmap=None, modestart=None, normalized=False):
+    def from_array(self, coeffs, zmap=None, modestart=None, errorbars={}, normalized=False):
         """
         Load coefficients from a provided list/array starting from modestart. Array is assumed to start
         from self.modestart if modestart is not provided.
         """
         self.normalized = normalized
+        self.errorbars = errorbars
+
         if len(coeffs) > 0:
             if modestart is None:
                 modestart = self.modestart
@@ -1048,6 +1138,15 @@ class ZernikeVector(MutableMapping):
                     if c != 0.0:
                         self.__setitem__(key, c)
 
+    def frac_error(self, key=None):
+        """
+        Calculate fractional size of the error bar for mode, key.
+        """
+        err = 0.0
+        if key is not None and key in self.coeffs:
+            err = np.abs(self.errorbars.get(key, 0.0 * self.units).value / self.coeffs[key].value)
+        return err
+
     def normalize(self):
         """
         Normalize coefficients to unit variance for each mode.
@@ -1058,6 +1157,8 @@ class ZernikeVector(MutableMapping):
                 mode = self._key_to_l(k)
                 noll = noll_coefficient(mode)
                 self.coeffs[k] /= noll
+                if k in self.errorbars:
+                    self.errorbars[k] /= noll
 
     def denormalize(self):
         """
@@ -1069,6 +1170,8 @@ class ZernikeVector(MutableMapping):
                 mode = self._key_to_l(k)
                 noll = noll_coefficient(mode)
                 self.coeffs[k] *= noll
+                if k in self.errorbars:
+                    self.errorbars[k] *= noll
 
     def ignore(self, key):
         """
@@ -1116,7 +1219,10 @@ class ZernikeVector(MutableMapping):
         rot_arr = np.dot(rotm, a)
         # this will take back out the zero terms
         del self.coeffs['Z99']
-        self.from_array(rot_arr)
+
+        # i think it's correct to just pass on the uncertainties unchanged since measurements are done in unrotated space.
+        # might want to consider handling rotations in the pupil coordinates before doing a fit.
+        self.from_array(rot_arr, errorbars=self.errorbars)
 
     def total_phase(self, rho, phi):
         """
@@ -1157,7 +1263,7 @@ class ZernikeVector(MutableMapping):
             last_label = last_mode
         last_coeff = self._key_to_l(sorted(self.coeffs.keys())[-1])
 
-        if last_coeff < 21:
+        if last_coeff < 22:
             modes = label_keys[3:last_coeff]  # ignore piston and tilts in bar plot
         else:
             modes = label_keys[3:22]
@@ -1165,19 +1271,23 @@ class ZernikeVector(MutableMapping):
 
         if self.normalized:
             coeffs = [self.__getitem__(m).value * noll_coefficient(self._key_to_l(m)) for m in modes]
+            errorbars = [self.errorbars.get(m, 0.0 * self.units).value * noll_coefficient(self._key_to_l(m)) for m in modes]
         else:
             coeffs = [self.__getitem__(m).value for m in modes]
+            errorbars = [self.errorbars.get(m, 0.0 * self.units).value for m in modes]
 
         # lump higher order terms into one RMS bin.
         if last_coeff > last_label:
             hi_orders = ZernikeVector(modestart=last_label+1, normalized=self.normalized, units=self.units, **self.coeffs)
             labels.append("Hi Ord RMS")
             coeffs.append(hi_orders.rms.value)
+            errorbars.append(0.0)
 
         # add total RMS
         if total:
             labels.append("Total RMS")
             coeffs.append(self.rms.value)
+            errorbars.append(0.0)
 
         max_c = u.Quantity(max_c, self.units).value
         cmap = cm.ScalarMappable(col.Normalize(-max_c, max_c), cm.coolwarm_r)
@@ -1185,7 +1295,7 @@ class ZernikeVector(MutableMapping):
         ind = np.arange(len(labels))
         fig, ax = plt.subplots(figsize=(11, 5))
         fig.set_label("Fringe Wavefront Amplitude per Zernike Mode")
-        ax.bar(ind, coeffs, color=cmap.to_rgba(coeffs))
+        ax.bar(ind, coeffs, color=cmap.to_rgba(coeffs), yerr=errorbars)
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
         ax.yaxis.grid(color='gray', linestyle='dotted')
@@ -1213,7 +1323,7 @@ class ZernikeVector(MutableMapping):
             last_label = last_mode
 
         last_coeff = self._key_to_l(sorted(self.coeffs.keys())[-1])
-        if last_coeff < 21:
+        if last_coeff < 22:
             modes = label_keys[3:last_coeff]  # ignore piston and tilts in bar plot
         else:
             modes = label_keys[3:22]
