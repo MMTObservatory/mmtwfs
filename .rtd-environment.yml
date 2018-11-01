@@ -17,6 +17,7 @@ dependencies:
   - dnspython
   - astroscrappy
   - ccdproc
+  - lmfit
   - docutils
   - pip:
     - "git+https://github.com/sphinx-gallery/sphinx-gallery.git"
