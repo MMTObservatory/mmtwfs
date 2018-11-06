@@ -146,6 +146,9 @@ mmt_config = {
             "find_fwhm": 9.0,  # FWHM for DAOfind kernel
             "find_thresh": 5.0,  # threshold for DAOfind
             "rotation": 234.0 * u.deg,  # rotation of aperture locations w.r.t. the primary mirror
+            "lenslet_pitch": 600 * u.um,  # width of each lenslet
+            "lenslet_fl": 40 * u.mm,  # focal length of each lenslet_fl
+            "pix_um": 20 * u.um,  # pixel size in micrometers
             "pix_size": 0.135 * u.arcsec,  # arcsec per WFS detector pixel
             "pup_size": 435,  # pixels
             "pup_inner": 65,  # inner obscuration radius in pixels
@@ -210,6 +213,9 @@ mmt_config = {
             "find_fwhm": 7.0,
             "find_thresh": 5.0,
             "rotation": -225. * u.deg,
+            "lenslet_pitch": 625 * u.um,  # width of each lenslet
+            "lenslet_fl": 45 * u.mm,  # focal length of each lenslet_fl
+            "pix_um": 20 * u.um,  # pixel size in micrometers
             "pix_size": 0.119 * u.arcsec,  # old KX260e detector with 20 um pixels
             "pup_size": 440,  # pupil outer diameter in pixels
             "pup_inner": 55,  # inner obscuration radius in pixels
@@ -250,6 +256,9 @@ mmt_config = {
             "find_fwhm": 15.0,
             "find_thresh": 7.0,
             "rotation": -225. * u.deg,
+            "lenslet_pitch": 625 * u.um,  # width of each lenslet
+            "lenslet_fl": 45 * u.mm,  # focal length of each lenslet_fl
+            "pix_um": 5.4 * u.um * 3,  # pixel size in micrometers
             "pix_size": 0.09639 * u.arcsec,  # SBIG STT-8300 with 5.4 um pixels binned 3x3
             "pup_size": 530,  # pupil outer diameter in pixels
             "pup_inner": 75,  # inner obscuration radius in pixels
@@ -289,6 +298,9 @@ mmt_config = {
             "find_fwhm": 7.0,
             "find_thresh": 5.0,
             "rotation": 180. * u.deg,  # this is referenced to camera2. camera1 is camera2+180, but is flipped by image acq
+            "lenslet_pitch": 600 * u.um,  # width of each lenslet
+            "lenslet_fl": 40 * u.mm,  # focal length of each lenslet_fl
+            "pix_um": 13 * u.um * 2,  # pixel size in micrometers, always binned 2x2
             "pix_size": 0.156 * u.arcsec,
             "pup_size": 290,  # pixels
             "pup_inner": 50,
@@ -331,6 +343,9 @@ mmt_config = {
             "find_fwhm": 7.0,
             "find_thresh": 5.0,
             "rotation": 180. * u.deg,  # per j. kansky 9/26/2017
+            "lenslet_pitch": 600 * u.um,  # width of each lenslet
+            "lenslet_fl": 40 * u.mm,  # focal length of each lenslet_fl
+            "pix_um": 13 * u.um * 2,  # pixel size in micrometers, always binned 2x2
             "pix_size": 0.156 * u.arcsec,
             "pup_size": 285,  # pixels
             "pup_inner": 45,
