@@ -142,7 +142,7 @@ mmt_config = {
             "name": "Hecto WFS",
             "secondary": "f5",  # secondary used with WFS system
             "default_mode": "hecto",
-            "eff_wave": 550 * u.nm,  # effective wavelength of the thruput response of the system
+            "eff_wave": 600 * u.nm,  # effective wavelength of the thruput response of the system
             "cor_coords": [242.0, 255.0],  # image coordinates of the center of rotation
             "find_fwhm": 9.0,  # FWHM for DAOfind kernel
             "find_thresh": 5.0,  # threshold for DAOfind
@@ -209,7 +209,7 @@ mmt_config = {
             "name": "F/9 WFS with Apogee Camera",
             "secondary": "f9",
             "default_mode": "blue",
-            "eff_wave": 780 * u.nm,  # effective wavelength of the thruput response of the system
+            "eff_wave": 600 * u.nm,  # effective wavelength of the thruput response of the system
             "lampsrv": "_lampbox._tcp.mmto.arizona.edu",
             "cor_coords": [255.0, 255.0],
             "find_fwhm": 7.0,
@@ -253,7 +253,7 @@ mmt_config = {
             "name": "F/9 WFS with SBIG Camera",
             "secondary": "f9",
             "default_mode": "blue",
-            "eff_wave": 780 * u.nm,  # effective wavelength of the thruput response of the system
+            "eff_wave": 550 * u.nm,  # effective wavelength of the thruput response of the system
             "lampsrv": "_lampbox._tcp.mmto.arizona.edu",
             "cor_coords": [376.0, 434.0],
             "find_fwhm": 15.0,
