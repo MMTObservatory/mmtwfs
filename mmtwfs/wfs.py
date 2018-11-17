@@ -122,7 +122,7 @@ def wfsfind(data, fwhm=7.0, threshold=5.0, plot=True, ap_radius=5.0, std=None):
     data = check_wfsdata(data)
     if std is None:
         mean, median, std = stats.sigma_clipped_stats(data, sigma=3.0, iters=5)
-    daofind = photutils.DAOStarFinder(fwhm=fwhm, threshold=threshold*std, sharphi=0.9)
+    daofind = photutils.DAOStarFinder(fwhm=fwhm, threshold=threshold*std, sharphi=0.95)
     sources = daofind(data)
 
     nsrcs = len(sources)
