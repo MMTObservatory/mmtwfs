@@ -299,14 +299,14 @@ mmt_config = {
             "default_mode": None,
             "eff_wave": 550 * u.nm,  # effective wavelength of the thruput response of the system
             "cor_coords": [255.0, 255.0],
-            "find_fwhm": 7.0,
+            "find_fwhm": 4.0,
             "find_thresh": 5.0,
             "rotation": 180. * u.deg,  # this is referenced to camera2. camera1 is camera2+180, but is flipped by image acq
             "lenslet_pitch": 600 * u.um,  # width of each lenslet
             "lenslet_fl": 40 * u.mm,  # focal length of each lenslet_fl
             "pix_um": 13 * u.um * 2,  # pixel size in micrometers, always binned 2x2
             "pix_size": 0.156 * u.arcsec,
-            "pup_size": 290,  # pixels
+            "pup_size": 320,  # pixels
             "pup_inner": 50,
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
