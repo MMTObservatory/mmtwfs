@@ -122,7 +122,7 @@ def wfsfind(data, fwhm=7.0, threshold=5.0, plot=True, ap_radius=5.0, std=None):
     data = check_wfsdata(data)
     if std is None:
         mean, median, std = stats.sigma_clipped_stats(data, sigma=3.0, iters=5)
-    daofind = photutils.DAOStarFinder(fwhm=fwhm, threshold=threshold*std, sharphi=0.9)
+    daofind = photutils.DAOStarFinder(fwhm=fwhm, threshold=threshold*std, sharphi=0.95)
     sources = daofind(data)
 
     nsrcs = len(sources)
@@ -631,23 +631,6 @@ class SH_Reference(object):
         self.apertures['dist'] = np.sqrt(self.apertures['xcentroid']**2 + self.apertures['ycentroid']**2)
         self.masked_apertures = self.apertures
 
-        # set up 2D gaussian model plus constant background to fit to the coadded spot.  tested this compared to fitting each
-        # spot individually and they give the same result with this method being faster.
-        with warnings.catch_warnings():
-            # ignore astropy warnings about issues with the fit...
-            warnings.simplefilter("ignore")
-            model = Gaussian2D(
-                amplitude=self.spot.max(),
-                x_mean=self.spot.shape[1]/2,
-                y_mean=self.spot.shape[0]/2
-            ) + Polynomial2D(degree=0)
-            fitter = LevMarLSQFitter()
-            y, x = np.mgrid[:self.spot.shape[0], :self.spot.shape[1]]
-            fit = fitter(model, x, y, self.spot)
-
-        self.sigma = 0.5 * (fit.x_stddev_0.value + fit.y_stddev_0.value)
-        self.fwhm = stats.funcs.gaussian_sigma_to_fwhm * self.sigma
-
         self.pup_inner = None
         self.pup_outer = None
 
@@ -715,6 +698,7 @@ class WFS(object):
         self.secondary = self.telescope.secondary
         self.plot = plot
         self.connected = False
+        self.ref_fwhm = self.ref_spot_fwhm()
 
         # this factor calibrates spot motion in pixels to nm of wavefront error
         self.tiltfactor = self.telescope.nmperasec * (self.pix_size.to(u.arcsec).value)
@@ -736,6 +720,15 @@ class WFS(object):
                 )
             else:
                 self.modes[mode]['reference'] = reference
+
+    def ref_spot_fwhm(self):
+        """
+        Calculate the Airy FWHM in pixels of a perfect WFS spot from the optical prescription and detector pixel size
+        """
+        theta_fwhm = 1.028 * self.eff_wave / self.lenslet_pitch
+        det_fwhm = np.arctan(theta_fwhm).value * self.lenslet_fl
+        det_fwhm_pix = det_fwhm.to(u.um).value / self.pix_um.to(u.um).value
+        return det_fwhm_pix
 
     def get_flipud(self, mode=None):
         """
@@ -771,8 +764,11 @@ class WFS(object):
         """
         # the effective wavelength of the WFS imagers is about 600-650 nm. we use 650 nm to maintain consistency
         # with the value used by the old SHWFS system.
-        wave = 550 * u.nm
+        wave = self.eff_wave
         wave = wave.to(u.m).value  # r_0 equation expects meters so convert
+
+        owave = 500 * u.nm  # standard wavelength that seeing values are referenced to
+        owave = owave.to(u.m).value
 
         # calculate the physical size of each aperture.
         ref = self.modes[mode]['reference']
@@ -782,8 +778,9 @@ class WFS(object):
 
         # we need to deconvolve the instrumental spot width from the measured one to get the portion of the width that
         # is due to spot motion
-        if sigma > ref.sigma:
-            corr_sigma = np.sqrt(sigma**2 - ref.sigma**2)
+        ref_sigma = stats.funcs.gaussian_fwhm_to_sigma * self.ref_fwhm
+        if sigma > ref_sigma:
+            corr_sigma = np.sqrt(sigma**2 - ref_sigma**2)
         else:
             return 0.0 * u.arcsec, 0.0 * u.arcsec
 
@@ -794,7 +791,7 @@ class WFS(object):
         r_0 = (0.179 * (wave**2) * (d**(-1/3))/corr_sigma**2)**0.6
 
         # this equation relates the turbulence scale size to an expected image FWHM at the given wavelength.
-        raw_seeing = u.Quantity(u.rad * 0.98 * .5e-6 / r_0, u.arcsec)
+        raw_seeing = u.Quantity(u.rad * 0.98 * owave/ r_0, u.arcsec)
 
         # correct seeing to zenith
         if airmass is not None:
@@ -1329,18 +1326,6 @@ class Binospec(F5):
     Defines configuration and methods specific to the Binospec WFS system. Binospec uses the same aberration table
     as the F5 system so we inherit from that.
     """
-    def __init__(self, config={}, plot=True):
-        super(Binospec, self).__init__(config=config, plot=plot)
-
-        # the binospec reference images use a more diffuse source so the spot fwhm's in them are too big.
-        # have several examples of on-sky data where the spots from the stars are smaller than the reference spots.
-        # for now, we'll bodge the fwhm values to be what they should be theoretically. these are close to the fwhm's
-        # measured in MMIRS reference images and the MMIRS systems are nearly identical optically to binospec's.
-        fwhm = 2.0
-        sigma = stats.funcs.gaussian_fwhm_to_sigma * fwhm
-        self.modes['binospec']['reference'].fwhm = fwhm
-        self.modes['binospec']['reference'].sigma = sigma
-
     def get_flipud(self, mode):
         """
         Method to determine if the WFS image needs to be flipped up/down

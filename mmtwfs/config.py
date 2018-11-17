@@ -142,10 +142,14 @@ mmt_config = {
             "name": "Hecto WFS",
             "secondary": "f5",  # secondary used with WFS system
             "default_mode": "hecto",
+            "eff_wave": 600 * u.nm,  # effective wavelength of the thruput response of the system
             "cor_coords": [242.0, 255.0],  # image coordinates of the center of rotation
             "find_fwhm": 9.0,  # FWHM for DAOfind kernel
             "find_thresh": 5.0,  # threshold for DAOfind
             "rotation": 234.0 * u.deg,  # rotation of aperture locations w.r.t. the primary mirror
+            "lenslet_pitch": 600 * u.um,  # width of each lenslet
+            "lenslet_fl": 40 * u.mm,  # focal length of each lenslet_fl
+            "pix_um": 20 * u.um,  # pixel size in micrometers
             "pix_size": 0.135 * u.arcsec,  # arcsec per WFS detector pixel
             "pup_size": 435,  # pixels
             "pup_inner": 65,  # inner obscuration radius in pixels
@@ -205,11 +209,15 @@ mmt_config = {
             "name": "F/9 WFS with Apogee Camera",
             "secondary": "f9",
             "default_mode": "blue",
+            "eff_wave": 600 * u.nm,  # effective wavelength of the thruput response of the system
             "lampsrv": "_lampbox._tcp.mmto.arizona.edu",
             "cor_coords": [255.0, 255.0],
             "find_fwhm": 7.0,
             "find_thresh": 5.0,
             "rotation": -225. * u.deg,
+            "lenslet_pitch": 625 * u.um,  # width of each lenslet
+            "lenslet_fl": 45 * u.mm,  # focal length of each lenslet_fl
+            "pix_um": 20 * u.um,  # pixel size in micrometers
             "pix_size": 0.119 * u.arcsec,  # old KX260e detector with 20 um pixels
             "pup_size": 440,  # pupil outer diameter in pixels
             "pup_inner": 55,  # inner obscuration radius in pixels
@@ -245,11 +253,15 @@ mmt_config = {
             "name": "F/9 WFS with SBIG Camera",
             "secondary": "f9",
             "default_mode": "blue",
+            "eff_wave": 550 * u.nm,  # effective wavelength of the thruput response of the system
             "lampsrv": "_lampbox._tcp.mmto.arizona.edu",
             "cor_coords": [376.0, 434.0],
             "find_fwhm": 15.0,
             "find_thresh": 7.0,
             "rotation": -225. * u.deg,
+            "lenslet_pitch": 625 * u.um,  # width of each lenslet
+            "lenslet_fl": 45 * u.mm,  # focal length of each lenslet_fl
+            "pix_um": 5.4 * u.um * 3,  # pixel size in micrometers
             "pix_size": 0.09639 * u.arcsec,  # SBIG STT-8300 with 5.4 um pixels binned 3x3
             "pup_size": 530,  # pupil outer diameter in pixels
             "pup_inner": 75,  # inner obscuration radius in pixels
@@ -285,12 +297,16 @@ mmt_config = {
             "name": "MMIRS WFS",
             "secondary": "f5",
             "default_mode": None,
+            "eff_wave": 550 * u.nm,  # effective wavelength of the thruput response of the system
             "cor_coords": [255.0, 255.0],
-            "find_fwhm": 7.0,
+            "find_fwhm": 4.0,
             "find_thresh": 5.0,
             "rotation": 180. * u.deg,  # this is referenced to camera2. camera1 is camera2+180, but is flipped by image acq
+            "lenslet_pitch": 600 * u.um,  # width of each lenslet
+            "lenslet_fl": 40 * u.mm,  # focal length of each lenslet_fl
+            "pix_um": 13 * u.um * 2,  # pixel size in micrometers, always binned 2x2
             "pix_size": 0.156 * u.arcsec,
-            "pup_size": 290,  # pixels
+            "pup_size": 320,  # pixels
             "pup_inner": 50,
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
@@ -327,10 +343,14 @@ mmt_config = {
             "name": "Binospec WFS",
             "secondary": "f5",
             "default_mode": "binospec",
+            "eff_wave": 550 * u.nm,  # effective wavelength of the thruput response of the system
             "cor_coords": [255.0, 255.0],
             "find_fwhm": 7.0,
             "find_thresh": 5.0,
             "rotation": 180. * u.deg,  # per j. kansky 9/26/2017
+            "lenslet_pitch": 600 * u.um,  # width of each lenslet
+            "lenslet_fl": 40 * u.mm,  # focal length of each lenslet_fl
+            "pix_um": 13 * u.um * 2,  # pixel size in micrometers, always binned 2x2
             "pix_size": 0.156 * u.arcsec,
             "pup_size": 285,  # pixels
             "pup_inner": 45,
