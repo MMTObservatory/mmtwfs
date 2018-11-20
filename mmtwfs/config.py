@@ -306,7 +306,7 @@ mmt_config = {
             "lenslet_fl": 40 * u.mm,  # focal length of each lenslet_fl
             "pix_um": 13 * u.um * 2,  # pixel size in micrometers, always binned 2x2
             "pix_size": 0.156 * u.arcsec,
-            "pup_size": 320,  # pixels
+            "pup_size": 330,  # pixels
             "pup_inner": 50,
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
