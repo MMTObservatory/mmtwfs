@@ -1298,10 +1298,10 @@ class F5(WFS):
         the WFS when the data was acquired.
         """
         # for most cases, this gets the reference focus
-        z_default = ZernikeVector(**self.modes[mode]['ref_zern'], errorbars={})
+        z_default = ZernikeVector(**self.modes[mode]['ref_zern'])
 
         # now get the off-axis aberrations
-        z_offaxis = ZernikeVector(errorbars={})
+        z_offaxis = ZernikeVector()
         if hdr is None:
             log.warning("Missing WFS header. Assuming data is acquired on-axis.")
             field_r = 0.0 * u.deg
