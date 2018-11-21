@@ -901,6 +901,7 @@ class WFS(object):
         self.modes[mode]['reference'].apply_pupil(self.pup_inner, self.pup_size/2.)
 
         ref_zv = self.reference_aberrations(mode, hdr=hdr)
+
         zref = ref_zv.array
         if len(zref) < self.nzern:
             pad = np.zeros(self.nzern - len(zref))
@@ -1297,10 +1298,10 @@ class F5(WFS):
         the WFS when the data was acquired.
         """
         # for most cases, this gets the reference focus
-        z_default = ZernikeVector(**self.modes[mode]['ref_zern'])
+        z_default = ZernikeVector(**self.modes[mode]['ref_zern'], errorbars={})
 
         # now get the off-axis aberrations
-        z_offaxis = ZernikeVector()
+        z_offaxis = ZernikeVector(errorbars={})
         if hdr is None:
             log.warning("Missing WFS header. Assuming data is acquired on-axis.")
             field_r = 0.0 * u.deg
