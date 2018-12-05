@@ -619,6 +619,7 @@ class SH_Reference(object):
             r=apsize/2.
         )
         masks = apers.to_mask(method='subpixel')
+        self.photapers = apers
         self.spot = np.zeros(masks[0].shape)
         for m in masks:
             subim = m.cutout(data)
