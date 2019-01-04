@@ -97,11 +97,6 @@ matrix:
         - os: linux
           env: PYTHON_VERSION=3.7
 
-        # Try numpy pre-release
-        - os: linux
-          env: NUMPY_VERSION=prerelease
-               EVENT_TYPE='pull_request push cron'
-
     allow_failures:
         # Do a PEP8 test with pycodestyle
         # (allow to fail unless your code completely compliant)
