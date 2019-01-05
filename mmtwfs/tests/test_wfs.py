@@ -89,7 +89,7 @@ def test_newf9_analysis():
     results = f9.measure_slopes(test_file)
     zresults = f9.fit_wavefront(results)
     testval = int(zresults['zernike']['Z09'].value)
-    assert((testval > 130) & (testval < 150))
+    assert((testval > 150) & (testval < 170))
 
 @cleanup
 def test_f5_analysis():

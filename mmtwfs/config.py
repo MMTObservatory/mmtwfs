@@ -256,8 +256,8 @@ mmt_config = {
             "eff_wave": 550 * u.nm,  # effective wavelength of the thruput response of the system
             "lampsrv": "_lampbox._tcp.mmto.arizona.edu",
             "cor_coords": [376.0, 434.0],
-            "find_fwhm": 15.0,
-            "find_thresh": 7.0,
+            "find_fwhm": 12.0,
+            "find_thresh": 5.0,
             "rotation": -225. * u.deg,
             "lenslet_pitch": 625 * u.um,  # width of each lenslet
             "lenslet_fl": 45 * u.mm,  # focal length of each lenslet_fl
