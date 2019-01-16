@@ -256,8 +256,8 @@ mmt_config = {
             "eff_wave": 550 * u.nm,  # effective wavelength of the thruput response of the system
             "lampsrv": "_lampbox._tcp.mmto.arizona.edu",
             "cor_coords": [376.0, 434.0],
-            "find_fwhm": 15.0,
-            "find_thresh": 7.0,
+            "find_fwhm": 12.0,
+            "find_thresh": 5.0,
             "rotation": -225. * u.deg,
             "lenslet_pitch": 625 * u.um,  # width of each lenslet
             "lenslet_fl": 45 * u.mm,  # focal length of each lenslet_fl
@@ -306,7 +306,7 @@ mmt_config = {
             "lenslet_fl": 40 * u.mm,  # focal length of each lenslet_fl
             "pix_um": 13 * u.um * 2,  # pixel size in micrometers, always binned 2x2
             "pix_size": 0.156 * u.arcsec,
-            "pup_size": 320,  # pixels
+            "pup_size": 330,  # pixels
             "pup_inner": 50,
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
@@ -319,7 +319,7 @@ mmt_config = {
                     "label": "Camera 1",
                     "pup_offset": [1.0, 0.5],  # [x, y] pupil offset from center of reference aperture pattern
                     "ref_zern": {
-                        "Z04": -1325. * u.nm
+                        "Z04": 1235. * u.nm
                     },
                     "reference_file": pkg_resources.resource_filename(
                         __name__,
@@ -330,7 +330,7 @@ mmt_config = {
                     "label": "Camera 2",
                     "pup_offset": [0.75, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
                     "ref_zern": {
-                        "Z04": 1912. * u.nm
+                        "Z04": 3442. * u.nm
                     },
                     "reference_file": pkg_resources.resource_filename(
                         __name__,

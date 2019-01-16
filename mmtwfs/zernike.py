@@ -573,7 +573,7 @@ class ZernikeVector(MutableMapping):
         "Z37": "Spher3"
     }
 
-    def __init__(self, coeffs=[], modestart=2, normalized=False, zmap=None, units=u.nm, errorbars={}, **kwargs):
+    def __init__(self, coeffs=[], modestart=2, normalized=False, zmap=None, units=u.nm, errorbars=None, **kwargs):
         """
         Parameters
         ----------
@@ -588,18 +588,27 @@ class ZernikeVector(MutableMapping):
             When loading coefficients from an array this maps the coefficient keys to array indices.
         units : `~astropy.units.IrreducibleUnit` or `~astropy.units.PrefixUnit` (default: ``u.nm`` - nanometers)
             Units of the coefficients.
+        errorbars = dict (default: None)
+            Uncertainties for each coefficient.
         **kwargs : kwargs
             Keyword arguments for setting terms individually, e.g. Z09=10.0.
         """
 
         self.modestart = modestart
         self.normalized = normalized
-        self.errorbars = errorbars
-        self.coeffs = {}
-        self.ignored = {}
+
+        self.coeffs = dict()
+        self.ignored = dict()
 
         # now set the units
         self.units = units
+
+        if errorbars is None:
+            self.errorbars = dict()
+        elif isinstance(errorbars, dict):
+            self.errorbars = errorbars
+        else:
+            raise ValueError("Errorbars for ZernikeVectors must be in the form of a dict.")
 
         # coeffs can be either a list-like or a string which is a JSON filename
         if isinstance(coeffs, str):
@@ -607,7 +616,7 @@ class ZernikeVector(MutableMapping):
         elif isinstance(coeffs, lmfit.minimizer.MinimizerResult):
             self.load_lmfit(coeffs)
         else:
-            self.from_array(coeffs, zmap=zmap, errorbars=errorbars)
+            self.from_array(coeffs, zmap=zmap, errorbars=self.errorbars)
 
         # now load any keyword inputs
         input_dict = dict(**kwargs)
@@ -1115,13 +1124,16 @@ class ZernikeVector(MutableMapping):
         else:
             return key
 
-    def from_array(self, coeffs, zmap=None, modestart=None, errorbars={}, normalized=False):
+    def from_array(self, coeffs, zmap=None, modestart=None, errorbars=None, normalized=False):
         """
         Load coefficients from a provided list/array starting from modestart. Array is assumed to start
         from self.modestart if modestart is not provided.
         """
         self.normalized = normalized
-        self.errorbars = errorbars
+        if errorbars is None or not isinstance(errorbars, dict):
+            self.errorbars = dict()
+        else:
+            self.errorbars = errorbars
 
         if len(coeffs) > 0:
             if modestart is None:

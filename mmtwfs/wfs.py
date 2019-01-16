@@ -121,7 +121,7 @@ def wfsfind(data, fwhm=7.0, threshold=5.0, plot=True, ap_radius=5.0, std=None):
     # data should be background subtracted first...
     data = check_wfsdata(data)
     if std is None:
-        mean, median, std = stats.sigma_clipped_stats(data, sigma=3.0, iters=5)
+        mean, median, std = stats.sigma_clipped_stats(data, sigma=3.0, maxiters=5)
     daofind = photutils.DAOStarFinder(fwhm=fwhm, threshold=threshold*std, sharphi=0.95)
     sources = daofind(data)
 
@@ -248,8 +248,8 @@ def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True):
     """
     data = check_wfsdata(data)
 
-    # set iters to None to let this clip all the way to convergence
-    mean, median, stddev = stats.sigma_clipped_stats(data, sigma=3.0, iters=None)
+    # set maxiters to None to let this clip all the way to convergence
+    mean, median, stddev = stats.sigma_clipped_stats(data, sigma=3.0, maxiters=None)
 
     # use wfsfind() and pass it the clipped stddev from here
     with warnings.catch_warnings():
@@ -619,6 +619,7 @@ class SH_Reference(object):
             r=apsize/2.
         )
         masks = apers.to_mask(method='subpixel')
+        self.photapers = apers
         self.spot = np.zeros(masks[0].shape)
         for m in masks:
             subim = m.cutout(data)
@@ -901,6 +902,7 @@ class WFS(object):
         self.modes[mode]['reference'].apply_pupil(self.pup_inner, self.pup_size/2.)
 
         ref_zv = self.reference_aberrations(mode, hdr=hdr)
+
         zref = ref_zv.array
         if len(zref) < self.nzern:
             pad = np.zeros(self.nzern - len(zref))
