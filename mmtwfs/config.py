@@ -319,7 +319,7 @@ mmt_config = {
                     "label": "Camera 1",
                     "pup_offset": [1.0, 0.5],  # [x, y] pupil offset from center of reference aperture pattern
                     "ref_zern": {
-                        "Z04": -1325. * u.nm
+                        "Z04": 1235. * u.nm
                     },
                     "reference_file": pkg_resources.resource_filename(
                         __name__,
@@ -330,7 +330,7 @@ mmt_config = {
                     "label": "Camera 2",
                     "pup_offset": [0.75, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
                     "ref_zern": {
-                        "Z04": 1912. * u.nm
+                        "Z04": 3442. * u.nm
                     },
                     "reference_file": pkg_resources.resource_filename(
                         __name__,
