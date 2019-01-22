@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import sys
 import argparse
 
 from pathlib import Path
@@ -14,7 +15,7 @@ log.setLevel(logging.INFO)
 
 ch = logging.StreamHandler(sys.stdout)
 ch.setLevel(logging.INFO)
-formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
+formatter = logging.Formatter('%(levelname)s - %(message)s')
 ch.setFormatter(formatter)
 log.addHandler(ch)
 
@@ -29,7 +30,7 @@ def main():
     )
     parser.add_argument(
         '-s', '--savedir',
-        help="Directory for saving renamed files."
+        help="Directory for saving renamed files.",
         default="."
     )
     parser.add_argument(
@@ -41,7 +42,7 @@ def main():
     args = parser.parse_args()
 
     rootdir = Path(args.rootdir)
-    files = sorted(list(rootdir.glob("mmirs*.fits")))
+    files = sorted(list(rootdir.glob("mmirs_wfs_0*.fits")))
 
     if len(files) < 1:
         log.error(f"No MMIRS WFS data found in {str(rootdir)}")
@@ -51,18 +52,20 @@ def main():
     for f in files:
         with fits.open(f) as hdulist:
             h = hdulist[0].header
-        if 'FITSNAME' in h:
-            orig_name = Path(h.header['FITSNAME']).name
-            log.info(f"{f.name} was originally {orig_name}.")
-            orig_num = parse(gmt, new_name)
-            new_name = "mmirs_wfs_{:04d}.fits".format(orig_num)
-            new_path = f.parent / new_name
-        if not args.dryrun:
-            try:
-                hdulist.writeto(new_path, overwrite=False)
-            except:
-                log.error(f"{new_path.name} already exists!")
-
+            if 'FITSNAME' in h:
+                orig_name = Path(h['FITSNAME']).name
+                log.info(f"{f.name} was originally {orig_name}.")
+                orig_num = parse(fmt, orig_name)[0]
+                new_name = "mmirs_wfs_rename_{:04d}.fits".format(orig_num)
+                new_path = Path(args.savedir) / new_name
+            if not args.dryrun:
+                try:
+                    hdulist.writeto(new_path, overwrite=False, output_verify="silentfix")
+                    log.info(f"Writing {f.name} to {str(new_path)}...")
+                except Exception as e:
+                    log.error(f"Error writing {new_path.name}: {e}")
+            else:
+                log.info(f"Would rename {f.name} to {str(new_path)}...")
 
 if __name__ == "__main__":
     main()
