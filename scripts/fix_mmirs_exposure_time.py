@@ -17,7 +17,7 @@ log.setLevel(logging.INFO)
 
 ch = logging.StreamHandler(sys.stdout)
 ch.setLevel(logging.INFO)
-formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
+formatter = logging.Formatter('%(levelname)s - %(message)s')
 ch.setFormatter(formatter)
 log.addHandler(ch)
 
@@ -39,7 +39,7 @@ def main():
     args = parser.parse_args()
 
     rootdir = Path(args.rootdir)
-    files = sorted(list(rootdir.glob("mmirs*.fits")))
+    files = sorted(list(rootdir.glob("mmirs_wfs*.fits")))
 
     if len(files) < 1:
         log.error(f"No MMIRS WFS data found in {str(rootdir)}")
@@ -50,7 +50,13 @@ def main():
         with fits.open(f) as hdulist:
             hdr = hdulist[-1].header
             data = hdulist[-1].data
-        timedict[str(f)] = hdr['DATE-OBS']
+            if 'DATE-OBS' in hdr:
+                timedict[str(f)] = hdr['DATE-OBS']
+            elif 'DATE' in hdr:
+                timedict[str(f)] = hdr['DATE']
+            else:
+                log.error(f"No valid time information in {str(f)}")
+                return
     log.debug(timedict)
 
     sec = 0.
@@ -87,7 +93,7 @@ def main():
                     else:
                         log.info(f"EXPTIME already set to {h.header['EXPTIME']} for {str(f)}")
             if changed and not args.dryrun:
-                hdulist.writeto(f, overwrite=True)
+                hdulist.writeto(f, overwrite=True, output_verify="silentfix")
 
 
 if __name__ == "__main__":
