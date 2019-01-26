@@ -143,7 +143,7 @@ mmt_config = {
             "secondary": "f5",  # secondary used with WFS system
             "default_mode": "hecto",
             "eff_wave": 600 * u.nm,  # effective wavelength of the thruput response of the system
-            "cor_coords": [242.0, 255.0],  # image coordinates of the center of rotation
+            "cor_coords": [251.0, 267.0],  # image coordinates of the center of rotation
             "find_fwhm": 9.0,  # FWHM for DAOfind kernel
             "find_thresh": 5.0,  # threshold for DAOfind
             "rotation": 234.0 * u.deg,  # rotation of aperture locations w.r.t. the primary mirror
