@@ -158,7 +158,7 @@ mmt_config = {
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 21,  # number of zernike modes to fit
             "az_parity": -1,  # E/W flip in image motion
-            "el_parity": 1,  # N/S flip in image motion
+            "el_parity": -1,  # N/S flip in image motion
             "reference_file": pkg_resources.resource_filename(
                 __name__,
                 os.path.join("data", "ref_images", "f5_hecto_ref.fits")
