@@ -1293,6 +1293,32 @@ class F5(WFS):
         """
         return 0.0 * u.deg, 0.0 * u.deg
 
+    def calculate_recenter(self, fit_results, defoc=1.0):
+        """
+        Perform zero-coma hexapod tilts to align the pupil center to the center-of-rotation. The location of the CoR is configured
+        to be at self.cor_coords
+        """
+        xc = fit_results['xcen']
+        yc = fit_results['ycen']
+        xref = self.cor_coords[0]
+        yref = self.cor_coords[1]
+        dx = xc - xref
+        dy = yc - yref
+
+        cam_rotation = self.rotation - 90 * u.deg  # pickoff plus fold mirror makes a 90 deg rotation
+        total_rotation = u.Quantity(cam_rotation - fit_results['rotator'], u.rad).value
+
+        dr, phi = cart2pol([dx, -dy])  # F/5 camera needs an up/down flip
+
+        derot_phi = phi + total_rotation
+
+        az, el = pol2cart([dr, derot_phi])
+
+        az *= self.az_parity * self.pix_size * defoc  # pix size scales with the pupil size as focus changes.
+        el *= self.el_parity * self.pix_size * defoc
+
+        return az.round(3), el.round(3)
+
     def reference_aberrations(self, mode, hdr=None):
         """
         Create reference ZernikeVector for 'mode'.  Pass 'hdr' to self.focal_plane_position() to get position of
