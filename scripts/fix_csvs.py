@@ -11,8 +11,8 @@ with open(csv_list) as f:
     csvs = f.readlines()
 
 for csv in csvs:
-    csv_path = csv_list.parent / csv
-    t = ascii.read(csv_path)
+    csv_path = csv_list.parent / csv.rstrip()
+    t = ascii.read(str(csv_path))
 
     if not 'exptime' in t.columns:
         exptimes = []
@@ -23,3 +23,5 @@ for csv in csvs:
         c = Column(name='exptime', data=exptimes)
         t.add_column(c)
         t.write(csv_path, format="ascii.csv", overwrite=True)
+        print(f"writing {str(csv_path)}")
+
