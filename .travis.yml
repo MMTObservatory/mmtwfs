@@ -32,20 +32,20 @@ env:
         - ASTROPY_VERSION=stable
         - MAIN_CMD='python setup.py'
         - SETUP_CMD='test'
-        - PIP_DEPENDENCIES='lmfit ccdproc git+https://github.com/astropy/astroscrappy.git'
+        - PIP_DEPENDENCIES=''
         - EVENT_TYPE='pull_request push'
 
         # For this package-template, we include examples of Cython modules,
         # so Cython is required for testing. If your package does not include
         # Cython code, you can set CONDA_DEPENDENCIES=''
-        - CONDA_DEPENDENCIES='Cython matplotlib scipy photutils scikit-image jupyter nose dnspython poppy'
+        - CONDA_DEPENDENCIES='Cython matplotlib scipy photutils scikit-image jupyter nose dnspython poppy lmfit ccdproc astroscrappy'
 
         # Conda packages for affiliated packages are hosted in channel
         # "astropy" while builds for astropy LTS with recent numpy versions
         # are in astropy-ci-extras. If your package uses either of these,
         # add the channels to CONDA_CHANNELS along with any other channels
         # you want to use.
-        - CONDA_CHANNELS='astropy-ci-extras astropy'
+        - CONDA_CHANNELS='astropy-ci-extras astropy astroconda'
 
         # If there are matplotlib or other GUI tests, uncomment the following
         # line to use the X virtual framebuffer.
