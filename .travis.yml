@@ -71,6 +71,7 @@ matrix:
         # Do a coverage test.
         - os: linux
           env: SETUP_CMD='test --coverage'
+               PIP_DEPENDENCIES='coverage codecov'
 
         # Check for sphinx doc build warnings - we do this first because it
         # may run for a long time
