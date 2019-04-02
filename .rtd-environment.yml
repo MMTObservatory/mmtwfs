@@ -12,14 +12,14 @@ dependencies:
   - scikit-image
   - pandas
   - ipython
-  - photutils
   - jupyter
   - dnspython
-  - astroscrappy
-  - ccdproc
-  - lmfit
   - docutils
   - pip:
+    - photutils
+    - ccdproc
+    - astroscrappy
+    - lmfit
     - "git+https://github.com/sphinx-gallery/sphinx-gallery.git"
     - sphinx-astropy
     - poppy
