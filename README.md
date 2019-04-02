@@ -7,6 +7,6 @@ Wavefront sensing and active optics management tools for the MMTO
 
 [![Build Status](https://travis-ci.org/MMTObservatory/mmtwfs.svg?branch=master)](https://travis-ci.org/MMTObservatory/mmtwfs.svg?branch=master)
 
-[![Coverage Status](https://coveralls.io/repos/github/MMTObservatory/mmtwfs/badge.svg?branch=master)](https://coveralls.io/github/MMTObservatory/mmtwfs?branch=master)
+[![Coverage Status](https://codecov.io/gh/MMTObservatory/mmtwfs/branch/master/graph/badge.svg)](https://codecov.io/gh/MMTObservatory/mmtwfs)
 
 [![Documentation Status](https://readthedocs.org/projects/mmtwfs/badge/?version=latest)](http://mmtwfs.readthedocs.io/en/latest/?badge=latest)
