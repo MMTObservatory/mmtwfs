@@ -23,7 +23,7 @@ import lmfit
 import astropy.units as u
 from astropy.io import fits
 from astropy.io import ascii
-from astropy import stats, visualization
+from astropy import stats, visualization, timeseries
 from astropy.modeling.models import Gaussian2D, Polynomial2D
 from astropy.modeling.fitting import LevMarLSQFitter
 from astropy.table import conf as table_conf
@@ -172,8 +172,8 @@ def grid_spacing(data, apertures):
 
     k = np.linspace(10.0, 50., 1000)  # look for spacings from 10 to 50 pixels (plenty of range, but not too small to alias)
     f = 1.0 / k  # convert spacing to frequency
-    xp = stats.LombScargle(x, xsum[0]).power(f)
-    yp = stats.LombScargle(y, ysum[0]).power(f)
+    xp = timeseries.LombScargle(x, xsum[0]).power(f)
+    yp = timeseries.LombScargle(y, ysum[0]).power(f)
 
     # the peak of the power spectrum will coincide with the average spacing
     xspacing = k[xp.argmax()]
