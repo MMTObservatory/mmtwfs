@@ -182,7 +182,7 @@ def grid_spacing(data, apertures):
     return xspacing, yspacing
 
 
-def center_pupil(data, pup_mask, threshold=0.5, sigma=20., plot=True):
+def center_pupil(input_data, pup_mask, threshold=0.8, sigma=10., plot=True):
     """
     Find the center of the pupil in a WFS image using skimage.feature.match_template(). This generates
     a correlation image and we centroid the peak of the correlation to determine the center.
@@ -205,7 +205,7 @@ def center_pupil(data, pup_mask, threshold=0.5, sigma=20., plot=True):
     cen : tuple (float, float)
         X and Y pixel coordinates of the pupil center
     """
-    data = check_wfsdata(data)
+    data = np.copy(check_wfsdata(input_data))
     pup_mask = check_wfsdata(pup_mask)
 
     # we smooth the image heavily to reduce the aliasing from the SH spots.
