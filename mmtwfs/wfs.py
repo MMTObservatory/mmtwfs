@@ -379,7 +379,7 @@ def fit_apertures(pars, ref, spots):
     return dist
 
 
-def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
+def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, cen_thresh=0.8, cen_sigma=10.0, plot=True):
     """
     Analyze a WFS image and produce pixel offsets between reference and observed spot positions.
 
@@ -406,6 +406,10 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
         Index of reference apertures that have detected spots
     sigma : float
         Sigma of gaussian fit to co-added WFS spot
+    cen_thresh: float
+        Frac of correlation peak below which correlation image is masked
+    cen_sigma: float
+        Sigma of gaussian to smooth image by before doing correlation
     """
     data = check_wfsdata(data)
     pup_mask = check_wfsdata(pup_mask)
@@ -418,8 +422,7 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
 
     # input data should be background subtracted for best results. this initial guess of the center positions
     # will be good enough to get the central obscuration, but will need to be fine-tuned for aperture association.
-    xcen, ycen, pupcen_fig = center_pupil(data, pup_mask, plot=plot)
-    pup_center = [xcen, ycen]
+    xcen, ycen, pupcen_fig = center_pupil(data, pup_mask, threshold=cen_thresh, sigma=cen_sigma, plot=plot)
 
     # using the mean spacing is straightforward for square apertures and a reasonable underestimate for hexagonal ones (e.g. f/9)
     ref_spacing = np.mean([ref.xspacing, ref.yspacing])
@@ -471,7 +474,11 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, plot=True):
     for i, k in enumerate(par_keys):
         fit_results[k] = min_results['x'][i]
 
-    xcen, ycen = fit_results['xcen'], fit_results['ycen']
+    xc, yc = fit_results['xcen'], fit_results['ycen']
+
+    # this is more reliably the center of the actual pupil image whereas fit_results shifts a bit depending on detected spots
+    pup_center = [xcen, ycen]
+
     scale = fit_results['scale']
     xcoma, ycoma = fit_results['xcoma'], fit_results['ycoma']
 
@@ -915,6 +922,8 @@ class WFS(object):
                 pup_mask,
                 fwhm=self.find_fwhm,
                 thresh=self.find_thresh,
+                cen_thresh=self.cen_thresh,
+                cen_sigma=self.cen_sigma,
                 plot=plot
             )
             slopes = slope_results['slopes']
