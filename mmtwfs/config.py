@@ -146,6 +146,8 @@ mmt_config = {
             "cor_coords": [251.0, 267.0],  # image coordinates of the center of rotation
             "find_fwhm": 9.0,  # FWHM for DAOfind kernel
             "find_thresh": 5.0,  # threshold for DAOfind
+            "cen_thresh": 0.1,
+            "cen_sigma": 30.0,
             "rotation": 234.0 * u.deg,  # rotation of aperture locations w.r.t. the primary mirror
             "lenslet_pitch": 600 * u.um,  # width of each lenslet
             "lenslet_fl": 40 * u.mm,  # focal length of each lenslet_fl
@@ -214,6 +216,8 @@ mmt_config = {
             "cor_coords": [255.0, 255.0],
             "find_fwhm": 7.0,
             "find_thresh": 5.0,
+            "cen_thresh": 0.8,
+            "cen_sigma": 10.0,
             "rotation": -225. * u.deg,
             "lenslet_pitch": 625 * u.um,  # width of each lenslet
             "lenslet_fl": 45 * u.mm,  # focal length of each lenslet_fl
@@ -258,6 +262,8 @@ mmt_config = {
             "cor_coords": [376.0, 434.0],
             "find_fwhm": 12.0,
             "find_thresh": 5.0,
+            "cen_thresh": 0.8,
+            "cen_sigma": 10.0,
             "rotation": -225. * u.deg,
             "lenslet_pitch": 625 * u.um,  # width of each lenslet
             "lenslet_fl": 45 * u.mm,  # focal length of each lenslet_fl
@@ -301,6 +307,8 @@ mmt_config = {
             "cor_coords": [255.0, 255.0],
             "find_fwhm": 7.0,
             "find_thresh": 4.0,
+            "cen_thresh": 0.8,
+            "cen_sigma": 10.0,
             "rotation": 180. * u.deg,  # this is referenced to camera2. camera1 is camera2+180, but is flipped by image acq
             "lenslet_pitch": 600 * u.um,  # width of each lenslet
             "lenslet_fl": 40 * u.mm,  # focal length of each lenslet_fl
@@ -348,6 +356,8 @@ mmt_config = {
             "cor_coords": [255.0, 255.0],
             "find_fwhm": 7.0,
             "find_thresh": 5.0,
+            "cen_thresh": 0.8,
+            "cen_sigma": 10.0,
             "rotation": 180. * u.deg,  # per j. kansky 9/26/2017
             "lenslet_pitch": 600 * u.um,  # width of each lenslet
             "lenslet_fl": 40 * u.mm,  # focal length of each lenslet_fl
