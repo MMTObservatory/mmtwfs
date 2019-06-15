@@ -146,6 +146,8 @@ mmt_config = {
             "cor_coords": [251.0, 267.0],  # image coordinates of the center of rotation
             "find_fwhm": 9.0,  # FWHM for DAOfind kernel
             "find_thresh": 5.0,  # threshold for DAOfind
+            "cen_thresh": 0.1,
+            "cen_sigma": 30.0,
             "rotation": 234.0 * u.deg,  # rotation of aperture locations w.r.t. the primary mirror
             "lenslet_pitch": 600 * u.um,  # width of each lenslet
             "lenslet_fl": 40 * u.mm,  # focal length of each lenslet_fl
@@ -209,11 +211,13 @@ mmt_config = {
             "name": "F/9 WFS with Apogee Camera",
             "secondary": "f9",
             "default_mode": "blue",
-            "eff_wave": 600 * u.nm,  # effective wavelength of the thruput response of the system
+            "eff_wave": 650 * u.nm,  # effective wavelength of the thruput response of the system
             "lampsrv": "_lampbox._tcp.mmto.arizona.edu",
             "cor_coords": [255.0, 255.0],
             "find_fwhm": 7.0,
             "find_thresh": 5.0,
+            "cen_thresh": 0.8,
+            "cen_sigma": 10.0,
             "rotation": -225. * u.deg,
             "lenslet_pitch": 625 * u.um,  # width of each lenslet
             "lenslet_fl": 45 * u.mm,  # focal length of each lenslet_fl
@@ -258,6 +262,8 @@ mmt_config = {
             "cor_coords": [376.0, 434.0],
             "find_fwhm": 12.0,
             "find_thresh": 5.0,
+            "cen_thresh": 0.8,
+            "cen_sigma": 10.0,
             "rotation": -225. * u.deg,
             "lenslet_pitch": 625 * u.um,  # width of each lenslet
             "lenslet_fl": 45 * u.mm,  # focal length of each lenslet_fl
@@ -297,17 +303,20 @@ mmt_config = {
             "name": "MMIRS WFS",
             "secondary": "f5",
             "default_mode": None,
-            "eff_wave": 550 * u.nm,  # effective wavelength of the thruput response of the system
+            "eff_wave": 700 * u.nm,  # effective wavelength of the thruput response of the system
             "cor_coords": [255.0, 255.0],
-            "find_fwhm": 4.0,
-            "find_thresh": 5.0,
+            "find_fwhm": 7.0,
+            "find_thresh": 4.0,
+            "cen_thresh": 0.8,
+            "cen_sigma": 10.0,
             "rotation": 180. * u.deg,  # this is referenced to camera2. camera1 is camera2+180, but is flipped by image acq
             "lenslet_pitch": 600 * u.um,  # width of each lenslet
             "lenslet_fl": 40 * u.mm,  # focal length of each lenslet_fl
             "pix_um": 13 * u.um * 2,  # pixel size in micrometers, always binned 2x2
             "pix_size": 0.156 * u.arcsec,
-            "pup_size": 330,  # pixels
+            "pup_size": 350,  # pixels
             "pup_inner": 50,
+            "pup_offset": [0.0, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 21,  # number of zernike modes to fit
@@ -347,6 +356,8 @@ mmt_config = {
             "cor_coords": [255.0, 255.0],
             "find_fwhm": 7.0,
             "find_thresh": 5.0,
+            "cen_thresh": 0.8,
+            "cen_sigma": 10.0,
             "rotation": 180. * u.deg,  # per j. kansky 9/26/2017
             "lenslet_pitch": 600 * u.um,  # width of each lenslet
             "lenslet_fl": 40 * u.mm,  # focal length of each lenslet_fl

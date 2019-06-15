@@ -1155,7 +1155,7 @@ class ZernikeVector(MutableMapping):
         Calculate fractional size of the error bar for mode, key.
         """
         err = 0.0
-        if key is not None and key in self.coeffs:
+        if key is not None and key in self.coeffs and self.coeffs[key].value != 0.0:
             err = np.abs(self.errorbars.get(key, 0.0 * self.units).value / self.coeffs[key].value)
         return err
 

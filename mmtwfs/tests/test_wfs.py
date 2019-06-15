@@ -71,7 +71,7 @@ def test_mmirs_analysis():
     results = mmirs.measure_slopes(test_file)
     zresults = mmirs.fit_wavefront(results)
     testval = int(zresults['zernike']['Z10'].value)
-    assert((testval > 205) & (testval < 220))
+    assert((testval > 330) & (testval < 340))
 
 @cleanup
 def test_f9_analysis():
@@ -89,7 +89,7 @@ def test_newf9_analysis():
     results = f9.measure_slopes(test_file)
     zresults = f9.fit_wavefront(results)
     testval = int(zresults['zernike']['Z09'].value)
-    assert((testval > 150) & (testval < 170))
+    assert((testval > 170) & (testval < 190))
 
 @cleanup
 def test_f5_analysis():
@@ -98,7 +98,7 @@ def test_f5_analysis():
     results = f5.measure_slopes(test_file)
     zresults = f5.fit_wavefront(results)
     testval = int(zresults['zernike']['Z10'].value)
-    assert((testval > -105) & (testval < -90))
+    assert((testval > 10) & (testval < 20))
 
 @cleanup
 def test_bino_analysis():
