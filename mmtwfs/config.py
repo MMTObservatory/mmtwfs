@@ -76,6 +76,60 @@ def merge_config(*dicts):
             updated[key] = values[-1]
     return updated
 
+"""
+Optics numbers are taken from Deb Woods' memo. Unsure if the description is published online somewhere...
+"""
+flwo48_config = {
+    "telescope": {
+        "diameter": 1219.225 * u.mm,  # primary diameter
+        "n_supports": 4,  # number of secondary support struts
+        "support_width": 0.12 * u.m,  # width of support struts in meters
+        "support_offset": 45. * u.deg,  # offset of support struts in degrees
+        "psf_pixel_scale": 0.02,  # arcsec/pixel
+        "psf_fov": 1.0  # arcsec
+    },
+    "secondary": {
+        "default": {
+            "diameter": 310.295 * u.mm,  # clear aperture of secondary
+            "plate_scale": 0.0456 * u.mm / u.arcsec  # plate scale of the focal plane
+        }
+    },
+    "wfs": {
+        "default": {
+            "name": "FLWO 1.2m WFS",
+            "secondary": "default",
+            "default_mode": "default",
+            "eff_wave": 600 * u.nm,  # effective wavelength of the thruput response of the system
+            "cor_coords": [255.0, 255.0],
+            "find_fwhm": 7.0,
+            "find_thresh": 5.0,
+            "cen_thresh": 0.8,
+            "cen_sigma": 10.0,
+            "rotation": 0. * u.deg,
+            "lenslet_pitch": 400. * u.um,  # width of each lenslet
+            "lenslet_fl": 53 * u.mm,  # focal length of each lenslet_fl
+            "pix_um": 20 * u.um,  # pixel size in micrometers
+            "pix_size": 0.24 * u.arcsec,  # old KX260e detector with 20 um pixels
+            "pup_size": 380,  # pupil outer diameter in pixels
+            "pup_inner": 50,  # inner obscuration radius in pixels
+            "pup_offset": [0.0, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
+            "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
+            "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
+            "nzern": 21,  # number of zernike modes to fit
+            "az_parity": -1,  # E/W flip in image motion
+            "el_parity": 1,  # N/S flip in image motion
+            "reference_file": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "LED2sec_22.fits")),
+            "modes": {
+                "default": {
+                    "label": "FLWO 1.2m WFS",
+                    "ref_zern": {
+                        "Z04": 0. * u.nm
+                    },
+                }
+            }
+        }
+    }
+}
 
 """
 Optics numbers are taken from http://www.mmto.org/sites/default/files/mmt_conv7_2.pdf
