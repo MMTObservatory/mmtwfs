@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import matplotlib.colors as col
 
-from .config import merge_config, mmt_config
+from .config import recursive_subclasses, merge_config, mmtwfs_config
 from .custom_exceptions import WFSConfigException
 from .secondary import SecondaryFactory
 from .zernike import ZernikeVector
@@ -33,16 +33,45 @@ log = logging.getLogger("Telescope")
 log.setLevel(logging.INFO)
 
 
-__all__ = ['MMT']
+__all__ = ['TelescopeFactory', 'MMT', 'FLWO12']
 
 
-class MMT(object):
+def TelescopeFactory(telescope="mmt", secondary="f5", config={}, **kwargs):
     """
-    Defines configuration and methods that pertain to the MMT's telescope and primary mirror systems
+    Build and return proper Telescope sub-class instance based on the value of 'telescope' and 'secondary'.
     """
-    def __init__(self, secondary="f5", config={}, **kwargs):
+    config = merge_config(config, dict(**kwargs))
+    secondary = secondary.lower()
+    telescope = telescope.lower()
+
+    types = recursive_subclasses(Telescope)
+    telescopes = [t.__name__.lower() for t in types]
+    tel_map = dict(list(zip(telescopes, types)))
+
+    if telescope not in telescopes:
+        raise WFSConfigException(value=f"Specified telescope, {telescope}, not valid or not implemented.")
+
+    tel_cls = tel_map[telescope](secondary=secondary, config=config)
+    return tel_cls
+
+
+class Telescope(object):
+    """
+    Defines generic configuration and methods that pertain to telescope and primary mirror systems
+    """
+    def __init__(self, telescope="mmt", secondary="f5", config={}, **kwargs):
         config = merge_config(config, dict(**kwargs))
-        self.__dict__.update(merge_config(mmt_config['telescope'], config))
+        if telescope not in mmtwfs_config['telescope']:
+            msg = f"Invalid telescope specified, {telescope}."
+            raise WFSConfigException(value=msg)
+        if secondary not in mmtwfs_config['secondary']:
+            msg = f"Invalid secondary specified, {secondary}."
+            raise WFSConfigException(value=msg)
+        if mmtwfs_config['secondary'][secondary]['telescope'] != telescope:
+            msg = f"Invalid secondary, {secondary}, for telescope, {telescope}."
+            raise WFSConfigException(value=msg)
+
+        self.__dict__.update(merge_config(mmtwfs_config['telescope'][telescope], config))
 
         self.secondary = SecondaryFactory(secondary=secondary)
 
@@ -53,30 +82,8 @@ class MMT(object):
         # ratio of the size of the central obstruction of the secondary to the size of the primary
         self.obscuration = self.secondary.diameter / self.diameter
 
-        # load table of finite element coordinates
-        self.nodecoor = self.load_bcv_coordinates()
-        self.n_node = len(self.nodecoor)
-
-        # load table of actuator coordinates
-        self.actcoor = self.load_actuator_coordinates()
-        self.n_act = len(self.actcoor)
-
-        # load actuator influence matrix that provides the surface displacement caused by 1 N of force by
-        # each actuator at each of self.node finite element node positions.
-        self.surf2act = self.load_influence_matrix()
-
         # create model of MMTO pupil including secondary and secondary support obstructions
         self.pupil = self._pupil_model()
-
-        # use this boolean to determine if corrections are actually to be sent
-        self.connected = False
-
-        # keep track of last and total forces. a blank ZernikeVector will generate the appropriate format
-        # table with all forces set to 0.
-        self.last_forces = self.bending_forces(zv=ZernikeVector())
-        self.total_forces = self.bending_forces(zv=ZernikeVector())
-        self.last_m1focus = 0.0 * u.um
-        self.total_m1focus = 0.0 * u.um
 
         # initialize poppy optical system used for calculating the PSFs
         self.osys = poppy.OpticalSystem()
@@ -98,18 +105,6 @@ class MMT(object):
         pup_model = poppy.CompoundAnalyticOptic(opticslist=[primary, secondary], name="MMTO")
         return pup_model
 
-    def connect(self):
-        """
-        Set state to connected so that calculated corrections will be sent to the relevant systems
-        """
-        self.connected = True
-
-    def disconnect(self):
-        """
-        Set state to disconnected so that corrections will be calculated, but not sent
-        """
-        self.connected = False
-
     def pupil_mask(self, rotation=0.0, size=400):
         """
         Use the pupil model to make a pupil mask that can be used as a kernel for finding pupil-like things in images
@@ -127,7 +122,7 @@ class MMT(object):
 
     def psf(self, zv=ZernikeVector(), wavelength=550.*u.nm, plot=True):
         """
-        Take a ZernikeVector and calculate resulting MMTO PSF at given wavelength.
+        Take a ZernikeVector and calculate resulting PSF at given wavelength.
         """
         # poppy wants the wavelength in meters
         try:
@@ -168,6 +163,58 @@ class MMT(object):
             cb = psf_fig.colorbar(ims)
             cb.set_label("Fraction of Total Flux")
         return psf, psf_fig
+
+
+class FLWO12(Telescope):
+    """
+    Defines configuration and methods for the FLWO 1.2-metre
+    """
+    def __init__(self, config={}, **kwargs):
+        config = merge_config(config, dict(**kwargs))
+        super(FLWO12, self).__init__(telescope="flwo12", secondary="flwo12", config=config)
+
+
+class MMT(Telescope):
+    """
+    Defines configuration and methods that pertain to the MMT's telescope and primary mirror systems
+    """
+    def __init__(self, secondary="f5", config={}, **kwargs):
+        config = merge_config(config, dict(**kwargs))
+        super(MMT, self).__init__(telescope="mmt", secondary=secondary, config=config)
+
+        # load table of finite element coordinates
+        self.nodecoor = self.load_bcv_coordinates()
+        self.n_node = len(self.nodecoor)
+
+        # load table of actuator coordinates
+        self.actcoor = self.load_actuator_coordinates()
+        self.n_act = len(self.actcoor)
+
+        # load actuator influence matrix that provides the surface displacement caused by 1 N of force by
+        # each actuator at each of self.node finite element node positions.
+        self.surf2act = self.load_influence_matrix()
+
+        # use this boolean to determine if corrections are actually to be sent
+        self.connected = False
+
+        # keep track of last and total forces. a blank ZernikeVector will generate the appropriate format
+        # table with all forces set to 0.
+        self.last_forces = self.bending_forces(zv=ZernikeVector())
+        self.total_forces = self.bending_forces(zv=ZernikeVector())
+        self.last_m1focus = 0.0 * u.um
+        self.total_m1focus = 0.0 * u.um
+
+    def connect(self):
+        """
+        Set state to connected so that calculated corrections will be sent to the relevant systems
+        """
+        self.connected = True
+
+    def disconnect(self):
+        """
+        Set state to disconnected so that corrections will be calculated, but not sent
+        """
+        self.connected = False
 
     def bending_forces(self, zv=ZernikeVector(), gain=0.5):
         """

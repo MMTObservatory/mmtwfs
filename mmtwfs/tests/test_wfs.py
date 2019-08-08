@@ -9,7 +9,7 @@ import numpy as np
 from matplotlib.testing.decorators import cleanup
 
 from ..zernike import ZernikeVector
-from ..config import mmt_config
+from ..config import mmtwfs_config
 from ..wfs import WFSFactory, check_wfsdata
 from ..custom_exceptions import WFSConfigException, WFSCommandException
 
@@ -44,7 +44,7 @@ def test_check_wfsdata():
         assert False
 
 def test_wfses():
-    for s in mmt_config['wfs']:
+    for s in mmtwfs_config['wfs']:
         wfs = WFSFactory(wfs=s, plot=True, test="foo")
         assert(wfs.test == "foo")
 

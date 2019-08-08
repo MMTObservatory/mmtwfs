@@ -31,8 +31,8 @@ from astroscrappy import detect_cosmics
 
 from ccdproc.utils.slices import slice_from_string
 
-from .config import recursive_subclasses, merge_config, mmt_config
-from .telescope import MMT
+from .config import recursive_subclasses, merge_config, mmtwfs_config
+from .telescope import TelescopeFactory
 from .f9topbox import CompMirror
 from .zernike import ZernikeVector, zernike_slopes, cart2pol, pol2cart
 from .custom_exceptions import WFSConfigException, WFSAnalysisFailed
@@ -701,8 +701,8 @@ class WFS(object):
     """
     def __init__(self, config={}, plot=True, **kwargs):
         key = self.__class__.__name__.lower()
-        self.__dict__.update(merge_config(mmt_config['wfs'][key], config))
-        self.telescope = MMT(secondary=self.secondary)
+        self.__dict__.update(merge_config(mmtwfs_config['wfs'][key], config))
+        self.telescope = TelescopeFactory(telescope=self.telescope, secondary=self.secondary)
         self.secondary = self.telescope.secondary
         self.plot = plot
         self.connected = False
@@ -1490,3 +1490,10 @@ class MMIRS(F5):
         focal_phi = guide_phi + rot + self.rotation
 
         return focal_r, focal_phi
+
+
+class FLWO12(WFS):
+    """
+    Defines configuration and methods for the WFS on the FLWO 1.2-meter
+    """
+    pass

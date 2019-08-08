@@ -123,13 +123,14 @@ mmtwfs_config = {
             "diameter": 1219.225 * u.mm,  # primary diameter
             "n_supports": 4,  # number of secondary support struts
             "support_width": 0.12 * u.m,  # width of support struts in meters
-            "support_offset": 45. * u.deg,  # offset of support struts in degrees
+            "support_offset": 0. * u.deg,  # offset of support struts in degrees
             "psf_pixel_scale": 0.02,  # arcsec/pixel
             "psf_fov": 1.0  # arcsec
         }
     },
     "secondary": {
         "f5": {
+            "telescope": "mmt",
             "hexserv": "_hexapod._tcp.mmto.arizona.edu",
             "diameter": 1688.0 * u.mm,  # clear aperture of secondary
             "plate_scale": 0.167 * u.mm / u.arcsec,  # plate scale of the focal plane (this is for spectroscopic mode)
@@ -139,6 +140,7 @@ mmtwfs_config = {
             "focus_trans": 40.8 * u.nm / u.um  # nm of defocus per um of hexapod Z (focus) translation.
         },
         "f9": {
+            "telescope": "mmt",
             "hexserv": "_hexapod._tcp.mmto.arizona.edu",
             "diameter": 1006.7 * u.mm,
             "plate_scale": 0.284 * u.mm / u.arcsec,
@@ -148,6 +150,7 @@ mmtwfs_config = {
             "focus_trans": 34.7 * u.nm / u.um
         },
         "flwo12": {
+            "telescope": "flwo12",
             "diameter": 310.295 * u.mm,  # clear aperture of secondary
             "plate_scale": 0.0456 * u.mm / u.arcsec  # plate scale of the focal plane
         }
@@ -155,6 +158,7 @@ mmtwfs_config = {
     "wfs": {
         "f5": {
             "name": "Hecto WFS",
+            "telescope": "mmt",  # telescope used with WFS system
             "secondary": "f5",  # secondary used with WFS system
             "default_mode": "hecto",
             "eff_wave": 600 * u.nm,  # effective wavelength of the thruput response of the system
@@ -224,6 +228,7 @@ mmtwfs_config = {
         },
         "f9": {
             "name": "F/9 WFS with Apogee Camera",
+            "telescope": "mmt",  # telescope used with WFS system
             "secondary": "f9",
             "default_mode": "blue",
             "eff_wave": 650 * u.nm,  # effective wavelength of the thruput response of the system
@@ -270,6 +275,7 @@ mmtwfs_config = {
         },
         "newf9": {
             "name": "F/9 WFS with SBIG Camera",
+            "telescope": "mmt",  # telescope used with WFS system
             "secondary": "f9",
             "default_mode": "blue",
             "eff_wave": 550 * u.nm,  # effective wavelength of the thruput response of the system
@@ -316,6 +322,7 @@ mmtwfs_config = {
         },
         "mmirs": {
             "name": "MMIRS WFS",
+            "telescope": "mmt",  # telescope used with WFS system
             "secondary": "f5",
             "default_mode": None,
             "eff_wave": 700 * u.nm,  # effective wavelength of the thruput response of the system
@@ -365,6 +372,7 @@ mmtwfs_config = {
         },
         "binospec": {
             "name": "Binospec WFS",
+            "telescope": "mmt",  # telescope used with WFS system
             "secondary": "f5",
             "default_mode": "binospec",
             "eff_wave": 550 * u.nm,  # effective wavelength of the thruput response of the system
@@ -402,6 +410,7 @@ mmtwfs_config = {
         },
         "flwo12": {
             "name": "FLWO 1.2m WFS",
+            "telescope": "flwo12",  # telescope used with WFS system
             "secondary": "flwo12",
             "default_mode": "default",
             "eff_wave": 600 * u.nm,  # effective wavelength of the thruput response of the system
