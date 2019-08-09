@@ -286,7 +286,9 @@ def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True):
         with warnings.catch_warnings():
             # ignore astropy warnings about issues with the fit...
             warnings.simplefilter("ignore")
-            model = Gaussian2D(amplitude=spot.max(), x_mean=spot.shape[1]/2, y_mean=spot.shape[0]/2) + Polynomial2D(degree=0)
+            g2d = Gaussian2D(amplitude=spot.max(), x_mean=spot.shape[1]/2, y_mean=spot.shape[0]/2)
+            p2d = Polynomial2D(degree=0)
+            model = g2d + p2d
             fitter = LevMarLSQFitter()
             y, x = np.mgrid[:spot.shape[0], :spot.shape[1]]
             fit = fitter(model, x, y, spot)
@@ -592,7 +594,7 @@ class SH_Reference(object):
     """
     Class to handle Shack-Hartmann reference data
     """
-    def __init__(self, data, fwhm=4.0, threshold=30.0, plot=True):
+    def __init__(self, data, fwhm=4.5, threshold=20.0, plot=True):
         """
         Read WFS reference image and generate reference magnifications (i.e. grid spacing) and
         aperture positions.
@@ -1496,4 +1498,6 @@ class FLWO12(WFS):
     """
     Defines configuration and methods for the WFS on the FLWO 1.2-meter
     """
-    pass
+    def trim_overscan(self, data, hdr=None):
+        # remove last column that is always set to 0
+        return data[:, :510]

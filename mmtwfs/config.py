@@ -122,7 +122,7 @@ mmtwfs_config = {
         "flwo12": {
             "diameter": 1219.225 * u.mm,  # primary diameter
             "n_supports": 4,  # number of secondary support struts
-            "support_width": 0.12 * u.m,  # width of support struts in meters
+            "support_width": 0.03 * u.m,  # width of support struts in meters
             "support_offset": 0. * u.deg,  # offset of support struts in degrees
             "psf_pixel_scale": 0.02,  # arcsec/pixel
             "psf_fov": 1.0  # arcsec
@@ -424,8 +424,8 @@ mmtwfs_config = {
             "lenslet_fl": 53 * u.mm,  # focal length of each lenslet_fl
             "pix_um": 20 * u.um,  # pixel size in micrometers
             "pix_size": 0.24 * u.arcsec,  # old KX260e detector with 20 um pixels
-            "pup_size": 380,  # pupil outer diameter in pixels
-            "pup_inner": 50,  # inner obscuration radius in pixels
+            "pup_size": 420,  # pupil outer diameter in pixels
+            "pup_inner": 40,  # inner obscuration radius in pixels
             "pup_offset": [0.0, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections

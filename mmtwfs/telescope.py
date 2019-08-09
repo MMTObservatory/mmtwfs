@@ -105,7 +105,7 @@ class Telescope(object):
         pup_model = poppy.CompoundAnalyticOptic(opticslist=[primary, secondary], name="MMTO")
         return pup_model
 
-    def pupil_mask(self, rotation=0.0, size=400):
+    def pupil_mask(self, rotation=0.0, size=512):
         """
         Use the pupil model to make a pupil mask that can be used as a kernel for finding pupil-like things in images
         """
