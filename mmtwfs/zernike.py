@@ -1073,7 +1073,7 @@ class ZernikeVector(MutableMapping):
             with open(filename, 'r') as f:
                 json_data = json.load(f)
         except IOError as e:
-            msg = "Missing JSON file: %s" % filename
+            msg = f"Missing JSON file, {filename}: {e}"
             raise ZernikeException(value=msg)
 
         if 'units' in json_data:
@@ -1320,7 +1320,7 @@ class ZernikeVector(MutableMapping):
         if title is not None:
             ax.set_title(title)
         cb = fig.colorbar(cmap)
-        cb.set_label("%s" % self.units)
+        cb.set_label(f"{self.units}")
         return fig
 
     def bar_chart(self, residual=None, total=True, max_c=500*u.nm, title=None, last_mode=None):
@@ -1381,7 +1381,7 @@ class ZernikeVector(MutableMapping):
         if title is not None:
             ax.set_title(title)
         cb = fig.colorbar(cmap)
-        cb.set_label("%s" % self.units)
+        cb.set_label(f"{self.units}")
         return fig
 
     def plot_map(self):

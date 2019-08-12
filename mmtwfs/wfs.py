@@ -479,7 +479,7 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, cen_thresh=0.8, cen_si
     xc, yc = fit_results['xcen'], fit_results['ycen']
 
     # this is more reliably the center of the actual pupil image whereas fit_results shifts a bit depending on detected spots
-    pup_center = [xcen, ycen]
+    pup_center = [xc, yc]
 
     scale = fit_results['scale']
     xcoma, ycoma = fit_results['xcoma'], fit_results['ycoma']
@@ -801,7 +801,7 @@ class WFS(object):
         r_0 = (0.179 * (wave**2) * (d**(-1/3))/corr_sigma**2)**0.6
 
         # this equation relates the turbulence scale size to an expected image FWHM at the given wavelength.
-        raw_seeing = u.Quantity(u.rad * 0.98 * owave/ r_0, u.arcsec)
+        raw_seeing = u.Quantity(u.rad * 0.98 * owave / r_0, u.arcsec)
 
         # correct seeing to zenith
         if airmass is not None:
