@@ -9,7 +9,7 @@ import socket
 import astropy.units as u
 
 from .utils import srvlookup
-from .config import recursive_subclasses, merge_config, mmt_config
+from .config import recursive_subclasses, merge_config, mmtwfs_config
 from .custom_exceptions import WFSConfigException, WFSCommandException
 
 import logging
@@ -18,7 +18,7 @@ log = logging.getLogger("Secondary")
 log.setLevel(logging.INFO)
 
 
-__all__ = ['Secondary', 'F9', 'F5', 'SecondaryFactory']
+__all__ = ['F9', 'F5', 'FLWO12', 'SecondaryFactory']
 
 
 def SecondaryFactory(secondary="f5", config={}, **kwargs):
@@ -45,7 +45,22 @@ class Secondary(object):
     """
     def __init__(self, config={}):
         key = self.__class__.__name__.lower()
-        self.__dict__.update(merge_config(mmt_config['secondary'][key], config))
+        self.__dict__.update(merge_config(mmtwfs_config['secondary'][key], config))
+
+
+class FLWO12(Secondary):
+    """
+    Secondary mirror configuration for the FLWO 1.2-meter
+    """
+    pass
+
+
+class MMTSecondary(object):
+    """
+    Mixin class that defines methods specific to MMT secondary mirror systems
+    """
+    def __init__(self, config={}):
+        super(MMTSecondary, self).__init__(config=config)
 
         # get host/port to use for hexapod communication
         self.host, self.port = srvlookup(self.hexserv)
@@ -214,14 +229,14 @@ class Secondary(object):
         return cmds
 
 
-class F5(Secondary):
+class F5(MMTSecondary, Secondary):
     """
     Defines configuration and methods specific to the F/5 secondary system
     """
     pass
 
 
-class F9(Secondary):
+class F9(MMTSecondary, Secondary):
     """
     Defines configuration and methods specific to the F/9 secondary system
     """

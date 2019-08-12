@@ -9,7 +9,7 @@ import numpy as np
 from matplotlib.testing.decorators import cleanup
 
 from ..zernike import ZernikeVector
-from ..config import mmt_config
+from ..config import mmtwfs_config
 from ..wfs import WFSFactory, check_wfsdata
 from ..custom_exceptions import WFSConfigException, WFSCommandException
 
@@ -44,7 +44,7 @@ def test_check_wfsdata():
         assert False
 
 def test_wfses():
-    for s in mmt_config['wfs']:
+    for s in mmtwfs_config['wfs']:
         wfs = WFSFactory(wfs=s, plot=True, test="foo")
         assert(wfs.test == "foo")
 
@@ -143,6 +143,14 @@ def test_correct_coma():
     assert(cy == 0.0)
 
 def test_recenter():
+    test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "test_newf9.fits"))
+    f9 = WFSFactory(wfs='newf9')
+    results = f9.measure_slopes(test_file, plot=False)
+    az, el = f9.calculate_recenter(results)
+    assert(np.abs(az) > 0.0)
+    assert(np.abs(el) > 0.0)
+
+def test_f5_recenter():
     test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "auto_wfs_0037_ave.fits"))
     f5 = WFSFactory(wfs='f5')
     results = f5.measure_slopes(test_file, plot=False)

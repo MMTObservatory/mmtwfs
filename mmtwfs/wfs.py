@@ -31,8 +31,8 @@ from astroscrappy import detect_cosmics
 
 from ccdproc.utils.slices import slice_from_string
 
-from .config import recursive_subclasses, merge_config, mmt_config
-from .telescope import MMT
+from .config import recursive_subclasses, merge_config, mmtwfs_config
+from .telescope import TelescopeFactory
 from .f9topbox import CompMirror
 from .zernike import ZernikeVector, zernike_slopes, cart2pol, pol2cart
 from .custom_exceptions import WFSConfigException, WFSAnalysisFailed
@@ -286,7 +286,9 @@ def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True):
         with warnings.catch_warnings():
             # ignore astropy warnings about issues with the fit...
             warnings.simplefilter("ignore")
-            model = Gaussian2D(amplitude=spot.max(), x_mean=spot.shape[1]/2, y_mean=spot.shape[0]/2) + Polynomial2D(degree=0)
+            g2d = Gaussian2D(amplitude=spot.max(), x_mean=spot.shape[1]/2, y_mean=spot.shape[0]/2)
+            p2d = Polynomial2D(degree=0)
+            model = g2d + p2d
             fitter = LevMarLSQFitter()
             y, x = np.mgrid[:spot.shape[0], :spot.shape[1]]
             fit = fitter(model, x, y, spot)
@@ -477,7 +479,7 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, cen_thresh=0.8, cen_si
     xc, yc = fit_results['xcen'], fit_results['ycen']
 
     # this is more reliably the center of the actual pupil image whereas fit_results shifts a bit depending on detected spots
-    pup_center = [xcen, ycen]
+    pup_center = [xc, yc]
 
     scale = fit_results['scale']
     xcoma, ycoma = fit_results['xcoma'], fit_results['ycoma']
@@ -592,7 +594,7 @@ class SH_Reference(object):
     """
     Class to handle Shack-Hartmann reference data
     """
-    def __init__(self, data, fwhm=4.0, threshold=30.0, plot=True):
+    def __init__(self, data, fwhm=4.5, threshold=20.0, plot=True):
         """
         Read WFS reference image and generate reference magnifications (i.e. grid spacing) and
         aperture positions.
@@ -701,8 +703,8 @@ class WFS(object):
     """
     def __init__(self, config={}, plot=True, **kwargs):
         key = self.__class__.__name__.lower()
-        self.__dict__.update(merge_config(mmt_config['wfs'][key], config))
-        self.telescope = MMT(secondary=self.secondary)
+        self.__dict__.update(merge_config(mmtwfs_config['wfs'][key], config))
+        self.telescope = TelescopeFactory(telescope=self.telescope, secondary=self.secondary)
         self.secondary = self.telescope.secondary
         self.plot = plot
         self.connected = False
@@ -799,7 +801,7 @@ class WFS(object):
         r_0 = (0.179 * (wave**2) * (d**(-1/3))/corr_sigma**2)**0.6
 
         # this equation relates the turbulence scale size to an expected image FWHM at the given wavelength.
-        raw_seeing = u.Quantity(u.rad * 0.98 * owave/ r_0, u.arcsec)
+        raw_seeing = u.Quantity(u.rad * 0.98 * owave / r_0, u.arcsec)
 
         # correct seeing to zenith
         if airmass is not None:
@@ -1490,3 +1492,12 @@ class MMIRS(F5):
         focal_phi = guide_phi + rot + self.rotation
 
         return focal_r, focal_phi
+
+
+class FLWO12(WFS):
+    """
+    Defines configuration and methods for the WFS on the FLWO 1.2-meter
+    """
+    def trim_overscan(self, data, hdr=None):
+        # remove last column that is always set to 0
+        return data[:, :510]

@@ -7,6 +7,11 @@ Misc. utility routines
 
 import dns.resolver as resolver
 
+import logging
+import logging.handlers
+
+log = logging.getLogger("DNSresolver")
+log.setLevel(logging.INFO)
 
 __all__ = ['srvlookup']
 
@@ -21,6 +26,7 @@ def srvlookup(server):
         port = response[0].port
     except Exception as e:
         # we'll be lenient and just return None if there's an issue
+        log.warning(f"Problem looking up {server} via DNS: {e}")
         host = None
         port = None
 

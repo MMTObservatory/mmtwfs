@@ -10,31 +10,35 @@ import astropy.units as u
 
 from matplotlib.testing.decorators import cleanup
 
-from ..config import mmt_config
-from ..telescope import MMT
+from ..config import mmtwfs_config
+from ..telescope import TelescopeFactory, MMT
 from ..zernike import ZernikeVector
 from ..custom_exceptions import WFSConfigException
 
 def test_telescope():
-    for s in mmt_config['secondary']:
-        t = MMT(secondary=s)
-        t.connect()
-        assert(t.connected)
-        t.disconnect()
-        assert(not t.connected)
-        assert(t.secondary.diameter == mmt_config['secondary'][s]['diameter'])
+    for s in mmtwfs_config['secondary']:
+        tel = mmtwfs_config['secondary'][s]['telescope']
+        t = TelescopeFactory(telescope=tel, secondary=s)
+        if tel == 'mmt':
+            t.connect()
+            assert(t.connected)
+            t.disconnect()
+            assert(not t.connected)
+        assert(t.secondary.diameter == mmtwfs_config['secondary'][s]['diameter'])
 
 def test_pupil_mask():
-    for s in mmt_config['secondary']:
-        t = MMT(secondary=s)
+    for s in mmtwfs_config['secondary']:
+        tel = mmtwfs_config['secondary'][s]['telescope']
+        t = TelescopeFactory(telescope=tel, secondary=s)
         mask = t.pupil_mask(size=400)
         assert(mask.shape == (400, 400))
         assert(mask.max() == 1.0)
         assert(mask.min() == 0.0)
 
 def test_bogus_pupil_mask():
-    for s in mmt_config['secondary']:
-        t = MMT(secondary=s)
+    for s in mmtwfs_config['secondary']:
+        tel = mmtwfs_config['secondary'][s]['telescope']
+        t = TelescopeFactory(telescope=tel, secondary=s)
         try:
             mask = t.pupil_mask(size=900)
         except WFSConfigException:
@@ -45,8 +49,9 @@ def test_bogus_pupil_mask():
             assert False
 
 def test_psf():
-    for s in mmt_config['secondary']:
-        t = MMT(secondary=s)
+    for s in mmtwfs_config['secondary']:
+        tel = mmtwfs_config['secondary'][s]['telescope']
+        t = TelescopeFactory(telescope=tel, secondary=s)
         zv = ZernikeVector(Z04=500*u.nm)
         p, p_fig = t.psf(zv=zv)
         p_im = p[0].data

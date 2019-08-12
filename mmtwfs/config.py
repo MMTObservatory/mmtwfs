@@ -11,7 +11,7 @@ import pkg_resources
 import astropy.units as u
 
 
-__all__ = ['recursive_subclasses', 'merge_config', 'mmt_config']
+__all__ = ['recursive_subclasses', 'merge_config', 'mmtwfs_config']
 
 
 def recursive_subclasses(cls):
@@ -78,47 +78,59 @@ def merge_config(*dicts):
 
 
 """
-Optics numbers are taken from http://www.mmto.org/sites/default/files/mmt_conv7_2.pdf
+MMTO optics numbers are taken from http://www.mmto.org/sites/default/files/mmt_conv7_2.pdf.
+FLWO optics numbers are taken from Deb Woods' memo. Unsure if the description is published online somewhere...
 """
-mmt_config = {
+mmtwfs_config = {
     "telescope": {
-        "diameter": 6502.4 * u.mm,  # primary diameter
-        "bcv_radius": 3228.5 * u.mm,  # radius to use when normalizing BCV finite element coordinates
-        "n_supports": 4,  # number of secondary support struts
-        "support_width": 0.12 * u.m,  # width of support struts in meters
-        "support_offset": 45. * u.deg,  # offset of support struts in degrees
-        "psf_pixel_scale": 0.02,  # arcsec/pixel
-        "psf_fov": 1.0,  # arcsec
-        # influence matrix to map actuator forces to surface displacement
-        "surf2act_file": pkg_resources.resource_filename(__name__, os.path.join("data", "Surf2ActTEL_32.bin")),
-        # coordinates of finite element nodes used in surf2act
-        "nodecoor_file": pkg_resources.resource_filename(__name__, os.path.join("data", "bcv_node_coordinates.dat")),
-        # coordinates of the force actuators
-        "actuator_file": pkg_resources.resource_filename(__name__, os.path.join("data", "actuator_coordinates.dat")),
-        "zern_map": {  # map the old zernike mode indexing scheme to the Noll scheme used in ZernikeVector
-            "Z02": 0,
-            "Z03": 1,
-            "Z04": 2,
-            "Z05": 3,
-            "Z06": 4,
-            "Z07": 5,
-            "Z08": 6,
-            "Z09": 8,
-            "Z10": 9,
-            "Z11": 7,
-            "Z12": 11,
-            "Z13": 10,
-            "Z14": 13,
-            "Z15": 12,
-            "Z16": 16,
-            "Z17": 17,
-            "Z18": 14,
-            "Z19": 15,
-            "Z22": 18
+        "mmt": {
+            "diameter": 6502.4 * u.mm,  # primary diameter
+            "bcv_radius": 3228.5 * u.mm,  # radius to use when normalizing BCV finite element coordinates
+            "n_supports": 4,  # number of secondary support struts
+            "support_width": 0.12 * u.m,  # width of support struts in meters
+            "support_offset": 45. * u.deg,  # offset of support struts in degrees
+            "psf_pixel_scale": 0.02,  # arcsec/pixel
+            "psf_fov": 1.0,  # arcsec
+            # influence matrix to map actuator forces to surface displacement
+            "surf2act_file": pkg_resources.resource_filename(__name__, os.path.join("data", "Surf2ActTEL_32.bin")),
+            # coordinates of finite element nodes used in surf2act
+            "nodecoor_file": pkg_resources.resource_filename(__name__, os.path.join("data", "bcv_node_coordinates.dat")),
+            # coordinates of the force actuators
+            "actuator_file": pkg_resources.resource_filename(__name__, os.path.join("data", "actuator_coordinates.dat")),
+            "zern_map": {  # map the old zernike mode indexing scheme to the Noll scheme used in ZernikeVector
+                "Z02": 0,
+                "Z03": 1,
+                "Z04": 2,
+                "Z05": 3,
+                "Z06": 4,
+                "Z07": 5,
+                "Z08": 6,
+                "Z09": 8,
+                "Z10": 9,
+                "Z11": 7,
+                "Z12": 11,
+                "Z13": 10,
+                "Z14": 13,
+                "Z15": 12,
+                "Z16": 16,
+                "Z17": 17,
+                "Z18": 14,
+                "Z19": 15,
+                "Z22": 18
+            }
+        },
+        "flwo12": {
+            "diameter": 1219.225 * u.mm,  # primary diameter
+            "n_supports": 4,  # number of secondary support struts
+            "support_width": 0.03 * u.m,  # width of support struts in meters
+            "support_offset": 0. * u.deg,  # offset of support struts in degrees
+            "psf_pixel_scale": 0.02,  # arcsec/pixel
+            "psf_fov": 1.0  # arcsec
         }
     },
     "secondary": {
         "f5": {
+            "telescope": "mmt",
             "hexserv": "_hexapod._tcp.mmto.arizona.edu",
             "diameter": 1688.0 * u.mm,  # clear aperture of secondary
             "plate_scale": 0.167 * u.mm / u.arcsec,  # plate scale of the focal plane (this is for spectroscopic mode)
@@ -128,6 +140,7 @@ mmt_config = {
             "focus_trans": 40.8 * u.nm / u.um  # nm of defocus per um of hexapod Z (focus) translation.
         },
         "f9": {
+            "telescope": "mmt",
             "hexserv": "_hexapod._tcp.mmto.arizona.edu",
             "diameter": 1006.7 * u.mm,
             "plate_scale": 0.284 * u.mm / u.arcsec,
@@ -135,11 +148,17 @@ mmt_config = {
             "cc_trans": 13.6 * u.um / u.arcsec,
             "zc_trans": 5.86 * u.um / u.arcsec,
             "focus_trans": 34.7 * u.nm / u.um
+        },
+        "flwo12": {
+            "telescope": "flwo12",
+            "diameter": 310.295 * u.mm,  # clear aperture of secondary
+            "plate_scale": 0.0456 * u.mm / u.arcsec  # plate scale of the focal plane
         }
     },
     "wfs": {
         "f5": {
             "name": "Hecto WFS",
+            "telescope": "mmt",  # telescope used with WFS system
             "secondary": "f5",  # secondary used with WFS system
             "default_mode": "hecto",
             "eff_wave": 600 * u.nm,  # effective wavelength of the thruput response of the system
@@ -209,6 +228,7 @@ mmt_config = {
         },
         "f9": {
             "name": "F/9 WFS with Apogee Camera",
+            "telescope": "mmt",  # telescope used with WFS system
             "secondary": "f9",
             "default_mode": "blue",
             "eff_wave": 650 * u.nm,  # effective wavelength of the thruput response of the system
@@ -255,6 +275,7 @@ mmt_config = {
         },
         "newf9": {
             "name": "F/9 WFS with SBIG Camera",
+            "telescope": "mmt",  # telescope used with WFS system
             "secondary": "f9",
             "default_mode": "blue",
             "eff_wave": 550 * u.nm,  # effective wavelength of the thruput response of the system
@@ -301,6 +322,7 @@ mmt_config = {
         },
         "mmirs": {
             "name": "MMIRS WFS",
+            "telescope": "mmt",  # telescope used with WFS system
             "secondary": "f5",
             "default_mode": None,
             "eff_wave": 700 * u.nm,  # effective wavelength of the thruput response of the system
@@ -350,6 +372,7 @@ mmt_config = {
         },
         "binospec": {
             "name": "Binospec WFS",
+            "telescope": "mmt",  # telescope used with WFS system
             "secondary": "f5",
             "default_mode": "binospec",
             "eff_wave": 550 * u.nm,  # effective wavelength of the thruput response of the system
@@ -382,6 +405,40 @@ mmt_config = {
                         __name__,
                         os.path.join("data", "ref_images", "binospec_ref.fits")
                     )
+                }
+            }
+        },
+        "flwo12": {
+            "name": "FLWO 1.2m WFS",
+            "telescope": "flwo12",  # telescope used with WFS system
+            "secondary": "flwo12",
+            "default_mode": "default",
+            "eff_wave": 600 * u.nm,  # effective wavelength of the thruput response of the system
+            "cor_coords": [255.0, 255.0],
+            "find_fwhm": 7.0,
+            "find_thresh": 5.0,
+            "cen_thresh": 0.8,
+            "cen_sigma": 10.0,
+            "rotation": 0. * u.deg,
+            "lenslet_pitch": 400. * u.um,  # width of each lenslet
+            "lenslet_fl": 53 * u.mm,  # focal length of each lenslet_fl
+            "pix_um": 20 * u.um,  # pixel size in micrometers
+            "pix_size": 0.24 * u.arcsec,  # old KX260e detector with 20 um pixels
+            "pup_size": 420,  # pupil outer diameter in pixels
+            "pup_inner": 40,  # inner obscuration radius in pixels
+            "pup_offset": [0.0, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
+            "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
+            "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
+            "nzern": 21,  # number of zernike modes to fit
+            "az_parity": -1,  # E/W flip in image motion
+            "el_parity": 1,  # N/S flip in image motion
+            "reference_file": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "LED2sec_22.fits")),
+            "modes": {
+                "default": {
+                    "label": "FLWO 1.2m WFS",
+                    "ref_zern": {
+                        "Z04": 0. * u.nm
+                    },
                 }
             }
         }
