@@ -42,7 +42,7 @@ jobs:
   - script: python setup.py ${{ format(parameters.command) }}
     displayName: Running tests
 
-  - ${{ if eq(parameters.runCodeCov, true) }}:
+  - ${{ if eq(parameters.runCodeCov, 'true') }}:
     - script: codecov -t $codecov_token
     env:
       codecov_token: $(CODECOV_TOKEN)
