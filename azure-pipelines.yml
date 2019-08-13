@@ -22,7 +22,7 @@ jobs:
     name: LinuxAllDependencies
     displayName: Linux with all dependencies
     pip_args: .[test,all]
-    runCodeCov: true
+    runCodeCov: 'true'
     command: test --readonly --coverage
 
 # Documentation build
