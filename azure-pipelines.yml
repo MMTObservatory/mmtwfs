@@ -22,10 +22,8 @@ jobs:
     name: LinuxAllDependencies
     displayName: Linux with all dependencies
     pip_args: .[test,all]
+    runCodeCov: true
     command: test --readonly --coverage
-  - script: codecov -t $codecov_token
-    env:
-      codecov_token: $(CODECOV_TOKEN)
 
 # Documentation build
 - template: azure-template.yml
