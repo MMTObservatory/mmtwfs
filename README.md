@@ -5,7 +5,7 @@ Wavefront sensing and active optics management tools for the MMTO
 
 [![Powered by AstroPy](http://img.shields.io/badge/powered%20by-AstroPy-orange.svg?style=flat)](http://www.astropy.org)
 
-[![Build Status](https://travis-ci.org/MMTObservatory/mmtwfs.svg?branch=master)](https://travis-ci.org/MMTObservatory/mmtwfs.svg?branch=master)
+[![Build Status](https://dev.azure.com/MMTObservatory/mmtwfs/_apis/build/status/MMTObservatory.mmtwfs?branchName=master)](https://dev.azure.com/MMTObservatory/mmtwfs/_build/latest?definitionId=1&branchName=master)
 
 [![Coverage Status](https://codecov.io/gh/MMTObservatory/mmtwfs/branch/master/graph/badge.svg)](https://codecov.io/gh/MMTObservatory/mmtwfs)
 
