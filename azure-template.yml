@@ -4,7 +4,7 @@
 parameters:
   python: '3.7'
   command: test
-  pip_args: .[test]
+  pip_args: .[test,all]
   pinned_dependencies: 'numpy'
   container: ''
 
