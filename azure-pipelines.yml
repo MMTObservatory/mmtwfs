@@ -1,16 +1,34 @@
-# Starter pipeline
-# Start with a minimal pipeline that you can customize to build and deploy your code.
-# Add steps that build, run tests, deploy, and more:
-# https://aka.ms/yaml
+jobs:
 
-pool:
-  vmImage: 'Ubuntu 16.04'
+# Simple build to make sure egg_info works.
+- job: LinuxEggInfo
+  displayName: Testing egg_info
+  pool:
+    vmImage: Ubuntu 16.04
+  steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '3.7'
+      architecture: 'x64'
+  - script: python setup.py egg_info
+    displayName: Running egg_info
 
-steps:
-- script: echo Hello, world!
-  displayName: 'Run a one-line script'
+# Now try with all optional dependencies. We also include the --readonly
+# flag to make sure no files are being written to the temporary install
+# location during testing.
+- template: azure-template.yml
+  parameters:
+    os: linux
+    name: LinuxAllDependencies
+    displayName: Linux with all dependencies
+    pip_args: .[test,all]
+    command: test --readonly --coverage
 
-- script: |
-    echo Add other tasks to build, test, and deploy your project.
-    echo See https://aka.ms/yaml
-  displayName: 'Run a multi-line script'
+# Documentation build
+- template: azure-template.yml
+  parameters:
+    os: linux
+    name: LinuxDocumentation
+    displayName: Documentation build
+    pip_args: .[docs,all]
+    command: build_docs

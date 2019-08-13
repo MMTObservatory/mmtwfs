@@ -1,0 +1,43 @@
+# Azure job template for the most common job in CI.
+
+# Define defaults
+parameters:
+  python: '3.7'
+  command: test
+  pip_args: .[test]
+  pinned_dependencies: 'numpy'
+  container: ''
+
+jobs:
+
+- job: ${{ format(parameters.name) }}
+  displayName: ${{ format(parameters.display_name) }}
+  pool:
+    ${{ if eq(parameters.os, 'osx') }}:
+      vmImage: macOS 10.13
+    ${{ if eq(parameters.os, 'linux') }}:
+      vmImage: Ubuntu 16.04
+    ${{ if eq(parameters.os, 'windows') }}:
+      vmImage: vs2017-win2016
+
+  ${{ if ne(parameters.container, '') }}:
+    container: '${{ format(parameters.container) }}'
+
+  steps:
+
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '${{ format(parameters.python) }}'
+      architecture: 'x64'
+
+  - script: pip install setuptools --upgrade
+    displayName: Upgrading setuptools
+
+  - script: pip install ${{ format(parameters.pinned_dependencies) }}
+    displayName: Installing pinned dependencies
+
+  - script: pip install -e ${{ format(parameters.pip_args) }}
+    displayName: Installing dependencies
+
+  - script: python setup.py ${{ format(parameters.command) }}
+    displayName: Running tests
