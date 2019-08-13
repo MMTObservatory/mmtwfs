@@ -3,16 +3,16 @@ name: mmtwfs
 
 dependencies:
   - python>=3
+  - Cython
   - docutils
   - astropy
+  - matplotlib
+  - scipy
+  - scikit-image
+  - jupyter
+  - dnspython
   - pip:
-    - Cython
-    - matplotlib
-    - scipy
     - photutils
-    - scikit-image
-    - jupyter
-    - dnspython
     - poppy
     - lmfit
     - ccdproc
