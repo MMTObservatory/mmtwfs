@@ -4,11 +4,11 @@ name: mmtwfs
 dependencies:
   - python>=3
   - docutils
+  - astropy
   - pip:
     - Cython
     - matplotlib
     - scipy
-    - astropy
     - photutils
     - scikit-image
     - jupyter
