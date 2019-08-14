@@ -329,21 +329,22 @@ mmtwfs_config = {
             "cor_coords": [255.0, 255.0],
             "find_fwhm": 7.0,
             "find_thresh": 4.0,
-            "cen_thresh": 0.8,
-            "cen_sigma": 10.0,
+            "cen_thresh": 0.7,
+            "cen_sigma": 5.0,
             "rotation": 180. * u.deg,  # this is referenced to camera2. camera1 is camera2+180, but is flipped by image acq
             "lenslet_pitch": 600 * u.um,  # width of each lenslet
             "lenslet_fl": 40 * u.mm,  # focal length of each lenslet_fl
             "pix_um": 13 * u.um * 2,  # pixel size in micrometers, always binned 2x2
             "pix_size": 0.156 * u.arcsec,
             "pup_size": 350,  # pixels
-            "pup_inner": 50,
+            "pup_inner": 40,
             "pup_offset": [0.0, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 21,  # number of zernike modes to fit
             "az_parity": 1,  # E/W flip in image motion
             "el_parity": 1,  # N/S flip in image motion
+            "wfs_mask": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "mmirs_mask.fits")),
             "aberr_table_file": pkg_resources.resource_filename(__name__, os.path.join("data", "mmirszernfield.tab")),
             "modes": {
                 "mmirs1": {
