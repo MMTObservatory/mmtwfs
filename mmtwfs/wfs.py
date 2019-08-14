@@ -507,7 +507,7 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, cen_thresh=0.8, cen_si
     xc, yc = fit_results['xcen'], fit_results['ycen']
 
     # this is more reliably the center of the actual pupil image whereas fit_results shifts a bit depending on detected spots
-    pup_center = [xc, yc]
+    pup_center = [xcen, ycen]
 
     scale = fit_results['scale']
     xcoma, ycoma = fit_results['xcoma'], fit_results['ycoma']
