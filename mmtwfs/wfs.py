@@ -48,7 +48,7 @@ table_conf.replace_warnings = ['attributes']
 
 __all__ = ['SH_Reference', 'WFS', 'F9', 'NewF9', 'F5', 'Binospec', 'MMIRS', 'WFSFactory', 'wfs_norm', 'check_wfsdata',
            'wfsfind', 'grid_spacing', 'center_pupil', 'get_apertures', 'match_apertures', 'aperture_distance', 'fit_apertures',
-           'get_slopes', 'make_init_pars', 'slope_diff']
+           'get_slopes', 'make_init_pars', 'slope_diff', 'mk_wfs_mask']
 
 
 def wfs_norm(data, interval=visualization.ZScaleInterval(contrast=0.05), stretch=visualization.LinearStretch()):
@@ -99,6 +99,34 @@ def check_wfsdata(data, header=False):
         return data, hdr
     else:
         return data
+
+
+def mk_wfs_mask(data, thresh_factor=50., outfile="wfs_mask.fits"):
+    """
+    Take a WFS image and mask/scale it so that it can be used as a reference for pupil centering
+
+    Parameters
+    ----------
+    data : FITS filename or 2D ndarray
+        WFS image
+    thresh_factor : float (default: 50.)
+        Fraction of maximum value below which will be masked to 0.
+    outfile : string (default: wfs_mask.fits)
+        Output FITS file to write the resulting image to.
+
+    Returns
+    -------
+    scaled : 2D ndarray
+        Scaled and masked WFS image
+    """
+    data = check_wfsdata(data)
+    mx = data.max()
+    thresh = mx / thresh_factor
+    data[data < thresh] = 0.
+    scaled = data / mx
+    if outfile is not None:
+        fits.writeto(outfile, scaled)
+    return scaled
 
 
 def wfsfind(data, fwhm=7.0, threshold=5.0, plot=True, ap_radius=5.0, std=None):
@@ -900,8 +928,11 @@ class WFS(object):
         if 'ROTOFF' in hdr:
             rotator -= hdr['ROTOFF'] * u.deg
 
-        # make rotated pupil mask
-        pup_mask = self.pupil_mask(rotator=rotator)
+        # make mask for finding wfs spot pattern
+        if hasattr(self, 'wfs_mask'):
+            pup_mask = check_wfsdata(self.wfs_mask)
+        else:
+            pup_mask = self.pupil_mask(rotator=rotator)
 
         # get adjusted reference center position and update the reference
         xcen, ycen = self.ref_pupil_location(mode, hdr=hdr)

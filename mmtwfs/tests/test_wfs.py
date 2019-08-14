@@ -10,7 +10,7 @@ from matplotlib.testing.decorators import cleanup
 
 from ..zernike import ZernikeVector
 from ..config import mmtwfs_config
-from ..wfs import WFSFactory, check_wfsdata
+from ..wfs import WFSFactory, check_wfsdata, mk_wfs_mask
 from ..custom_exceptions import WFSConfigException, WFSCommandException
 
 
@@ -63,6 +63,11 @@ def test_connect():
     wfs.connect()
     wfs.disconnect()
     assert(not wfs.connected)  # can't always access systems...
+
+def make_mask():
+    test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "test_newf9.fits"))
+    mask = mk_wfs_mask(test_file, outfile=None)
+    assert(mask.min() == 0.0)
 
 @cleanup
 def test_mmirs_analysis():

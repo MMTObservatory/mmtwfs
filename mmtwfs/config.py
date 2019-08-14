@@ -152,7 +152,7 @@ mmtwfs_config = {
         "flwo12": {
             "telescope": "flwo12",
             "diameter": 310.295 * u.mm,  # clear aperture of secondary
-            "plate_scale": 0.0456 * u.mm / u.arcsec  # plate scale of the focal plane
+            "plate_scale": 0.0455 * u.mm / u.arcsec  # plate scale of the focal plane
         }
     },
     "wfs": {
@@ -417,13 +417,13 @@ mmtwfs_config = {
             "cor_coords": [255.0, 255.0],
             "find_fwhm": 7.0,
             "find_thresh": 5.0,
-            "cen_thresh": 0.8,
-            "cen_sigma": 10.0,
+            "cen_thresh": 0.7,
+            "cen_sigma": 3.0,
             "rotation": 0. * u.deg,
             "lenslet_pitch": 400. * u.um,  # width of each lenslet
             "lenslet_fl": 53 * u.mm,  # focal length of each lenslet_fl
             "pix_um": 20 * u.um,  # pixel size in micrometers
-            "pix_size": 0.24 * u.arcsec,  # old KX260e detector with 20 um pixels
+            "pix_size": 0.24 * u.arcsec,
             "pup_size": 420,  # pupil outer diameter in pixels
             "pup_inner": 40,  # inner obscuration radius in pixels
             "pup_offset": [0.0, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
@@ -432,6 +432,7 @@ mmtwfs_config = {
             "nzern": 21,  # number of zernike modes to fit
             "az_parity": -1,  # E/W flip in image motion
             "el_parity": 1,  # N/S flip in image motion
+            "wfs_mask": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "flwo_mask.fits")),
             "reference_file": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "LED2sec_22.fits")),
             "modes": {
                 "default": {
