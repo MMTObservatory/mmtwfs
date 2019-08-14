@@ -165,21 +165,22 @@ mmtwfs_config = {
             "cor_coords": [251.0, 267.0],  # image coordinates of the center of rotation
             "find_fwhm": 9.0,  # FWHM for DAOfind kernel
             "find_thresh": 5.0,  # threshold for DAOfind
-            "cen_thresh": 0.1,
-            "cen_sigma": 30.0,
+            "cen_thresh": 0.7,
+            "cen_sigma": 5.0,
             "rotation": 234.0 * u.deg,  # rotation of aperture locations w.r.t. the primary mirror
             "lenslet_pitch": 600 * u.um,  # width of each lenslet
             "lenslet_fl": 40 * u.mm,  # focal length of each lenslet_fl
             "pix_um": 20 * u.um,  # pixel size in micrometers
             "pix_size": 0.135 * u.arcsec,  # arcsec per WFS detector pixel
-            "pup_size": 435,  # pixels
-            "pup_inner": 65,  # inner obscuration radius in pixels
+            "pup_size": 450,  # pixels
+            "pup_inner": 45,  # inner obscuration radius in pixels
             "pup_offset": [0.0, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 21,  # number of zernike modes to fit
             "az_parity": -1,  # E/W flip in image motion
             "el_parity": -1,  # N/S flip in image motion
+            "wfs_mask": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "f5_mask.fits")),
             "reference_file": pkg_resources.resource_filename(
                 __name__,
                 os.path.join("data", "ref_images", "f5_hecto_ref.fits")
@@ -236,21 +237,22 @@ mmtwfs_config = {
             "cor_coords": [255.0, 255.0],
             "find_fwhm": 7.0,
             "find_thresh": 5.0,
-            "cen_thresh": 0.8,
-            "cen_sigma": 10.0,
+            "cen_thresh": 0.7,
+            "cen_sigma": 4.0,
             "rotation": -225. * u.deg,
             "lenslet_pitch": 625 * u.um,  # width of each lenslet
             "lenslet_fl": 45 * u.mm,  # focal length of each lenslet_fl
             "pix_um": 20 * u.um,  # pixel size in micrometers
             "pix_size": 0.119 * u.arcsec,  # old KX260e detector with 20 um pixels
-            "pup_size": 440,  # pupil outer diameter in pixels
-            "pup_inner": 55,  # inner obscuration radius in pixels
+            "pup_size": 420,  # pupil outer diameter in pixels
+            "pup_inner": 25,  # inner obscuration radius in pixels
             "pup_offset": [0.4, 0.75],  # [x, y] pupil offset from center of reference aperture pattern
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 21,  # number of zernike modes to fit
             "az_parity": -1,  # E/W flip in image motion
             "el_parity": 1,  # N/S flip in image motion
+            "wfs_mask": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "oldf9_mask.fits")),
             "reference_file": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "f9_ref.fits")),
             "modes": {
                 "blue": {
@@ -283,21 +285,22 @@ mmtwfs_config = {
             "cor_coords": [376.0, 434.0],
             "find_fwhm": 12.0,
             "find_thresh": 5.0,
-            "cen_thresh": 0.8,
-            "cen_sigma": 10.0,
+            "cen_thresh": 0.7,
+            "cen_sigma": 5.0,
             "rotation": -225. * u.deg,
             "lenslet_pitch": 625 * u.um,  # width of each lenslet
             "lenslet_fl": 45 * u.mm,  # focal length of each lenslet_fl
             "pix_um": 5.4 * u.um * 3,  # pixel size in micrometers
             "pix_size": 0.09639 * u.arcsec,  # SBIG STT-8300 with 5.4 um pixels binned 3x3
-            "pup_size": 530,  # pupil outer diameter in pixels
-            "pup_inner": 75,  # inner obscuration radius in pixels
+            "pup_size": 570,  # pupil outer diameter in pixels
+            "pup_inner": 25,  # inner obscuration radius in pixels
             "pup_offset": [0.0, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 21,  # number of zernike modes to fit
             "az_parity": 1,  # E/W flip in image motion
             "el_parity": -1,  # N/S flip in image motion
+            "wfs_mask": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "newf9_mask.fits")),
             "reference_file": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "f9_new_ref.fits")),
             "modes": {
                 "blue": {
