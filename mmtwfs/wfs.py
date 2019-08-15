@@ -845,13 +845,12 @@ class WFS(object):
 
         return seeing, raw_seeing
 
-    def pupil_mask(self, rotator=0.0):
+    def pupil_mask(self, hdr=None):
         """
-        Wrap the Telescope.pupil_mask() method to include both WFS and instrument rotator rotation angles
+        Load and return the WFS spot mask used to locate and register the pupil
         """
-        rotator = u.Quantity(rotator, u.deg)
-        pup = self.telescope.pupil_mask(rotation=self.rotation+rotator, size=self.pup_size)
-        return pup
+        pup_mask = check_wfsdata(self.wfs_mask)
+        return pup_mask
 
     def reference_aberrations(self, mode, **kwargs):
         """
@@ -935,10 +934,7 @@ class WFS(object):
             rotator -= hdr['ROTOFF'] * u.deg
 
         # make mask for finding wfs spot pattern
-        if hasattr(self, 'wfs_mask'):
-            pup_mask = check_wfsdata(self.wfs_mask)
-        else:
-            pup_mask = self.pupil_mask(rotator=rotator)
+        pup_mask = self.pupil_mask(hdr=hdr)
 
         # get adjusted reference center position and update the reference
         xcen, ycen = self.ref_pupil_location(mode, hdr=hdr)
