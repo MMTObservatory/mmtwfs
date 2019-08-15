@@ -802,13 +802,12 @@ class WFS(object):
         Given a sigma derived from a gaussian fit to a WFS spot, deconvolve the systematic width from the reference image
         and relate the remainder to r_0 and thus a seeing FWHM.
         """
-        # the effective wavelength of the WFS imagers is about 600-650 nm. we use 650 nm to maintain consistency
-        # with the value used by the old SHWFS system.
+        # the effective wavelength of the WFS imagers is about 600-700 nm. mmirs and the oldf9 system use blue-blocking filters
         wave = self.eff_wave
         wave = wave.to(u.m).value  # r_0 equation expects meters so convert
 
-        owave = 500 * u.nm  # standard wavelength that seeing values are referenced to
-        owave = owave.to(u.m).value
+        refwave = 500 * u.nm  # standard wavelength that seeing values are referenced to
+        refwave = refwave.to(u.m).value
 
         # calculate the physical size of each aperture.
         ref = self.modes[mode]['reference']
@@ -831,7 +830,12 @@ class WFS(object):
         r_0 = (0.179 * (wave**2) * (d**(-1/3))/corr_sigma**2)**0.6
 
         # this equation relates the turbulence scale size to an expected image FWHM at the given wavelength.
-        raw_seeing = u.Quantity(u.rad * 0.98 * owave / r_0, u.arcsec)
+        raw_seeing = u.Quantity(u.rad * 0.98 * wave / r_0, u.arcsec)
+
+        # seeing scales as lambda^-1/5 so calculate factor to scale to reference lambda
+        wave_corr = refwave**-0.2 / wave**-0.2
+
+        raw_seeing *= wave_corr
 
         # correct seeing to zenith
         if airmass is not None:

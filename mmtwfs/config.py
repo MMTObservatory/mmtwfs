@@ -232,7 +232,7 @@ mmtwfs_config = {
             "telescope": "mmt",  # telescope used with WFS system
             "secondary": "f9",
             "default_mode": "blue",
-            "eff_wave": 650 * u.nm,  # effective wavelength of the thruput response of the system
+            "eff_wave": 700 * u.nm,  # effective wavelength of the thruput response of the system
             "lampsrv": "_lampbox._tcp.mmto.arizona.edu",
             "cor_coords": [255.0, 255.0],
             "find_fwhm": 7.0,
