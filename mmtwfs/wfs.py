@@ -165,11 +165,11 @@ def wfsfind(data, fwhm=7.0, threshold=5.0, plot=True, ap_radius=5.0, std=None):
     if plot:
         fig, ax = plt.subplots()
         fig.set_label("WFSfind")
-        positions = (sources['xcentroid'], sources['ycentroid'])
+        positions = list(zip(sources['xcentroid'], sources['ycentroid']))
         apertures = photutils.CircularAperture(positions, r=ap_radius)
         norm = wfs_norm(data)
         ax.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
-        apertures.plot(color='red', lw=1.5, alpha=0.5, ax=ax)
+        apertures.plot(color='red', lw=1.5, alpha=0.5, axes=ax)
     return sources, fig
 
 
@@ -288,7 +288,7 @@ def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True):
     # rectangular apertures produced masks that were sqrt(2) too large.
     # see https://github.com/astropy/photutils/issues/499 for details.
     apers = photutils.CircularAperture(
-        (srcs['xcentroid'], srcs['ycentroid']),
+        list(zip(srcs['xcentroid'], srcs['ycentroid'])),
         r=apsize/2.
     )
     masks = apers.to_mask(method='subpixel')
@@ -476,7 +476,7 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, cen_thresh=0.8, cen_si
     srcs = srcs[(srcs['dist'] > pup_inner*init_scale) & (srcs['dist'] < pup_outer*init_scale)]
 
     src_aps = photutils.CircularAperture(
-        (srcs['xcentroid'], srcs['ycentroid']),
+        list(zip(srcs['xcentroid'], srcs['ycentroid'])),
         r=apsize/2.
     )
 
@@ -528,7 +528,7 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, cen_thresh=0.8, cen_si
     trim_refy = ref.masked_apertures['ycentroid'][ref_mask] + fit_results['ycen']
 
     ref_aps = photutils.CircularAperture(
-        (trim_refx, trim_refy),
+        list(zip(trim_refx, trim_refy)),
         r=ref_spacing/2.
     )
 
@@ -544,7 +544,7 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, cen_thresh=0.8, cen_si
         aps_fig.set_label("Aperture Positions")
         ax.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
         ax.scatter(pup_center[0], pup_center[1])
-        src_aps.plot(color='blue', ax=ax)
+        src_aps.plot(color='blue', axes=ax)
 
     # need full slopes array the size of the complete set of reference apertures and pre-filled with np.nan for masking
     slopes = np.nan * np.ones((2, len(ref.masked_apertures['xcentroid'])))
@@ -654,7 +654,7 @@ class SH_Reference(object):
         # quadrature from the observed FWHM when calculating the seeing.
         apsize = np.mean([self.xspacing, self.yspacing])
         apers = photutils.CircularAperture(
-            (self.apertures['xcentroid'], self.apertures['ycentroid']),
+            list(zip(self.apertures['xcentroid'], self.apertures['ycentroid'])),
             r=apsize/2.
         )
         masks = apers.to_mask(method='subpixel')
@@ -1005,7 +1005,7 @@ class WFS(object):
             figures['slopes'].set_label("Aperture Positions and Spot Movement")
             ax = figures['slopes'].axes[0]
             ax.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
-            aps.plot(color='blue', ax=ax)
+            aps.plot(color='blue', axes=ax)
             ax.quiver(x, y, uu, vv, scale_units='xy', scale=0.2, pivot='tip', color='red')
             xl = [0.1*data.shape[1]]
             yl = [0.95*data.shape[0]]
