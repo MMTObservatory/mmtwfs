@@ -232,7 +232,7 @@ mmtwfs_config = {
             "telescope": "mmt",  # telescope used with WFS system
             "secondary": "f9",
             "default_mode": "blue",
-            "eff_wave": 700 * u.nm,  # effective wavelength of the thruput response of the system
+            "eff_wave": 780 * u.nm,  # effective wavelength of the thruput response of the system
             "lampsrv": "_lampbox._tcp.mmto.arizona.edu",
             "cor_coords": [255.0, 255.0],
             "find_fwhm": 7.0,
@@ -280,7 +280,7 @@ mmtwfs_config = {
             "telescope": "mmt",  # telescope used with WFS system
             "secondary": "f9",
             "default_mode": "blue",
-            "eff_wave": 550 * u.nm,  # effective wavelength of the thruput response of the system
+            "eff_wave": 600 * u.nm,  # effective wavelength of the thruput response of the system
             "lampsrv": "_lampbox._tcp.mmto.arizona.edu",
             "cor_coords": [376.0, 434.0],
             "find_fwhm": 12.0,
@@ -328,7 +328,7 @@ mmtwfs_config = {
             "telescope": "mmt",  # telescope used with WFS system
             "secondary": "f5",
             "default_mode": None,
-            "eff_wave": 700 * u.nm,  # effective wavelength of the thruput response of the system
+            "eff_wave": 750 * u.nm,  # effective wavelength of the thruput response of the system
             "cor_coords": [255.0, 255.0],
             "find_fwhm": 7.0,
             "find_thresh": 4.0,
@@ -379,7 +379,7 @@ mmtwfs_config = {
             "telescope": "mmt",  # telescope used with WFS system
             "secondary": "f5",
             "default_mode": "binospec",
-            "eff_wave": 550 * u.nm,  # effective wavelength of the thruput response of the system
+            "eff_wave": 600 * u.nm,  # effective wavelength of the thruput response of the system
             "cor_coords": [255.0, 255.0],
             "find_fwhm": 7.0,
             "find_thresh": 5.0,
