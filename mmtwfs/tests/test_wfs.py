@@ -6,6 +6,7 @@ import os
 
 import numpy as np
 
+import matplotlib.pyplot as plt
 from matplotlib.testing.decorators import cleanup
 
 from ..zernike import ZernikeVector
@@ -77,6 +78,29 @@ def test_mmirs_analysis():
     zresults = mmirs.fit_wavefront(results)
     testval = int(zresults['zernike']['Z10'].value)
     assert((testval > 330) & (testval < 340))
+
+@cleanup
+def test_mmirs_pupil_mask():
+    test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "mmirs_wfs_0150.fits"))
+    mmirs = WFSFactory(wfs='mmirs')
+    data, hdr = check_wfsdata(test_file, header=True)
+    fig, ax = plt.subplots()
+    ngood = mmirs.plotgrid_hdr(hdr, ax)
+    assert(ngood > 0)
+
+@cleanup
+def test_mmirs_bogus_pupil_mask():
+    mmirs = WFSFactory(wfs='mmirs')
+    hdr = {}
+    fig, ax = plt.subplots()
+    try:
+        ngood = mmirs.plotgrid_hdr(hdr, ax)
+    except WFSCommandException:
+        assert True
+    except Exception as e:
+        assert False
+    else:
+        assert False
 
 @cleanup
 def test_f9_analysis():

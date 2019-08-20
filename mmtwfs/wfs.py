@@ -35,7 +35,7 @@ from .config import recursive_subclasses, merge_config, mmtwfs_config
 from .telescope import TelescopeFactory
 from .f9topbox import CompMirror
 from .zernike import ZernikeVector, zernike_slopes, cart2pol, pol2cart
-from .custom_exceptions import WFSConfigException, WFSAnalysisFailed
+from .custom_exceptions import WFSConfigException, WFSAnalysisFailed, WFSCommandException
 
 import logging
 import logging.handlers
@@ -1465,6 +1465,167 @@ class MMIRS(F5):
     """
     Defines configuration and methods specific to the MMIRS WFS system
     """
+    def __init__(self, config={}, plot=True):
+        super(MMIRS, self).__init__(config=config, plot=plot)
+
+        # Parameters describing MMIRS pickoff mirror geometry
+        # Location and diameter of exit pupil
+        self.zp = 71.749 / 0.02714  # Determined by tracing chief ray at 7.2' field angle with
+                                    # mmirs_asbuiltoptics_20110107_corronly.zmx
+        self.dp = self.zp / 5.18661  # Working f/# from Zemax file
+
+        # Location of fold mirror
+        self.zm = 114.8
+
+        # Angle of fold mirror
+        self.am = 42 * u.deg
+
+        # Following dimensions from drawing MMIRS-1233_Rev1.pdf
+        # Diameter of pickoff mirror
+        self.pickoff_diam = (6.3 * u.imperial.inch).to(u.mm).value
+
+        # X size of opening in pickoff mirror
+        self.pickoff_xsize = (3.29 * u.imperial.inch).to(u.mm).value
+
+        # Y size of opening in pickoff mirror
+        self.pickoff_ysize = (3.53 * u.imperial.inch).to(u.mm).value
+
+        # radius of corner  in pickoff mirror
+        self.pickoff_rcirc = (0.4 * u.imperial.inch).to(u.mm).value
+
+    def mirrorpoint(self, x0, y0, x, y):
+        """
+        Compute intersection of ray with pickoff mirror.
+        The ray leaves the exit pupil at position x,y and hits the focal surface at x0,y0.
+        Math comes from http://geomalgorithms.com/a05-_intersect-1.html
+        """
+        # Point in focal plane
+        P0 = np.array([x0, y0, 0])
+
+        # Point in exit pupil
+        P1 = np.array([x * self.dp / 2, y * self.dp / 2, self.zp])
+
+        # Pickoff mirror intesection with optical axis
+        V0 = np.array([0, 0, self.zm])
+
+        # normal to mirror
+        if (x0 < 0):
+            n = np.array([-np.sin(self.am), 0, np.cos(self.am)])
+        else:
+            n = np.array([np.sin(self.am), 0, np.cos(self.am)])
+
+        w = P0 - V0
+
+        # Vector connecting P0 to P1
+        u = P1 - P0
+
+        # Distance from P0 to intersection as a fraction of abs(u)
+        s = -n.dot(w) / n.dot(u)
+
+        # Intersection point on mirror
+        P = P0 + s * u
+
+        return (P[0], P[1])
+
+    def onmirror(self, x, y, side):
+        """
+        Determine if a point is on the pickoff mirror surface:
+            x,y = coordinates of ray
+            side=1 means right face of the pickoff mirror, -1=left face
+        """
+        if np.hypot(x, y) > self.pickoff_diam / 2.:
+            return False
+        if x * side < 0:
+            return False
+        x = abs(x)
+        y = abs(y)
+        if ((x > self.pickoff_xsize/2) or (y > self.pickoff_ysize/2)
+            or (x > self.pickoff_xsize/2 - self.pickoff_rcirc and y > self.pickoff_ysize/2 - self.pickoff_rcirc
+                and np.hypot(x - (self.pickoff_xsize/2 - self.pickoff_rcirc),
+                             y - (self.pickoff_ysize/2 - self.pickoff_rcirc)) > self.pickoff_rcirc)):
+            return True
+        else:
+            return False
+
+    def drawoutline(self, ax):
+        """
+        Draw outline of MMIRS pickoff mirror onto matplotlib axis, ax
+        """
+        circ = np.arange(360) * u.deg
+        ax.plot(np.cos(circ) * self.pickoff_diam/2, np.sin(circ) * self.pickoff_diam/2, "b")
+        ax.set_aspect('equal', 'datalim')
+        ax.plot(
+            [-(self.pickoff_xsize/2 - self.pickoff_rcirc), (self.pickoff_xsize/2 - self.pickoff_rcirc)],
+            [self.pickoff_ysize/2, self.pickoff_ysize/2],
+            "b"
+        )
+        ax.plot(
+            [-(self.pickoff_xsize/2 - self.pickoff_rcirc), (self.pickoff_xsize/2 - self.pickoff_rcirc)],
+            [-self.pickoff_ysize/2, -self.pickoff_ysize/2],
+            "b"
+        )
+        ax.plot(
+            [-(self.pickoff_xsize/2), -(self.pickoff_xsize/2)],
+            [self.pickoff_ysize/2 - self.pickoff_rcirc, -(self.pickoff_ysize/2 - self.pickoff_rcirc)],
+            "b"
+        )
+        ax.plot(
+            [(self.pickoff_xsize/2), (self.pickoff_xsize/2)],
+            [self.pickoff_ysize/2 - self.pickoff_rcirc, -(self.pickoff_ysize/2 - self.pickoff_rcirc)],
+            "b"
+        )
+        ax.plot(
+            np.cos(circ[0:90]) * self.pickoff_rcirc + self.pickoff_xsize/2 - self.pickoff_rcirc,
+            np.sin(circ[0:90]) * self.pickoff_rcirc + self.pickoff_ysize/2 - self.pickoff_rcirc,
+            "b"
+        )
+        ax.plot(
+            np.cos(circ[90:180]) * self.pickoff_rcirc - self.pickoff_xsize/2 + self.pickoff_rcirc,
+            np.sin(circ[90:180]) * self.pickoff_rcirc + self.pickoff_ysize/2 - self.pickoff_rcirc,
+            "b"
+        )
+        ax.plot(
+            np.cos(circ[180:270]) * self.pickoff_rcirc - self.pickoff_xsize/2 + self.pickoff_rcirc,
+            np.sin(circ[180:270]) * self.pickoff_rcirc - self.pickoff_ysize/2 + self.pickoff_rcirc,
+            "b"
+        )
+        ax.plot(
+            np.cos(circ[270:360]) * self.pickoff_rcirc + self.pickoff_xsize/2 - self.pickoff_rcirc,
+            np.sin(circ[270:360]) * self.pickoff_rcirc - self.pickoff_ysize/2 + self.pickoff_rcirc,
+            "b"
+        )
+        ax.plot([0, 0], [self.pickoff_ysize/2, self.pickoff_diam/2], "b")
+        ax.plot([0, 0], [-self.pickoff_ysize/2, -self.pickoff_diam/2], "b")
+
+    def plotgrid(self, x0, y0, ax, npts=14):
+        """
+        Plot a grid of points representing Shack-Hartmann apertures corresponding to wavefront sensor positioned at
+        a focal plane position of x0, y0 mm. This position is written in the FITS header keywords GUIDERX and GUIDERY.
+        """
+        ngood = 0
+        for x in np.arange(-1, 1, 2.0 / npts):
+            for y in np.arange(-1, 1, 2.0 / npts):
+                if (np.hypot(x, y) < 1 and np.hypot(x, y) >= self.telescope.obscuration): # Only plot points w/in the pupil
+                    xm, ym = self.mirrorpoint(x0, y0, x, y)  # Get intersection with pickoff
+                    if self.onmirror(xm, ym, x0/abs(x0)):  # Find out if point is on the mirror surface
+                        ax.scatter(xm, ym, 1, "g")
+                        ngood += 1
+                    else:
+                        ax.scatter(xm, ym, 1, "r")
+        return ngood
+
+    def plotgrid_hdr(self, hdr, ax, npts=14):
+        """
+        Wrap self.plotgrid() and get x0, y0 values from hdr.
+        """
+        if 'GUIDERX' not in hdr or 'GUIDERY' not in hdr:
+            msg = "No MMIRS WFS position available in header."
+            raise WFSCommandException(value=msg)
+        x0 = hdr['GUIDERX']
+        y0 = hdr['GUIDERY']
+        ngood = self.plotgrid(x0, y0, ax=ax, npts=npts)
+        return ngood
+
     def get_mode(self, hdr):
         """
         For MMIRS we figure out the mode from which camera the image is taken with.
