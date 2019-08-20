@@ -33,7 +33,7 @@ class WFSConfigException(MMTWFSException):
 
 class WFSCommandException(MMTWFSException):
     """
-    Raise when an error occurs due to invalid command sent to a WFS system.
+    Raise when an error occurs due to invalid command sent to a WFS system or invalid inputs given to WFS method.
     """
     def __init__(self, value="Command Error", results=None):
         super(WFSCommandException, self).__init__(value, results=results)
