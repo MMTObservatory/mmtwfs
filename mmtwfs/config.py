@@ -238,7 +238,7 @@ mmtwfs_config = {
             "find_fwhm": 7.0,
             "find_thresh": 5.0,
             "cen_thresh": 0.7,
-            "cen_sigma": 4.0,
+            "cen_sigma": 5.0,
             "rotation": -225. * u.deg,
             "lenslet_pitch": 625 * u.um,  # width of each lenslet
             "lenslet_fl": 45 * u.mm,  # focal length of each lenslet_fl
@@ -423,7 +423,7 @@ mmtwfs_config = {
             "find_fwhm": 7.0,
             "find_thresh": 5.0,
             "cen_thresh": 0.7,
-            "cen_sigma": 3.0,
+            "cen_sigma": 5.0,
             "rotation": 0. * u.deg,
             "lenslet_pitch": 400. * u.um,  # width of each lenslet
             "lenslet_fl": 53 * u.mm,  # focal length of each lenslet_fl
