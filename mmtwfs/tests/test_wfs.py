@@ -80,6 +80,14 @@ def test_mmirs_analysis():
     assert((testval > 330) & (testval < 340))
 
 @cleanup
+def test_mmirs_pacman():
+    test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "mmirs_wfs_rename_0566.fits"))
+    mmirs = WFSFactory(wfs='mmirs')
+    results = mmirs.measure_slopes(test_file)
+    testval = results['xcen']
+    assert((testval > 215) & (testval < 217))
+
+@cleanup
 def test_mmirs_pupil_mask():
     test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "mmirs_wfs_0150.fits"))
     mmirs = WFSFactory(wfs='mmirs')
