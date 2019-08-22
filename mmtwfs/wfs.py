@@ -17,6 +17,7 @@ import matplotlib.cm as cm
 
 from skimage import feature
 from scipy import ndimage, optimize
+from scipy.ndimage import rotate
 
 import lmfit
 
@@ -1625,6 +1626,40 @@ class MMIRS(F5):
         y0 = hdr['GUIDERY']
         ngood = self.plotgrid(x0, y0, ax=ax, npts=npts)
         return ngood
+
+    def pupil_mask(self, hdr, npts=14):
+        """
+        Use MMIRS pickoff mirror geometry to calculate the pupil mask
+        """
+        if 'GUIDERX' not in hdr or 'GUIDERY' not in hdr:
+            msg = "No MMIRS WFS position available in header."
+            raise WFSCommandException(value=msg)
+        if 'CA' not in hdr:
+            msg = "No camera rotation angle available in header."
+            raise WFSCommandException(value=msg)
+        cam_rot = 90-hdr['CA']
+        x0 = hdr['GUIDERX']
+        y0 = hdr['GUIDERY']
+
+        good = []
+        center = self.pup_size / 2.
+
+        for x in np.arange(-1, 1, 2.0 / npts):
+            for y in np.arange(-1, 1, 2.0 / npts):
+                if (np.hypot(x, y) < 1 and np.hypot(x, y) >= self.telescope.obscuration):
+                    xm, ym = self.mirrorpoint(x0, y0, x, y)
+                    if self.onmirror(xm, ym, x0/abs(x0)):
+                        x_impos = center * (x + 1.)
+                        y_impos = center * (y + 1.)
+                        good.append((x_impos, y_impos))
+
+        xi, yi = np.mgrid[0:self.pup_size, 0:self.pup_size]
+        im = np.zeros((self.pup_size, self.pup_size))
+        sigma = 3.
+        for g in good:
+            im += Gaussian2D(1, g[0], g[1], sigma, sigma)(xi, yi)
+        im_rot = rotate(im, cam_rot, reshape=False)
+        return im_rot
 
     def get_mode(self, hdr):
         """
