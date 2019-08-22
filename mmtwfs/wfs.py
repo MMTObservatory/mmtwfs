@@ -237,20 +237,24 @@ def center_pupil(input_data, pup_mask, threshold=0.8, sigma=10., plot=True):
     data = np.copy(check_wfsdata(input_data))
     pup_mask = check_wfsdata(pup_mask)
 
-    # we smooth the image heavily to reduce the aliasing from the SH spots.
+    # smooth the image to increae the S/N.
     smo = ndimage.gaussian_filter(data, sigma)
 
     # use skimage.feature.match_template() to do a fast cross-correlation between the WFS image and the pupil model.
     # the location of the peak of the correlation will be the center of the WFS pattern.
     match = feature.match_template(smo, pup_mask, pad_input=True)
-    match[match < threshold * match.max()] = 0
-    cen = photutils.centroids.centroid_com(match)
+    find_thresh = threshold * match.max()
+    t = photutils.detection.find_peaks(match, find_thresh, box_size=5, centroid_func=photutils.centroids.centroid_com)
+    best_peak = t[t['peak_value'] == t['peak_value'].max()][0]
+    xp = best_peak['x_centroid']
+    yp = best_peak['y_centroid']
     fig = None
     if plot:
         fig, ax = plt.subplots()
         fig.set_label("Pupil Correlation Image (masked)")
         ax.imshow(match, interpolation=None, cmap=cm.magma, origin='lower')
-    return cen[0], cen[1], fig
+        ax.scatter(xp, yp, marker="+", color="b")
+    return xp, yp, fig
 
 
 def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True):
@@ -1637,7 +1641,7 @@ class MMIRS(F5):
         if 'CA' not in hdr:
             msg = "No camera rotation angle available in header."
             raise WFSCommandException(value=msg)
-        cam_rot = 90-hdr['CA']
+        cam_rot = hdr['CA']
         x0 = hdr['GUIDERX']
         y0 = hdr['GUIDERY']
 
@@ -1653,7 +1657,7 @@ class MMIRS(F5):
                         y_impos = center * (y + 1.)
                         good.append((x_impos, y_impos))
 
-        xi, yi = np.mgrid[0:self.pup_size, 0:self.pup_size]
+        yi, xi = np.mgrid[0:self.pup_size, 0:self.pup_size]
         im = np.zeros((self.pup_size, self.pup_size))
         sigma = 3.
         for g in good:
