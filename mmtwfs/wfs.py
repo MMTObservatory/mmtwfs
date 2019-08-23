@@ -245,15 +245,22 @@ def center_pupil(input_data, pup_mask, threshold=0.8, sigma=10., plot=True):
     match = feature.match_template(smo, pup_mask, pad_input=True)
     find_thresh = threshold * match.max()
     t = photutils.detection.find_peaks(match, find_thresh, box_size=5, centroid_func=photutils.centroids.centroid_com)
-    best_peak = t[t['peak_value'] == t['peak_value'].max()][0]
-    xp = best_peak['x_centroid']
-    yp = best_peak['y_centroid']
+    peak = t['peak_value'].max()
+    xps = []
+    yps = []
+    # if there are peaks that are very nearly correlated, average their positions
+    for p in t:
+        if p['peak_value'] >= 0.95*peak:
+            xps.append(p['x_centroid'])
+            yps.append(p['y_centroid'])
+    xp = np.mean(xps)
+    yp = np.mean(yps)
     fig = None
     if plot:
         fig, ax = plt.subplots()
         fig.set_label("Pupil Correlation Image (masked)")
         ax.imshow(match, interpolation=None, cmap=cm.magma, origin='lower')
-        ax.scatter(xp, yp, marker="+", color="b")
+        ax.scatter(xp, yp, marker="+", color="green")
     return xp, yp, fig
 
 
@@ -490,7 +497,7 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, cen_thresh=0.8, cen_si
     args = (ref.masked_apertures, srcs)
     par_keys = ('xcen', 'ycen', 'scale', 'xcoma', 'ycoma')
     pars = (xcen, ycen, init_scale, 0.0, 0.0)
-    coma_bound = 1e-7  # keep coma constrained by now since it can cause trouble
+    coma_bound = 1e-4  # keep coma constrained by now since it can cause trouble
     # scipy.optimize.minimize can do bounded minimization so leverage that to keep the solution within a reasonable range.
     bounds = (
         (xcen-15, xcen+15),  # hopefully we're not too far off from true center...
@@ -521,6 +528,7 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, cen_thresh=0.8, cen_si
 
     refx = ref.masked_apertures['xcentroid'] * (scale + ref.masked_apertures['xcentroid'] * xcoma) + fit_results['xcen']
     refy = ref.masked_apertures['ycentroid'] * (scale + ref.masked_apertures['ycentroid'] * ycoma) + fit_results['ycen']
+
     xspacing = scale * ref.xspacing
     yspacing = scale * ref.yspacing
 
@@ -1602,7 +1610,7 @@ class MMIRS(F5):
         ax.plot([0, 0], [self.pickoff_ysize/2, self.pickoff_diam/2], "b")
         ax.plot([0, 0], [-self.pickoff_ysize/2, -self.pickoff_diam/2], "b")
 
-    def plotgrid(self, x0, y0, ax, npts=14):
+    def plotgrid(self, x0, y0, ax, npts=15):
         """
         Plot a grid of points representing Shack-Hartmann apertures corresponding to wavefront sensor positioned at
         a focal plane position of x0, y0 mm. This position is written in the FITS header keywords GUIDERX and GUIDERY.
@@ -1619,7 +1627,7 @@ class MMIRS(F5):
                         ax.scatter(xm, ym, 1, "r")
         return ngood
 
-    def plotgrid_hdr(self, hdr, ax, npts=14):
+    def plotgrid_hdr(self, hdr, ax, npts=15):
         """
         Wrap self.plotgrid() and get x0, y0 values from hdr.
         """
@@ -1631,7 +1639,7 @@ class MMIRS(F5):
         ngood = self.plotgrid(x0, y0, ax=ax, npts=npts)
         return ngood
 
-    def pupil_mask(self, hdr, npts=14):
+    def pupil_mask(self, hdr, npts=15):
         """
         Use MMIRS pickoff mirror geometry to calculate the pupil mask
         """
@@ -1647,22 +1655,39 @@ class MMIRS(F5):
 
         good = []
         center = self.pup_size / 2.
-
-        for x in np.arange(-1, 1, 2.0 / npts):
-            for y in np.arange(-1, 1, 2.0 / npts):
-                if (np.hypot(x, y) < 1 and np.hypot(x, y) >= self.telescope.obscuration):
+        obsc = self.telescope.obscuration.value
+        spacing = 2.0 / npts
+        for x in np.arange(-1, 1, spacing):
+            for y in np.arange(-1, 1, spacing):
+                r = np.hypot(x, y)
+                if (r < 1 and np.hypot(x, y) >= obsc):
                     xm, ym = self.mirrorpoint(x0, y0, x, y)
                     if self.onmirror(xm, ym, x0/abs(x0)):
                         x_impos = center * (x + 1.)
                         y_impos = center * (y + 1.)
-                        good.append((x_impos, y_impos))
+                        amp = 1.
+                        # this is kind of a hacky way to dim spots near the edge, but easier than doing full calc
+                        # of the aperture intersection with pupil. it also doesn't need to be that accurate for the
+                        # purposes of the cross-correlation used to register the pupil.
+                        if r > 1. - spacing:
+                            amp = 1. - (r - (1. - spacing)) / spacing
+                        if r - obsc < spacing:
+                            amp = (r - obsc) / spacing
+                        good.append((amp, x_impos, y_impos))
 
         yi, xi = np.mgrid[0:self.pup_size, 0:self.pup_size]
         im = np.zeros((self.pup_size, self.pup_size))
         sigma = 3.
         for g in good:
-            im += Gaussian2D(1, g[0], g[1], sigma, sigma)(xi, yi)
+            im += Gaussian2D(g[0], g[1], g[2], sigma, sigma)(xi, yi)
+
+        # camera 2's lenslet array is rotated -1.12 deg w.r.t. the camera.
+        if hdr['CAMERA'] == 1:
+            cam_rot -= 1.12
+
         im_rot = rotate(im, cam_rot, reshape=False)
+        im_rot[im_rot < 1e-2] = 0.0
+
         return im_rot
 
     def get_mode(self, hdr):
