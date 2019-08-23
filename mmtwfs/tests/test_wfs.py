@@ -77,7 +77,7 @@ def test_mmirs_analysis():
     results = mmirs.measure_slopes(test_file)
     zresults = mmirs.fit_wavefront(results)
     testval = int(zresults['zernike']['Z10'].value)
-    assert((testval > 330) & (testval < 340))
+    assert((testval > 320) & (testval < 330))
 
 @cleanup
 def test_mmirs_pacman():
@@ -144,7 +144,7 @@ def test_bino_analysis():
     results = wfs.measure_slopes(test_file, mode="binospec")
     zresults = wfs.fit_wavefront(results)
     testval = int(zresults['zernike']['Z10'].value)
-    assert((testval > 130) & (testval < 140))
+    assert((testval > -60) & (testval < -40))
 
 @cleanup
 def test_too_few_spots():
