@@ -85,7 +85,7 @@ def test_mmirs_pacman():
     mmirs = WFSFactory(wfs='mmirs')
     results = mmirs.measure_slopes(test_file)
     testval = results['xcen']
-    assert((testval > 215) & (testval < 217))
+    assert((testval > 227) & (testval < 229))
 
 @cleanup
 def test_mmirs_pupil_mask():
