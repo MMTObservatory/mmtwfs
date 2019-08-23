@@ -286,7 +286,7 @@ mmtwfs_config = {
             "find_fwhm": 12.0,
             "find_thresh": 5.0,
             "cen_thresh": 0.7,
-            "cen_sigma": 5.0,
+            "cen_sigma": 6.0,
             "rotation": -225. * u.deg,
             "lenslet_pitch": 625 * u.um,  # width of each lenslet
             "lenslet_fl": 45 * u.mm,  # focal length of each lenslet_fl
@@ -330,16 +330,16 @@ mmtwfs_config = {
             "default_mode": None,
             "eff_wave": 750 * u.nm,  # effective wavelength of the thruput response of the system
             "cor_coords": [255.0, 255.0],
-            "find_fwhm": 7.0,
+            "find_fwhm": 6.0,
             "find_thresh": 4.0,
             "cen_thresh": 0.7,
-            "cen_sigma": 5.0,
+            "cen_sigma": 6.0,
             "rotation": 180. * u.deg,  # this is referenced to camera2. camera1 is camera2+180, but is flipped by image acq
             "lenslet_pitch": 600 * u.um,  # width of each lenslet
             "lenslet_fl": 40 * u.mm,  # focal length of each lenslet_fl
             "pix_um": 13 * u.um * 2,  # pixel size in micrometers, always binned 2x2
             "pix_size": 0.156 * u.arcsec,
-            "pup_size": 350,  # pixels
+            "pup_size": 345,  # pixels
             "pup_inner": 40,
             "pup_offset": [0.0, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
@@ -352,7 +352,7 @@ mmtwfs_config = {
             "modes": {
                 "mmirs1": {
                     "label": "Camera 1",
-                    "pup_offset": [1.0, 0.5],  # [x, y] pupil offset from center of reference aperture pattern
+                    "pup_offset": [0.0, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
                     "ref_zern": {
                         "Z04": -3176. * u.nm
                     },
@@ -363,7 +363,7 @@ mmtwfs_config = {
                 },
                 "mmirs2": {
                     "label": "Camera 2",
-                    "pup_offset": [0.75, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
+                    "pup_offset": [0.0, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
                     "ref_zern": {
                         "Z04": 1059. * u.nm
                     },
@@ -384,7 +384,7 @@ mmtwfs_config = {
             "find_fwhm": 7.0,
             "find_thresh": 5.0,
             "cen_thresh": 0.7,
-            "cen_sigma": 5.0,
+            "cen_sigma": 6.0,
             "rotation": 180. * u.deg,  # per j. kansky 9/26/2017
             "lenslet_pitch": 600 * u.um,  # width of each lenslet
             "lenslet_fl": 40 * u.mm,  # focal length of each lenslet_fl
@@ -423,7 +423,7 @@ mmtwfs_config = {
             "find_fwhm": 7.0,
             "find_thresh": 5.0,
             "cen_thresh": 0.7,
-            "cen_sigma": 5.0,
+            "cen_sigma": 6.0,
             "rotation": 0. * u.deg,
             "lenslet_pitch": 400. * u.um,  # width of each lenslet
             "lenslet_fl": 53 * u.mm,  # focal length of each lenslet_fl
