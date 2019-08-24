@@ -174,7 +174,6 @@ mmtwfs_config = {
             "pix_size": 0.135 * u.arcsec,  # arcsec per WFS detector pixel
             "pup_size": 450,  # pixels
             "pup_inner": 45,  # inner obscuration radius in pixels
-            "pup_offset": [0.0, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 21,  # number of zernike modes to fit
@@ -246,7 +245,6 @@ mmtwfs_config = {
             "pix_size": 0.119 * u.arcsec,  # old KX260e detector with 20 um pixels
             "pup_size": 420,  # pupil outer diameter in pixels
             "pup_inner": 25,  # inner obscuration radius in pixels
-            "pup_offset": [0.4, 0.75],  # [x, y] pupil offset from center of reference aperture pattern
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 21,  # number of zernike modes to fit
@@ -294,7 +292,6 @@ mmtwfs_config = {
             "pix_size": 0.09639 * u.arcsec,  # SBIG STT-8300 with 5.4 um pixels binned 3x3
             "pup_size": 570,  # pupil outer diameter in pixels
             "pup_inner": 25,  # inner obscuration radius in pixels
-            "pup_offset": [0.0, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 21,  # number of zernike modes to fit
@@ -341,7 +338,6 @@ mmtwfs_config = {
             "pix_size": 0.156 * u.arcsec,
             "pup_size": 345,  # pixels
             "pup_inner": 40,
-            "pup_offset": [0.0, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 21,  # number of zernike modes to fit
@@ -352,7 +348,6 @@ mmtwfs_config = {
             "modes": {
                 "mmirs1": {
                     "label": "Camera 1",
-                    "pup_offset": [0.0, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
                     "ref_zern": {
                         "Z04": -3176. * u.nm
                     },
@@ -363,7 +358,6 @@ mmtwfs_config = {
                 },
                 "mmirs2": {
                     "label": "Camera 2",
-                    "pup_offset": [0.0, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
                     "ref_zern": {
                         "Z04": 1059. * u.nm
                     },
@@ -402,7 +396,6 @@ mmtwfs_config = {
             "modes": {
                 "binospec": {
                     "label": "Binospec",
-                    "pup_offset": [0.0, 0.0],  # [x, y] pupil offset from center of reference aperture pattern in subap units
                     "ref_zern": {
                         "Z04": 0.0 * u.nm
                     },
@@ -431,7 +424,6 @@ mmtwfs_config = {
             "pix_size": 0.24 * u.arcsec,
             "pup_size": 420,  # pupil outer diameter in pixels
             "pup_inner": 40,  # inner obscuration radius in pixels
-            "pup_offset": [0.0, 0.0],  # [x, y] pupil offset from center of reference aperture pattern
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
             "m2_gain": 1.0,  # default gain to apply to secondary mirror corrections
             "nzern": 21,  # number of zernike modes to fit

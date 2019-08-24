@@ -797,17 +797,11 @@ class WFS(object):
 
     def ref_pupil_location(self, mode, hdr=None):
         """
-        Use pup_offset to adjust where the pupil should land on the reference image. For most cases, this just
-        applies the pup_offset. For binospec and eventually mmirs, the header information will be used to get
-        probe position and the shift will be calculated from that.
+        Get the center of the pupil on the reference image
         """
-        if 'pup_offset' in self.modes[mode]:
-            pup_offset = self.modes[mode]['pup_offset']
-        else:
-            pup_offset = self.pup_offset
         ref = self.modes[mode]['reference']
-        x = ref.xcen + pup_offset[0] * ref.xspacing
-        y = ref.ycen + pup_offset[1] * ref.yspacing
+        x = ref.xcen
+        y = ref.ycen
         return x, y
 
     def seeing(self, mode, sigma, airmass=None):
@@ -1427,9 +1421,8 @@ class Binospec(F5):
         """
         if hdr is None:
             ref = self.modes[mode]['reference']
-            pup_offset = self.modes[mode]['pup_offset']
-            x = ref.xcen + pup_offset[0] * ref.xspacing
-            y = ref.ycen + pup_offset[1] * ref.yspacing
+            x = ref.xcen
+            y = ref.ycen
         else:
             for k in ['STARXMM', 'STARYMM']:
                 if k not in hdr:
