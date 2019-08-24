@@ -65,9 +65,9 @@ def test_connect():
     wfs.disconnect()
     assert(not wfs.connected)  # can't always access systems...
 
-def make_mask():
+def test_make_mask():
     test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "test_newf9.fits"))
-    mask = mk_wfs_mask(test_file, outfile=None)
+    mask = mk_wfs_mask(test_file, thresh_factor=4., outfile=None)
     assert(mask.min() == 0.0)
 
 @cleanup
@@ -95,6 +95,20 @@ def test_mmirs_pupil_mask():
     fig, ax = plt.subplots()
     ngood = mmirs.plotgrid_hdr(hdr, ax)
     assert(ngood > 0)
+
+@cleanup
+def test_mmirs_pickoff_plots():
+    mmirs = WFSFactory(wfs='mmirs')
+    fig, ax = plt.subplots()
+    mmirs.drawoutline(ax)
+    # Some representative positions that vignette on different edges of the mirror
+    mmirs.plotgrid(-50, -60, ax)
+    mmirs.plotgrid(-45, -40, ax)
+    mmirs.plotgrid(-7, -52, ax)
+    mmirs.plotgrid(50, 60, ax)
+    mmirs.plotgrid(45, 40, ax)
+    mmirs.plotgrid(7, 52, ax)
+    assert(fig is not None)
 
 @cleanup
 def test_mmirs_bogus_pupil_mask():
