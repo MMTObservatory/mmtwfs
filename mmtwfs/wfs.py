@@ -17,6 +17,7 @@ import matplotlib.cm as cm
 
 from skimage import feature
 from scipy import ndimage, optimize
+from scipy.ndimage import rotate
 
 import lmfit
 
@@ -35,7 +36,7 @@ from .config import recursive_subclasses, merge_config, mmtwfs_config
 from .telescope import TelescopeFactory
 from .f9topbox import CompMirror
 from .zernike import ZernikeVector, zernike_slopes, cart2pol, pol2cart
-from .custom_exceptions import WFSConfigException, WFSAnalysisFailed
+from .custom_exceptions import WFSConfigException, WFSAnalysisFailed, WFSCommandException
 
 import logging
 import logging.handlers
@@ -48,7 +49,7 @@ table_conf.replace_warnings = ['attributes']
 
 __all__ = ['SH_Reference', 'WFS', 'F9', 'NewF9', 'F5', 'Binospec', 'MMIRS', 'WFSFactory', 'wfs_norm', 'check_wfsdata',
            'wfsfind', 'grid_spacing', 'center_pupil', 'get_apertures', 'match_apertures', 'aperture_distance', 'fit_apertures',
-           'get_slopes', 'make_init_pars', 'slope_diff']
+           'get_slopes', 'make_init_pars', 'slope_diff', 'mk_wfs_mask']
 
 
 def wfs_norm(data, interval=visualization.ZScaleInterval(contrast=0.05), stretch=visualization.LinearStretch()):
@@ -101,6 +102,34 @@ def check_wfsdata(data, header=False):
         return data
 
 
+def mk_wfs_mask(data, thresh_factor=50., outfile="wfs_mask.fits"):
+    """
+    Take a WFS image and mask/scale it so that it can be used as a reference for pupil centering
+
+    Parameters
+    ----------
+    data : FITS filename or 2D ndarray
+        WFS image
+    thresh_factor : float (default: 50.)
+        Fraction of maximum value below which will be masked to 0.
+    outfile : string (default: wfs_mask.fits)
+        Output FITS file to write the resulting image to.
+
+    Returns
+    -------
+    scaled : 2D ndarray
+        Scaled and masked WFS image
+    """
+    data = check_wfsdata(data)
+    mx = data.max()
+    thresh = mx / thresh_factor
+    data[data < thresh] = 0.
+    scaled = data / mx
+    if outfile is not None:
+        fits.writeto(outfile, scaled)
+    return scaled
+
+
 def wfsfind(data, fwhm=7.0, threshold=5.0, plot=True, ap_radius=5.0, std=None):
     """
     Use photutils.DAOStarFinder() to find and centroid spots in a Shack-Hartmann WFS image.
@@ -137,11 +166,11 @@ def wfsfind(data, fwhm=7.0, threshold=5.0, plot=True, ap_radius=5.0, std=None):
     if plot:
         fig, ax = plt.subplots()
         fig.set_label("WFSfind")
-        positions = (sources['xcentroid'], sources['ycentroid'])
+        positions = list(zip(sources['xcentroid'], sources['ycentroid']))
         apertures = photutils.CircularAperture(positions, r=ap_radius)
         norm = wfs_norm(data)
         ax.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
-        apertures.plot(color='red', lw=1.5, alpha=0.5, ax=ax)
+        apertures.plot(color='red', lw=1.5, alpha=0.5, axes=ax)
     return sources, fig
 
 
@@ -208,20 +237,31 @@ def center_pupil(input_data, pup_mask, threshold=0.8, sigma=10., plot=True):
     data = np.copy(check_wfsdata(input_data))
     pup_mask = check_wfsdata(pup_mask)
 
-    # we smooth the image heavily to reduce the aliasing from the SH spots.
+    # smooth the image to increae the S/N.
     smo = ndimage.gaussian_filter(data, sigma)
 
     # use skimage.feature.match_template() to do a fast cross-correlation between the WFS image and the pupil model.
     # the location of the peak of the correlation will be the center of the WFS pattern.
     match = feature.match_template(smo, pup_mask, pad_input=True)
-    match[match < threshold * match.max()] = 0
-    cen = photutils.centroids.centroid_com(match)
+    find_thresh = threshold * match.max()
+    t = photutils.detection.find_peaks(match, find_thresh, box_size=5, centroid_func=photutils.centroids.centroid_com)
+    peak = t['peak_value'].max()
+    xps = []
+    yps = []
+    # if there are peaks that are very nearly correlated, average their positions
+    for p in t:
+        if p['peak_value'] >= 0.95*peak:
+            xps.append(p['x_centroid'])
+            yps.append(p['y_centroid'])
+    xp = np.mean(xps)
+    yp = np.mean(yps)
     fig = None
     if plot:
         fig, ax = plt.subplots()
         fig.set_label("Pupil Correlation Image (masked)")
         ax.imshow(match, interpolation=None, cmap=cm.magma, origin='lower')
-    return cen[0], cen[1], fig
+        ax.scatter(xp, yp, marker="+", color="green")
+    return xp, yp, fig
 
 
 def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True):
@@ -260,7 +300,7 @@ def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True):
     # rectangular apertures produced masks that were sqrt(2) too large.
     # see https://github.com/astropy/photutils/issues/499 for details.
     apers = photutils.CircularAperture(
-        (srcs['xcentroid'], srcs['ycentroid']),
+        list(zip(srcs['xcentroid'], srcs['ycentroid'])),
         r=apsize/2.
     )
     masks = apers.to_mask(method='subpixel')
@@ -448,7 +488,7 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, cen_thresh=0.8, cen_si
     srcs = srcs[(srcs['dist'] > pup_inner*init_scale) & (srcs['dist'] < pup_outer*init_scale)]
 
     src_aps = photutils.CircularAperture(
-        (srcs['xcentroid'], srcs['ycentroid']),
+        list(zip(srcs['xcentroid'], srcs['ycentroid'])),
         r=apsize/2.
     )
 
@@ -457,7 +497,7 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, cen_thresh=0.8, cen_si
     args = (ref.masked_apertures, srcs)
     par_keys = ('xcen', 'ycen', 'scale', 'xcoma', 'ycoma')
     pars = (xcen, ycen, init_scale, 0.0, 0.0)
-    coma_bound = 1e-7  # keep coma constrained by now since it can cause trouble
+    coma_bound = 1e-4  # keep coma constrained by now since it can cause trouble
     # scipy.optimize.minimize can do bounded minimization so leverage that to keep the solution within a reasonable range.
     bounds = (
         (xcen-15, xcen+15),  # hopefully we're not too far off from true center...
@@ -478,14 +518,17 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, cen_thresh=0.8, cen_si
 
     xc, yc = fit_results['xcen'], fit_results['ycen']
 
-    # this is more reliably the center of the actual pupil image whereas fit_results shifts a bit depending on detected spots
-    pup_center = [xc, yc]
+    # this is more reliably the center of the actual pupil image whereas fit_results shifts a bit depending on detected spots.
+    # the lenslet pattern can move around a bit on the pupil, but we need the center of the pupil to calculate their pupil
+    # coordinates.
+    pup_center = [xcen, ycen]
 
     scale = fit_results['scale']
     xcoma, ycoma = fit_results['xcoma'], fit_results['ycoma']
 
     refx = ref.masked_apertures['xcentroid'] * (scale + ref.masked_apertures['xcentroid'] * xcoma) + fit_results['xcen']
     refy = ref.masked_apertures['ycentroid'] * (scale + ref.masked_apertures['ycentroid'] * ycoma) + fit_results['ycen']
+
     xspacing = scale * ref.xspacing
     yspacing = scale * ref.yspacing
 
@@ -498,7 +541,7 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, cen_thresh=0.8, cen_si
     trim_refy = ref.masked_apertures['ycentroid'][ref_mask] + fit_results['ycen']
 
     ref_aps = photutils.CircularAperture(
-        (trim_refx, trim_refy),
+        list(zip(trim_refx, trim_refy)),
         r=ref_spacing/2.
     )
 
@@ -514,7 +557,7 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, cen_thresh=0.8, cen_si
         aps_fig.set_label("Aperture Positions")
         ax.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
         ax.scatter(pup_center[0], pup_center[1])
-        src_aps.plot(color='blue', ax=ax)
+        src_aps.plot(color='blue', axes=ax)
 
     # need full slopes array the size of the complete set of reference apertures and pre-filled with np.nan for masking
     slopes = np.nan * np.ones((2, len(ref.masked_apertures['xcentroid'])))
@@ -624,7 +667,7 @@ class SH_Reference(object):
         # quadrature from the observed FWHM when calculating the seeing.
         apsize = np.mean([self.xspacing, self.yspacing])
         apers = photutils.CircularAperture(
-            (self.apertures['xcentroid'], self.apertures['ycentroid']),
+            list(zip(self.apertures['xcentroid'], self.apertures['ycentroid'])),
             r=apsize/2.
         )
         masks = apers.to_mask(method='subpixel')
@@ -754,17 +797,11 @@ class WFS(object):
 
     def ref_pupil_location(self, mode, hdr=None):
         """
-        Use pup_offset to adjust where the pupil should land on the reference image. For most cases, this just
-        applies the pup_offset. For binospec and eventually mmirs, the header information will be used to get
-        probe position and the shift will be calculated from that.
+        Get the center of the pupil on the reference image
         """
-        if 'pup_offset' in self.modes[mode]:
-            pup_offset = self.modes[mode]['pup_offset']
-        else:
-            pup_offset = self.pup_offset
         ref = self.modes[mode]['reference']
-        x = ref.xcen + pup_offset[0] * ref.xspacing
-        y = ref.ycen + pup_offset[1] * ref.yspacing
+        x = ref.xcen
+        y = ref.ycen
         return x, y
 
     def seeing(self, mode, sigma, airmass=None):
@@ -772,13 +809,12 @@ class WFS(object):
         Given a sigma derived from a gaussian fit to a WFS spot, deconvolve the systematic width from the reference image
         and relate the remainder to r_0 and thus a seeing FWHM.
         """
-        # the effective wavelength of the WFS imagers is about 600-650 nm. we use 650 nm to maintain consistency
-        # with the value used by the old SHWFS system.
+        # the effective wavelength of the WFS imagers is about 600-700 nm. mmirs and the oldf9 system use blue-blocking filters
         wave = self.eff_wave
         wave = wave.to(u.m).value  # r_0 equation expects meters so convert
 
-        owave = 500 * u.nm  # standard wavelength that seeing values are referenced to
-        owave = owave.to(u.m).value
+        refwave = 500 * u.nm  # standard wavelength that seeing values are referenced to
+        refwave = refwave.to(u.m).value
 
         # calculate the physical size of each aperture.
         ref = self.modes[mode]['reference']
@@ -801,7 +837,12 @@ class WFS(object):
         r_0 = (0.179 * (wave**2) * (d**(-1/3))/corr_sigma**2)**0.6
 
         # this equation relates the turbulence scale size to an expected image FWHM at the given wavelength.
-        raw_seeing = u.Quantity(u.rad * 0.98 * owave / r_0, u.arcsec)
+        raw_seeing = u.Quantity(u.rad * 0.98 * wave / r_0, u.arcsec)
+
+        # seeing scales as lambda^-1/5 so calculate factor to scale to reference lambda
+        wave_corr = refwave**-0.2 / wave**-0.2
+
+        raw_seeing *= wave_corr
 
         # correct seeing to zenith
         if airmass is not None:
@@ -811,13 +852,12 @@ class WFS(object):
 
         return seeing, raw_seeing
 
-    def pupil_mask(self, rotator=0.0):
+    def pupil_mask(self, hdr=None):
         """
-        Wrap the Telescope.pupil_mask() method to include both WFS and instrument rotator rotation angles
+        Load and return the WFS spot mask used to locate and register the pupil
         """
-        rotator = u.Quantity(rotator, u.deg)
-        pup = self.telescope.pupil_mask(rotation=self.rotation+rotator, size=self.pup_size)
-        return pup
+        pup_mask = check_wfsdata(self.wfs_mask)
+        return pup_mask
 
     def reference_aberrations(self, mode, **kwargs):
         """
@@ -900,8 +940,8 @@ class WFS(object):
         if 'ROTOFF' in hdr:
             rotator -= hdr['ROTOFF'] * u.deg
 
-        # make rotated pupil mask
-        pup_mask = self.pupil_mask(rotator=rotator)
+        # make mask for finding wfs spot pattern
+        pup_mask = self.pupil_mask(hdr=hdr)
 
         # get adjusted reference center position and update the reference
         xcen, ycen = self.ref_pupil_location(mode, hdr=hdr)
@@ -972,7 +1012,7 @@ class WFS(object):
             figures['slopes'].set_label("Aperture Positions and Spot Movement")
             ax = figures['slopes'].axes[0]
             ax.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
-            aps.plot(color='blue', ax=ax)
+            aps.plot(color='blue', axes=ax)
             ax.quiver(x, y, uu, vv, scale_units='xy', scale=0.2, pivot='tip', color='red')
             xl = [0.1*data.shape[1]]
             yl = [0.95*data.shape[0]]
@@ -1381,9 +1421,8 @@ class Binospec(F5):
         """
         if hdr is None:
             ref = self.modes[mode]['reference']
-            pup_offset = self.modes[mode]['pup_offset']
-            x = ref.xcen + pup_offset[0] * ref.xspacing
-            y = ref.ycen + pup_offset[1] * ref.yspacing
+            x = ref.xcen
+            y = ref.ycen
         else:
             for k in ['STARXMM', 'STARYMM']:
                 if k not in hdr:
@@ -1432,6 +1471,218 @@ class MMIRS(F5):
     """
     Defines configuration and methods specific to the MMIRS WFS system
     """
+    def __init__(self, config={}, plot=True):
+        super(MMIRS, self).__init__(config=config, plot=plot)
+
+        # Parameters describing MMIRS pickoff mirror geometry
+        # Location and diameter of exit pupil
+        self.zp = 71.749 / 0.02714  # Determined by tracing chief ray at 7.2' field angle with
+                                    # mmirs_asbuiltoptics_20110107_corronly.zmx
+        self.dp = self.zp / 5.18661  # Working f/# from Zemax file
+
+        # Location of fold mirror
+        self.zm = 114.8
+
+        # Angle of fold mirror
+        self.am = 42 * u.deg
+
+        # Following dimensions from drawing MMIRS-1233_Rev1.pdf
+        # Diameter of pickoff mirror
+        self.pickoff_diam = (6.3 * u.imperial.inch).to(u.mm).value
+
+        # X size of opening in pickoff mirror
+        self.pickoff_xsize = (3.29 * u.imperial.inch).to(u.mm).value
+
+        # Y size of opening in pickoff mirror
+        self.pickoff_ysize = (3.53 * u.imperial.inch).to(u.mm).value
+
+        # radius of corner  in pickoff mirror
+        self.pickoff_rcirc = (0.4 * u.imperial.inch).to(u.mm).value
+
+    def mirrorpoint(self, x0, y0, x, y):
+        """
+        Compute intersection of ray with pickoff mirror.
+        The ray leaves the exit pupil at position x,y and hits the focal surface at x0,y0.
+        Math comes from http://geomalgorithms.com/a05-_intersect-1.html
+        """
+        # Point in focal plane
+        P0 = np.array([x0, y0, 0])
+
+        # Point in exit pupil
+        P1 = np.array([x * self.dp / 2, y * self.dp / 2, self.zp])
+
+        # Pickoff mirror intesection with optical axis
+        V0 = np.array([0, 0, self.zm])
+
+        # normal to mirror
+        if (x0 < 0):
+            n = np.array([-np.sin(self.am), 0, np.cos(self.am)])
+        else:
+            n = np.array([np.sin(self.am), 0, np.cos(self.am)])
+
+        w = P0 - V0
+
+        # Vector connecting P0 to P1
+        u = P1 - P0
+
+        # Distance from P0 to intersection as a fraction of abs(u)
+        s = -n.dot(w) / n.dot(u)
+
+        # Intersection point on mirror
+        P = P0 + s * u
+
+        return (P[0], P[1])
+
+    def onmirror(self, x, y, side):
+        """
+        Determine if a point is on the pickoff mirror surface:
+            x,y = coordinates of ray
+            side=1 means right face of the pickoff mirror, -1=left face
+        """
+        if np.hypot(x, y) > self.pickoff_diam / 2.:
+            return False
+        if x * side < 0:
+            return False
+        x = abs(x)
+        y = abs(y)
+        if ((x > self.pickoff_xsize/2) or (y > self.pickoff_ysize/2)
+            or (x > self.pickoff_xsize/2 - self.pickoff_rcirc and y > self.pickoff_ysize/2 - self.pickoff_rcirc
+                and np.hypot(x - (self.pickoff_xsize/2 - self.pickoff_rcirc),
+                             y - (self.pickoff_ysize/2 - self.pickoff_rcirc)) > self.pickoff_rcirc)):
+            return True
+        else:
+            return False
+
+    def drawoutline(self, ax):
+        """
+        Draw outline of MMIRS pickoff mirror onto matplotlib axis, ax
+        """
+        circ = np.arange(360) * u.deg
+        ax.plot(np.cos(circ) * self.pickoff_diam/2, np.sin(circ) * self.pickoff_diam/2, "b")
+        ax.set_aspect('equal', 'datalim')
+        ax.plot(
+            [-(self.pickoff_xsize/2 - self.pickoff_rcirc), (self.pickoff_xsize/2 - self.pickoff_rcirc)],
+            [self.pickoff_ysize/2, self.pickoff_ysize/2],
+            "b"
+        )
+        ax.plot(
+            [-(self.pickoff_xsize/2 - self.pickoff_rcirc), (self.pickoff_xsize/2 - self.pickoff_rcirc)],
+            [-self.pickoff_ysize/2, -self.pickoff_ysize/2],
+            "b"
+        )
+        ax.plot(
+            [-(self.pickoff_xsize/2), -(self.pickoff_xsize/2)],
+            [self.pickoff_ysize/2 - self.pickoff_rcirc, -(self.pickoff_ysize/2 - self.pickoff_rcirc)],
+            "b"
+        )
+        ax.plot(
+            [(self.pickoff_xsize/2), (self.pickoff_xsize/2)],
+            [self.pickoff_ysize/2 - self.pickoff_rcirc, -(self.pickoff_ysize/2 - self.pickoff_rcirc)],
+            "b"
+        )
+        ax.plot(
+            np.cos(circ[0:90]) * self.pickoff_rcirc + self.pickoff_xsize/2 - self.pickoff_rcirc,
+            np.sin(circ[0:90]) * self.pickoff_rcirc + self.pickoff_ysize/2 - self.pickoff_rcirc,
+            "b"
+        )
+        ax.plot(
+            np.cos(circ[90:180]) * self.pickoff_rcirc - self.pickoff_xsize/2 + self.pickoff_rcirc,
+            np.sin(circ[90:180]) * self.pickoff_rcirc + self.pickoff_ysize/2 - self.pickoff_rcirc,
+            "b"
+        )
+        ax.plot(
+            np.cos(circ[180:270]) * self.pickoff_rcirc - self.pickoff_xsize/2 + self.pickoff_rcirc,
+            np.sin(circ[180:270]) * self.pickoff_rcirc - self.pickoff_ysize/2 + self.pickoff_rcirc,
+            "b"
+        )
+        ax.plot(
+            np.cos(circ[270:360]) * self.pickoff_rcirc + self.pickoff_xsize/2 - self.pickoff_rcirc,
+            np.sin(circ[270:360]) * self.pickoff_rcirc - self.pickoff_ysize/2 + self.pickoff_rcirc,
+            "b"
+        )
+        ax.plot([0, 0], [self.pickoff_ysize/2, self.pickoff_diam/2], "b")
+        ax.plot([0, 0], [-self.pickoff_ysize/2, -self.pickoff_diam/2], "b")
+
+    def plotgrid(self, x0, y0, ax, npts=15):
+        """
+        Plot a grid of points representing Shack-Hartmann apertures corresponding to wavefront sensor positioned at
+        a focal plane position of x0, y0 mm. This position is written in the FITS header keywords GUIDERX and GUIDERY.
+        """
+        ngood = 0
+        for x in np.arange(-1, 1, 2.0 / npts):
+            for y in np.arange(-1, 1, 2.0 / npts):
+                if (np.hypot(x, y) < 1 and np.hypot(x, y) >= self.telescope.obscuration): # Only plot points w/in the pupil
+                    xm, ym = self.mirrorpoint(x0, y0, x, y)  # Get intersection with pickoff
+                    if self.onmirror(xm, ym, x0/abs(x0)):  # Find out if point is on the mirror surface
+                        ax.scatter(xm, ym, 1, "g")
+                        ngood += 1
+                    else:
+                        ax.scatter(xm, ym, 1, "r")
+        return ngood
+
+    def plotgrid_hdr(self, hdr, ax, npts=15):
+        """
+        Wrap self.plotgrid() and get x0, y0 values from hdr.
+        """
+        if 'GUIDERX' not in hdr or 'GUIDERY' not in hdr:
+            msg = "No MMIRS WFS position available in header."
+            raise WFSCommandException(value=msg)
+        x0 = hdr['GUIDERX']
+        y0 = hdr['GUIDERY']
+        ngood = self.plotgrid(x0, y0, ax=ax, npts=npts)
+        return ngood
+
+    def pupil_mask(self, hdr, npts=15):
+        """
+        Use MMIRS pickoff mirror geometry to calculate the pupil mask
+        """
+        if 'GUIDERX' not in hdr or 'GUIDERY' not in hdr:
+            msg = "No MMIRS WFS position available in header."
+            raise WFSCommandException(value=msg)
+        if 'CA' not in hdr:
+            msg = "No camera rotation angle available in header."
+            raise WFSCommandException(value=msg)
+        cam_rot = hdr['CA']
+        x0 = hdr['GUIDERX']
+        y0 = hdr['GUIDERY']
+
+        good = []
+        center = self.pup_size / 2.
+        obsc = self.telescope.obscuration.value
+        spacing = 2.0 / npts
+        for x in np.arange(-1, 1, spacing):
+            for y in np.arange(-1, 1, spacing):
+                r = np.hypot(x, y)
+                if (r < 1 and np.hypot(x, y) >= obsc):
+                    xm, ym = self.mirrorpoint(x0, y0, x, y)
+                    if self.onmirror(xm, ym, x0/abs(x0)):
+                        x_impos = center * (x + 1.)
+                        y_impos = center * (y + 1.)
+                        amp = 1.
+                        # this is kind of a hacky way to dim spots near the edge, but easier than doing full calc
+                        # of the aperture intersection with pupil. it also doesn't need to be that accurate for the
+                        # purposes of the cross-correlation used to register the pupil.
+                        if r > 1. - spacing:
+                            amp = 1. - (r - (1. - spacing)) / spacing
+                        if r - obsc < spacing:
+                            amp = (r - obsc) / spacing
+                        good.append((amp, x_impos, y_impos))
+
+        yi, xi = np.mgrid[0:self.pup_size, 0:self.pup_size]
+        im = np.zeros((self.pup_size, self.pup_size))
+        sigma = 3.
+        for g in good:
+            im += Gaussian2D(g[0], g[1], g[2], sigma, sigma)(xi, yi)
+
+        # camera 2's lenslet array is rotated -1.12 deg w.r.t. the camera.
+        if hdr['CAMERA'] == 1:
+            cam_rot -= 1.12
+
+        im_rot = rotate(im, cam_rot, reshape=False)
+        im_rot[im_rot < 1e-2] = 0.0
+
+        return im_rot
+
     def get_mode(self, hdr):
         """
         For MMIRS we figure out the mode from which camera the image is taken with.

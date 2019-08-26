@@ -6,11 +6,12 @@ import os
 
 import numpy as np
 
+import matplotlib.pyplot as plt
 from matplotlib.testing.decorators import cleanup
 
 from ..zernike import ZernikeVector
 from ..config import mmtwfs_config
-from ..wfs import WFSFactory, check_wfsdata
+from ..wfs import WFSFactory, check_wfsdata, mk_wfs_mask
 from ..custom_exceptions import WFSConfigException, WFSCommandException
 
 
@@ -64,6 +65,11 @@ def test_connect():
     wfs.disconnect()
     assert(not wfs.connected)  # can't always access systems...
 
+def test_make_mask():
+    test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "test_newf9.fits"))
+    mask = mk_wfs_mask(test_file, thresh_factor=4., outfile=None)
+    assert(mask.min() == 0.0)
+
 @cleanup
 def test_mmirs_analysis():
     test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "mmirs_wfs_0150.fits"))
@@ -71,7 +77,52 @@ def test_mmirs_analysis():
     results = mmirs.measure_slopes(test_file)
     zresults = mmirs.fit_wavefront(results)
     testval = int(zresults['zernike']['Z10'].value)
-    assert((testval > 330) & (testval < 340))
+    assert((testval > 320) & (testval < 330))
+
+@cleanup
+def test_mmirs_pacman():
+    test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "mmirs_wfs_rename_0566.fits"))
+    mmirs = WFSFactory(wfs='mmirs')
+    results = mmirs.measure_slopes(test_file)
+    testval = results['xcen']
+    assert((testval > 227) & (testval < 229))
+
+@cleanup
+def test_mmirs_pupil_mask():
+    test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "mmirs_wfs_0150.fits"))
+    mmirs = WFSFactory(wfs='mmirs')
+    data, hdr = check_wfsdata(test_file, header=True)
+    fig, ax = plt.subplots()
+    ngood = mmirs.plotgrid_hdr(hdr, ax)
+    assert(ngood > 0)
+
+@cleanup
+def test_mmirs_pickoff_plots():
+    mmirs = WFSFactory(wfs='mmirs')
+    fig, ax = plt.subplots()
+    mmirs.drawoutline(ax)
+    # Some representative positions that vignette on different edges of the mirror
+    mmirs.plotgrid(-50, -60, ax)
+    mmirs.plotgrid(-45, -40, ax)
+    mmirs.plotgrid(-7, -52, ax)
+    mmirs.plotgrid(50, 60, ax)
+    mmirs.plotgrid(45, 40, ax)
+    mmirs.plotgrid(7, 52, ax)
+    assert(fig is not None)
+
+@cleanup
+def test_mmirs_bogus_pupil_mask():
+    mmirs = WFSFactory(wfs='mmirs')
+    hdr = {}
+    fig, ax = plt.subplots()
+    try:
+        ngood = mmirs.plotgrid_hdr(hdr, ax)
+    except WFSCommandException:
+        assert True
+    except Exception as e:
+        assert False
+    else:
+        assert False
 
 @cleanup
 def test_f9_analysis():
@@ -80,7 +131,7 @@ def test_f9_analysis():
     results = f9.measure_slopes(test_file)
     zresults = f9.fit_wavefront(results)
     testval = int(zresults['zernike']['Z09'].value)
-    assert((testval > 475) & (testval < 495))
+    assert((testval > 440) & (testval < 450))
 
 @cleanup
 def test_newf9_analysis():
@@ -89,7 +140,7 @@ def test_newf9_analysis():
     results = f9.measure_slopes(test_file)
     zresults = f9.fit_wavefront(results)
     testval = int(zresults['zernike']['Z09'].value)
-    assert((testval > 170) & (testval < 190))
+    assert((testval > 90) & (testval < 110))
 
 @cleanup
 def test_f5_analysis():
@@ -98,7 +149,7 @@ def test_f5_analysis():
     results = f5.measure_slopes(test_file)
     zresults = f5.fit_wavefront(results)
     testval = int(zresults['zernike']['Z10'].value)
-    assert((testval > 10) & (testval < 20))
+    assert((testval > 120) & (testval < 140))
 
 @cleanup
 def test_bino_analysis():
@@ -107,7 +158,7 @@ def test_bino_analysis():
     results = wfs.measure_slopes(test_file, mode="binospec")
     zresults = wfs.fit_wavefront(results)
     testval = int(zresults['zernike']['Z10'].value)
-    assert((testval > 180) & (testval < 200))
+    assert((testval > -60) & (testval < -40))
 
 @cleanup
 def test_too_few_spots():
