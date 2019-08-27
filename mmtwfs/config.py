@@ -383,7 +383,7 @@ mmtwfs_config = {
             "find_thresh": 5.0,
             "cen_thresh": 0.7,
             "cen_sigma": 6.0,
-            "cen_tol": 50.,
+            "cen_tol": 100.,
             "rotation": 180. * u.deg,  # per j. kansky 9/26/2017
             "lenslet_pitch": 600 * u.um,  # width of each lenslet
             "lenslet_fl": 40 * u.mm,  # focal length of each lenslet_fl

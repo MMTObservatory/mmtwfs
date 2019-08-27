@@ -979,6 +979,7 @@ class WFS(object):
                 pup_mask,
                 fwhm=self.find_fwhm,
                 thresh=self.find_thresh,
+                cen=self.cor_coords,
                 cen_thresh=self.cen_thresh,
                 cen_sigma=self.cen_sigma,
                 cen_tol=self.cen_tol,
