@@ -421,7 +421,7 @@ def fit_apertures(pars, ref, spots):
     return dist
 
 
-def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, cen_thresh=0.8, cen_sigma=10.0, plot=True):
+def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, cen=[255, 255], cen_thresh=0.8, cen_sigma=10.0, cen_tol=50., plot=True):
     """
     Analyze a WFS image and produce pixel offsets between reference and observed spot positions.
 
@@ -431,27 +431,38 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, cen_thresh=0.8, cen_si
         FITS file or np.ndarray containing WFS observation
     ref : `~astropy.table.Table`
         Table of reference apertures
+    pup_mask : str or 2D np.ndarray
+        FITS file or np.ndarray containing mask used to register WFS spot pattern via cross-correlation
+    fwhm : float (default: 7.0)
+        FWHM of convolution kernel applied to image by the spot finding algorithm
+    thresh : float (default: 5.0)
+        Number of sigma above background for a spot to be considered detected
+    cen : list-like with 2 elements (default: [255, 255])
+        Expected position of the center of the WFS spot pattern in form [X_cen, Y_cen]
+    cen_thresh : float (default: 0.8)
+        Masking threshold as fraction of peak value used in `~photutils.detection.find_peaks`
+    cen_sigma : float (default: 10.0)
+        Width of gaussian filter applied to image by `~mmtwfs.wfs.center_pupil`
+    cen_tol : float (default: 50.0)
+        Tolerance for difference between expected and measureed pupil center
     plot : bool
         Toggle plotting of image with aperture overlays
 
     Returns
     -------
-    slopes : list of tuples
-        X/Y pixel offsets between measured and reference aperture positions.
-    final_aps : `~astropy.table.Table`
-        Centroided observed apertures
-    xspacing, yspacing : float, float
-        Observed X and Y grid spacing
-    xcen, ycen : float, float
-        Center of pupil image
-    idx : list
-        Index of reference apertures that have detected spots
-    sigma : float
-        Sigma of gaussian fit to co-added WFS spot
-    cen_thresh: float
-        Frac of correlation peak below which correlation image is masked
-    cen_sigma: float
-        Sigma of gaussian to smooth image by before doing correlation
+    results : dict
+        Results of the wavefront slopes measurement packaged into a dict with the following keys:
+            slopes - mask np.ndarry containing the slope values in pixel units
+            pup_coords - pupil coordinates for the position for each slope value
+            spots - `~astropy.table.Table` as returned by photutils star finder routines
+            src_aps - `~photutils.aperture.CircularAperture` for each detected spot
+            spacing - list-like of form (xspacing, yspacing) containing the mean spacing between rows and columns of spots
+            center - list-like of form (xcen, ycen) containing the center of the spot pattern
+            ref_mask - np.ndarray of matched spots in reference image
+            src_mask - np.ndarray of matched spots in the data image
+            spot_sigma - sigma of a gaussian fit to a co-addition of detected spots
+            figures - dict of figures that are optionally produced
+            grid_fit - dict of best-fit parameters of grid fit used to do fine registration between source and reference spots
     """
     data = check_wfsdata(data)
     pup_mask = check_wfsdata(pup_mask)
@@ -465,6 +476,10 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, cen_thresh=0.8, cen_si
     # input data should be background subtracted for best results. this initial guess of the center positions
     # will be good enough to get the central obscuration, but will need to be fine-tuned for aperture association.
     xcen, ycen, pupcen_fig = center_pupil(data, pup_mask, threshold=cen_thresh, sigma=cen_sigma, plot=plot)
+
+    if np.hypot(xcen-cen[0], ycen-cen[1]) > cen_tol:
+        msg = f"Measured pupil center [{round(xcen)}, {round(ycen)}] more than {cen_tol} pixels from {cen}."
+        raise WFSAnalysisFailed(value=msg)
 
     # using the mean spacing is straightforward for square apertures and a reasonable underestimate for hexagonal ones (e.g. f/9)
     ref_spacing = np.mean([ref.xspacing, ref.yspacing])
@@ -964,8 +979,10 @@ class WFS(object):
                 pup_mask,
                 fwhm=self.find_fwhm,
                 thresh=self.find_thresh,
+                cen=self.cor_coords,
                 cen_thresh=self.cen_thresh,
                 cen_sigma=self.cen_sigma,
+                cen_tol=self.cen_tol,
                 plot=plot
             )
             slopes = slope_results['slopes']

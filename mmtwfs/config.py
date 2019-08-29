@@ -165,8 +165,9 @@ mmtwfs_config = {
             "cor_coords": [251.0, 267.0],  # image coordinates of the center of rotation
             "find_fwhm": 9.0,  # FWHM for DAOfind kernel
             "find_thresh": 5.0,  # threshold for DAOfind
-            "cen_thresh": 0.7,
-            "cen_sigma": 5.0,
+            "cen_thresh": 0.7,  # threshold for finding peaks in correlation image used for pupil registration
+            "cen_sigma": 5.0,  # sigma of smoothing kernel used on data before pupil registration
+            "cen_tol": 50.,  # distance from cor_coords allowed for a wavefront analysis to be considered potentially valid
             "rotation": 234.0 * u.deg,  # rotation of aperture locations w.r.t. the primary mirror
             "lenslet_pitch": 600 * u.um,  # width of each lenslet
             "lenslet_fl": 40 * u.mm,  # focal length of each lenslet_fl
@@ -238,6 +239,7 @@ mmtwfs_config = {
             "find_thresh": 5.0,
             "cen_thresh": 0.7,
             "cen_sigma": 5.0,
+            "cen_tol": 50.,
             "rotation": -225. * u.deg,
             "lenslet_pitch": 625 * u.um,  # width of each lenslet
             "lenslet_fl": 45 * u.mm,  # focal length of each lenslet_fl
@@ -285,6 +287,7 @@ mmtwfs_config = {
             "find_thresh": 5.0,
             "cen_thresh": 0.7,
             "cen_sigma": 6.0,
+            "cen_tol": 150.,
             "rotation": -225. * u.deg,
             "lenslet_pitch": 625 * u.um,  # width of each lenslet
             "lenslet_fl": 45 * u.mm,  # focal length of each lenslet_fl
@@ -326,11 +329,12 @@ mmtwfs_config = {
             "secondary": "f5",
             "default_mode": None,
             "eff_wave": 750 * u.nm,  # effective wavelength of the thruput response of the system
-            "cor_coords": [255.0, 255.0],
+            "cor_coords": [245.0, 253.0],
             "find_fwhm": 6.0,
             "find_thresh": 4.0,
             "cen_thresh": 0.7,
             "cen_sigma": 6.0,
+            "cen_tol": 50.,
             "rotation": 180. * u.deg,  # this is referenced to camera2. camera1 is camera2+180, but is flipped by image acq
             "lenslet_pitch": 600 * u.um,  # width of each lenslet
             "lenslet_fl": 40 * u.mm,  # focal length of each lenslet_fl
@@ -374,11 +378,12 @@ mmtwfs_config = {
             "secondary": "f5",
             "default_mode": "binospec",
             "eff_wave": 600 * u.nm,  # effective wavelength of the thruput response of the system
-            "cor_coords": [255.0, 255.0],
+            "cor_coords": [269.0, 252.0],
             "find_fwhm": 7.0,
             "find_thresh": 5.0,
             "cen_thresh": 0.7,
             "cen_sigma": 6.0,
+            "cen_tol": 100.,
             "rotation": 180. * u.deg,  # per j. kansky 9/26/2017
             "lenslet_pitch": 600 * u.um,  # width of each lenslet
             "lenslet_fl": 40 * u.mm,  # focal length of each lenslet_fl
@@ -417,6 +422,7 @@ mmtwfs_config = {
             "find_thresh": 5.0,
             "cen_thresh": 0.7,
             "cen_sigma": 6.0,
+            "cen_tol": 75.,
             "rotation": 0. * u.deg,
             "lenslet_pitch": 400. * u.um,  # width of each lenslet
             "lenslet_fl": 53 * u.mm,  # focal length of each lenslet_fl
