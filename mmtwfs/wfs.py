@@ -478,7 +478,7 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, cen=[255, 255], cen_th
     xcen, ycen, pupcen_fig = center_pupil(data, pup_mask, threshold=cen_thresh, sigma=cen_sigma, plot=plot)
 
     if np.hypot(xcen-cen[0], ycen-cen[1]) > cen_tol:
-        msg = f"Measured pupil center [{xcen}, {ycen}] more than {cen_tol} pixels from {cen}."
+        msg = f"Measured pupil center [{round(xcen)}, {round(ycen)}] more than {cen_tol} pixels from {cen}."
         raise WFSAnalysisFailed(value=msg)
 
     # using the mean spacing is straightforward for square apertures and a reasonable underestimate for hexagonal ones (e.g. f/9)
