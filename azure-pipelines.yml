@@ -23,7 +23,7 @@ jobs:
     displayName: Linux with all dependencies
     pip_args: .[test,all]
     runCodeCov: 'true'
-    command: test --coverage
+    command: test --readonly --coverage
 
 # Documentation build
 - template: azure-template.yml
