@@ -6,7 +6,7 @@ include ah_bootstrap.py
 include setup.cfg
 
 recursive-include mmtwfs *.pyx *.c *.pxd
-recursive-include data *
+recursive-include mmtwfs/data *
 recursive-include notebooks *
 
 prune build
