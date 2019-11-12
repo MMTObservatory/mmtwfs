@@ -1,7 +1,7 @@
 # mmtwfs
 Wavefront sensing and active optics management tools for the MMTO
 
-[![DOI](https://zenodo.org/badge/79272723.svg)](https://zenodo.org/badge/latestdoi/79272723)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.1255356.svg)](https://doi.org/10.5281/zenodo.1255356)
 
 [![Powered by AstroPy](http://img.shields.io/badge/powered%20by-AstroPy-orange.svg?style=flat)](http://www.astropy.org)
 
