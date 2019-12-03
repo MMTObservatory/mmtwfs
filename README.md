@@ -7,6 +7,8 @@ Wavefront sensing and active optics management tools for the MMTO
 
 [![Build Status](https://dev.azure.com/MMTObservatory/mmtwfs/_apis/build/status/MMTObservatory.mmtwfs?branchName=master)](https://dev.azure.com/MMTObservatory/mmtwfs/_build/latest?definitionId=1&branchName=master)
 
+[![Actions Status](https://github.com/{owner}/{repo}/workflows/{workflow_name}/badge.svg)](https://github.com/{owner}/{repo}/actions)
+
 [![Coverage Status](https://codecov.io/gh/MMTObservatory/mmtwfs/branch/master/graph/badge.svg)](https://codecov.io/gh/MMTObservatory/mmtwfs)
 
 [![Documentation Status](https://readthedocs.org/projects/mmtwfs/badge/?version=latest)](http://mmtwfs.readthedocs.io/en/latest/?badge=latest)
