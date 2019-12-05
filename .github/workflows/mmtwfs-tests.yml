@@ -64,6 +64,7 @@ jobs:
       uses: codecov/codecov-action@v1
       with:
         token: ${{ secrets.CODECOV }}
+        file: ./.coverage
 
   # Use the `flake8` tool to check for syntax errors
   flake8-linter:
