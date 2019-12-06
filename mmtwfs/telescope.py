@@ -236,8 +236,8 @@ class MMT(Telescope):
         # need to rotate the wavefront -90 degrees to match the BCV angle convention of +Y being 0 deg.
         zv.rotate(-90*u.deg)
 
-        # get surface displacements at the BCV node positions. multiply the wavefront amplitude by 0.5 to account for reflection
-        # off the surface.
+        # get surface displacements at the BCV node positions. multiply the wavefront amplitude by 0.5 to account for
+        # reflection off the surface.
         surf_corr = -0.5 * gain * zv.total_phase(self.nodecoor['bcv_rho'], self.nodecoor['bcv_phi'])
         if isinstance(surf_corr, float):  # means we got 0.0 from zv.total_phase()
             force_vec = np.zeros(self.n_act)
@@ -300,7 +300,11 @@ class MMT(Telescope):
         """
         frac = 1.0
         log.info(f"Using command, /mmt/scripts/cell_send_forces {filename}, to apply forces...")
-        pipe = subprocess.Popen(['/mmt/scripts/cell_send_forces', f"{filename}"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        pipe = subprocess.Popen(
+            ['/mmt/scripts/cell_send_forces', f"{filename}"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
 
         try:
             (stdout, stderr) = pipe.communicate(timeout=10)

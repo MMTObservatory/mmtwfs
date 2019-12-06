@@ -17,7 +17,7 @@ import copy
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import matplotlib.colors as col
-from mpl_toolkits.mplot3d import Axes3D
+from mpl_toolkits.mplot3d import Axes3D  # noqa
 
 import lmfit
 import numpy as np
@@ -1034,7 +1034,11 @@ class ZernikeVector(MutableMapping):
             s += "\n"
             if self._key_to_l(keys[-1]) > last:
                 hi_orders = ZernikeVector(modestart=last+1, normalized=self.normalized, units=self.units, **self.coeffs)
-                s += "High Orders RMS: \t {0:0.3g}  {1:>3s} ➞ {2:>3s}\n".format(hi_orders.rms, self._l_to_key(last+1), keys[-1])
+                s += "High Orders RMS: \t {0:0.3g}  {1:>3s} ➞ {2:>3s}\n".format(
+                    hi_orders.rms,
+                    self._l_to_key(last+1),
+                    keys[-1]
+                )
             s += "Total RMS: \t {0:0.4g}\n".format(self.rms)
 
         return s

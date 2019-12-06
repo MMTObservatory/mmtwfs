@@ -421,7 +421,7 @@ def fit_apertures(pars, ref, spots):
     return dist
 
 
-def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, cen=[255, 255], cen_thresh=0.8, cen_sigma=10.0, cen_tol=50., plot=True):
+def get_slopes(data, ref, pup_mask, fwhm=7., thresh=5., cen=[255, 255], cen_thresh=0.8, cen_sigma=10., cen_tol=50., plot=True):
     """
     Analyze a WFS image and produce pixel offsets between reference and observed spot positions.
 
@@ -481,7 +481,7 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, cen=[255, 255], cen_th
         msg = f"Measured pupil center [{round(xcen)}, {round(ycen)}] more than {cen_tol} pixels from {cen}."
         raise WFSAnalysisFailed(value=msg)
 
-    # using the mean spacing is straightforward for square apertures and a reasonable underestimate for hexagonal ones (e.g. f/9)
+    # using the mean spacing is straightforward for square apertures and a reasonable underestimate for hexagonal ones
     ref_spacing = np.mean([ref.xspacing, ref.yspacing])
     apsize = ref_spacing
 
@@ -530,8 +530,6 @@ def get_slopes(data, ref, pup_mask, fwhm=7.0, thresh=5.0, cen=[255, 255], cen_th
     fit_results = {}
     for i, k in enumerate(par_keys):
         fit_results[k] = min_results['x'][i]
-
-    xc, yc = fit_results['xcen'], fit_results['ycen']
 
     # this is more reliably the center of the actual pupil image whereas fit_results shifts a bit depending on detected spots.
     # the lenslet pattern can move around a bit on the pupil, but we need the center of the pupil to calculate their pupil
@@ -1162,12 +1160,16 @@ class WFS(object):
         zv_masked.denormalize()  # need to assure we're using fringe coeffs
         log.debug(f"\nInput masked: {zv_masked}")
 
-        # now use any available error bars to mask down to 1 sigma below amplitude or 0 if error bars are larger than amplitude.
+        # use any available error bars to mask down to 1 sigma below amplitude or 0 if error bars are larger than amplitude.
         for z in zv_masked:
             frac_err = 1. - min(zv_masked.frac_error(key=z), 1.)
             zv_masked[z] *= frac_err
         log.debug(f"\nErrorbar masked: {zv_masked}")
-        forces, m1focus, zv_allmasked = self.telescope.calculate_primary_corrections(zv=zv_masked, mask=mask, gain=self.m1_gain)
+        forces, m1focus, zv_allmasked = self.telescope.calculate_primary_corrections(
+            zv=zv_masked,
+            mask=mask,
+            gain=self.m1_gain
+        )
         log.debug(f"\nAll masked: {zv_allmasked}")
         return forces, m1focus, zv_allmasked
 
@@ -1199,8 +1201,8 @@ class WFS(object):
 
     def calculate_recenter(self, fit_results, defoc=1.0):
         """
-        Perform zero-coma hexapod tilts to align the pupil center to the center-of-rotation. The location of the CoR is configured
-        to be at self.cor_coords
+        Perform zero-coma hexapod tilts to align the pupil center to the center-of-rotation.
+        The location of the CoR is configured to be at self.cor_coords.
         """
         xc = fit_results['xcen']
         yc = fit_results['ycen']
@@ -1363,8 +1365,8 @@ class F5(WFS):
 
     def calculate_recenter(self, fit_results, defoc=1.0):
         """
-        Perform zero-coma hexapod tilts to align the pupil center to the center-of-rotation. The location of the CoR is configured
-        to be at self.cor_coords
+        Perform zero-coma hexapod tilts to align the pupil center to the center-of-rotation.
+        The location of the CoR is configured to be at self.cor_coords.
         """
         xc = fit_results['xcen']
         yc = fit_results['ycen']
@@ -1493,8 +1495,8 @@ class MMIRS(F5):
 
         # Parameters describing MMIRS pickoff mirror geometry
         # Location and diameter of exit pupil
-        self.zp = 71.749 / 0.02714  # Determined by tracing chief ray at 7.2' field angle with
-                                    # mmirs_asbuiltoptics_20110107_corronly.zmx
+        # Determined by tracing chief ray at 7.2' field angle with mmirs_asbuiltoptics_20110107_corronly.zmx
+        self.zp = 71.749 / 0.02714
         self.dp = self.zp / 5.18661  # Working f/# from Zemax file
 
         # Location of fold mirror
@@ -1628,7 +1630,7 @@ class MMIRS(F5):
         ngood = 0
         for x in np.arange(-1, 1, 2.0 / npts):
             for y in np.arange(-1, 1, 2.0 / npts):
-                if (np.hypot(x, y) < 1 and np.hypot(x, y) >= self.telescope.obscuration): # Only plot points w/in the pupil
+                if (np.hypot(x, y) < 1 and np.hypot(x, y) >= self.telescope.obscuration):  # Only plot points w/in the pupil
                     xm, ym = self.mirrorpoint(x0, y0, x, y)  # Get intersection with pickoff
                     if self.onmirror(xm, ym, x0/abs(x0)):  # Find out if point is on the mirror surface
                         ax.scatter(xm, ym, 1, "g")

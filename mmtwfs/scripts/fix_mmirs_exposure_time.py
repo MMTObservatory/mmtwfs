@@ -11,7 +11,6 @@ from astropy.io import fits
 
 import logging
 
-
 log = logging.getLogger('Fix MMIRS')
 log.setLevel(logging.INFO)
 
@@ -20,6 +19,7 @@ ch.setLevel(logging.INFO)
 formatter = logging.Formatter('%(levelname)s - %(message)s')
 ch.setFormatter(formatter)
 log.addHandler(ch)
+
 
 def main():
     parser = argparse.ArgumentParser(description='Utility for fixing missing exposure times in MMIRS WFS images.')
@@ -49,7 +49,6 @@ def main():
     for f in files:
         with fits.open(f) as hdulist:
             hdr = hdulist[-1].header
-            data = hdulist[-1].data
             if 'DATE-OBS' in hdr:
                 timedict[str(f)] = hdr['DATE-OBS']
             elif 'DATE' in hdr:
