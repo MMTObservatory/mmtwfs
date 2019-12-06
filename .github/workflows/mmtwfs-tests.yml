@@ -60,11 +60,13 @@ jobs:
     - name: Test and calculate coverage
       run: |
         python setup.py test --coverage
+        coverage xml
     - name: Upload coverage to codecov
       uses: codecov/codecov-action@v1
       with:
         token: ${{ secrets.CODECOV }}
-        file: ./.coverage
+        file: ./coverage.xml
+        fail_ci_if_error: true
 
   # Use the `flake8` tool to check for syntax errors
   flake8-linter:
