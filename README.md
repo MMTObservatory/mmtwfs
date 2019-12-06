@@ -1,5 +1,5 @@
 # mmtwfs
-Wavefront sensing and active optics management tools for the MMTO
+Wavefront sensing and active optics management tools for the MMTO.
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.1255356.svg)](https://doi.org/10.5281/zenodo.1255356)
 
