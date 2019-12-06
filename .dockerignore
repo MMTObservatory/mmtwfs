@@ -1,0 +1,11 @@
+.git
+.ipynb_checkpoints
+Dockerfile
+.DS_Store
+.gitignore
+.pytest_cache
+__pycache__
+build
+dist
+htmlcov
+mmtwfs.egg-info

@@ -1,0 +1,10 @@
+cff-version: 1.1.0
+message: If you use this software, please cite it as below.
+authors:
+  - family-names: Pickering
+    given-names: Timothy
+    orcid: https://orcid.org/0000-0002-9427-5448
+title: "Wavefront sensing and active optics management tools for the MMTO"
+version: 1.0.0
+doi: 10.5281/zenodo.1255356
+date-released: 2018-05-29

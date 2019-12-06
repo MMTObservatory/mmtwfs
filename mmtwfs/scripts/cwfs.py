@@ -13,10 +13,6 @@ import time
 import numpy as np
 from pathlib import Path
 
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-
 import astropy.units as u
 from astropy.io import fits
 
@@ -25,6 +21,9 @@ from mmtwfs.wfs import WFSFactory
 
 import logging
 
+import matplotlib
+import matplotlib.pyplot as plt
+matplotlib.use('Agg')
 
 log = logging.getLogger('CWFS')
 log.setLevel(logging.INFO)
@@ -35,7 +34,7 @@ formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
 ch.setFormatter(formatter)
 log.addHandler(ch)
 
-# main function
+
 def main():
 
     parser = argparse.ArgumentParser(
@@ -45,7 +44,7 @@ def main():
         'images',
         metavar="<FITS image>",
         nargs=2,
-        help='Intra and extra focal image file names (no path). If no focus information, first image is assumed to be intra-focal.'
+        help='Intra and extra focal image file names (no path). If focus not known, first image is assumed to be intra-focal.'
     )
     parser.add_argument(
         '-codedir',
