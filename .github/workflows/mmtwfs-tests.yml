@@ -6,7 +6,7 @@
 # - pytest on OSX, Python 3.8.
 # - flake8 syntax check.
 
-name: mmtwfs-tests
+name: Python Tests
 
 on: [push, pull_request]
 
