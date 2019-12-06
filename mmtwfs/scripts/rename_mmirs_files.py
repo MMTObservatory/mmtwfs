@@ -19,6 +19,7 @@ formatter = logging.Formatter('%(levelname)s - %(message)s')
 ch.setFormatter(formatter)
 log.addHandler(ch)
 
+
 def main():
     parser = argparse.ArgumentParser(description='Utility for renaming MMIRS images based on the original numbering.')
 
@@ -66,6 +67,7 @@ def main():
                     log.error(f"Error writing {new_path.name}: {e}")
             else:
                 log.info(f"Would rename {f.name} to {str(new_path)}...")
+
 
 if __name__ == "__main__":
     main()

@@ -34,7 +34,7 @@ formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
 ch.setFormatter(formatter)
 log.addHandler(ch)
 
-# main function
+
 def main():
 
     parser = argparse.ArgumentParser(
