@@ -1,5 +1,7 @@
 .git
 .ipynb_checkpoints
+.coverage
+coverage.xml
 Dockerfile
 .DS_Store
 .gitignore
