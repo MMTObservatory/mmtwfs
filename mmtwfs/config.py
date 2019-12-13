@@ -334,7 +334,7 @@ mmtwfs_config = {
             "find_thresh": 4.0,
             "cen_thresh": 0.7,
             "cen_sigma": 6.0,
-            "cen_tol": 50.,
+            "cen_tol": 75.,
             "rotation": 180. * u.deg,  # this is referenced to camera2. camera1 is camera2+180, but is flipped by image acq
             "lenslet_pitch": 600 * u.um,  # width of each lenslet
             "lenslet_fl": 40 * u.mm,  # focal length of each lenslet_fl
