@@ -1,9 +1,9 @@
 # GitHub Actions workflow for mmtwfs continuous integration.
 #
 # This file configures several different jobs:
-# - pytest on Linux, Python 3.7.
-# - pytest on Linux, Python 3.8.
-# - pytest on OSX, Python 3.8.
+# - tox on Linux, Python 3.7.
+# - tox on Linux, Python 3.8.
+# - tox on OSX, Python 3.8.
 # - flake8 syntax check.
 
 name: Python Tests
@@ -22,22 +22,19 @@ jobs:
         include:
           - name: 3.7
             python-version: 3.7
-            pip-command: pip install -e .[all,test]
-            pytest-command: python setup.py test
+            pytest-command: tox -e test
           - name: 3.8
             python-version: 3.8
-            pip-command: pip install -e .[all,test]
-            pytest-command: python setup.py test
+            pytest-command: tox -e test
     steps:
     - uses: actions/checkout@v1
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v1
       with:
         python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
+    - name: Install base dependencies
       run: |
-        python -m pip install --upgrade pip setuptools wheel numpy
-        ${{ matrix.pip-command }}
+        python -m pip install --upgrade pip setuptools wheel numpy tox
     - name: Test with ${{ matrix.pytest-command }}
       run: |
         ${{ matrix.pytest-command }}
@@ -55,14 +52,13 @@ jobs:
       uses: actions/setup-python@v1
       with:
         python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
+    - name: Install base dependencies
       run: |
-        python -m pip install --upgrade pip setuptools wheel numpy
-        pip install -e .[all,test]
+        python -m pip install --upgrade pip setuptools wheel numpy tox
     - name: Test and calculate coverage
       run: |
-        python setup.py test --coverage
-        coverage xml
+        tox -e test
+        tox -e report
     - name: Upload coverage to codecov
       uses: codecov/codecov-action@v1
       with:
@@ -85,8 +81,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
     - name: Install flake8
       run: |
-        python -m pip install --upgrade pip
-        pip install flake8
+        python -m pip install --upgrade pip flake8
     - name: Lint with flake8
       run: |
         # stop the build if there are Python syntax errors or undefined names
