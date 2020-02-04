@@ -11,35 +11,43 @@ def test_secondaries():
         sec = SecondaryFactory(secondary=s, test="foo")
         assert(sec.test == "foo")
 
+
 def test_bogus_secondary():
     try:
         sec = SecondaryFactory(secondary="bazz")
+        assert(sec is not None)
     except WFSConfigException:
         assert True
     except Exception as e:
+        assert(e is not None)
         assert False
     else:
         assert False
+
 
 def test_connect():
     s = SecondaryFactory(secondary='f5')
     try:
         s.connect()
-    except:
+    except Exception as e:
         assert(not s.connected)
+        assert(e is not None)
     finally:
         s.disconnect()
     assert(not s.connected)
+
 
 def test_focus():
     s = SecondaryFactory(secondary='f5')
     cmd = s.focus(200.3)
     assert("200.3" in cmd)
 
+
 def test_m1spherical():
     s = SecondaryFactory(secondary='f5')
     cmd = s.m1spherical(200.3)
     assert("200.3" in cmd)
+
 
 def test_cc():
     s = SecondaryFactory(secondary='f5')
@@ -52,9 +60,11 @@ def test_cc():
     except WFSCommandException:
         assert True
     except Exception as e:
+        assert(e is not None)
         assert False
     else:
         assert False
+
 
 def test_zc():
     s = SecondaryFactory(secondary='f5')
@@ -67,9 +77,11 @@ def test_zc():
     except WFSCommandException:
         assert True
     except Exception as e:
+        assert(e is not None)
         assert False
     else:
         assert False
+
 
 def test_clear():
     s = SecondaryFactory(secondary='f5')

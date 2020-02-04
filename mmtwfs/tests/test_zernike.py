@@ -16,6 +16,7 @@ def test_R_mn():
     r = R_mn(2, 1, np.ones(25).reshape((5, 5)))
     assert(r == 0.0)
 
+
 def test_norm():
     rho = 0.5
     phi = 0.5
@@ -26,6 +27,7 @@ def test_norm():
         z2 = f(m, n, rho, phi, norm=True)
         assert(np.isclose(z2/z1, nc))
 
+
 def test_bogus_noll_to_zernike():
     try:
         noll_to_zernike(0)
@@ -34,15 +36,18 @@ def test_bogus_noll_to_zernike():
     else:
         assert False
 
+
 def test_bogus_coefficient():
     try:
-        c = noll_coefficient(0)
+        noll_coefficient(0)
     except ZernikeException:
         assert True
     except Exception as e:
+        assert(e is not None)
         assert False
     else:
         assert False
+
 
 def test_bogus_setkeys():
     zv = ZernikeVector()
@@ -52,109 +57,129 @@ def test_bogus_setkeys():
         except KeyError:
             assert True
         except Exception as e:
+            assert(e is not None)
             assert False
         else:
             assert False
+
 
 def test_bogus_getkeys():
     zv = ZernikeVector()
     for k in ["Z2", "bazz"]:
         try:
-            a = zv[k]
+            zv[k]
         except KeyError:
             assert True
         except Exception as e:
+            assert(e is not None)
             assert False
         else:
             assert False
 
+
 def test_bogus_add():
     z1 = ZernikeVector(Z04=1000)
     try:
-        z2 = z1 + "bazz"
+        z1 + "bazz"
     except ZernikeException:
         assert True
     except Exception as e:
+        assert(e is not None)
         assert False
     else:
         assert False
+
 
 def test_bogus_radd():
     z1 = ZernikeVector(Z04=1000)
     try:
-        z2 = "bazz" + z1
+        "bazz" + z1
     except ZernikeException:
         assert True
     except Exception as e:
+        assert(e is not None)
         assert False
     else:
         assert False
+
 
 def test_bogus_sub():
     z1 = ZernikeVector(Z04=1000)
     try:
-        z2 = z1 - "bazz"
+        z1 - "bazz"
     except ZernikeException:
         assert True
     except Exception as e:
+        assert(e is not None)
         assert False
     else:
         assert False
+
 
 def test_bogus_rsub():
     z1 = ZernikeVector(Z04=1000)
     try:
-        z2 = "bazz" - z1
+        "bazz" - z1
     except ZernikeException:
         assert True
     except Exception as e:
+        assert(e is not None)
         assert False
     else:
         assert False
+
 
 def test_bogus_div():
     z1 = ZernikeVector(Z04=1000)
     try:
-        z2 = z1 / "bazz"
+        z1 / "bazz"
     except ZernikeException:
         assert True
     except Exception as e:
+        assert(e is not None)
         assert False
     else:
         assert False
+
 
 def test_bogus_rdiv():
     z1 = ZernikeVector(Z04=1000)
     try:
-        z2 = "bazz" / z1
+        "bazz" / z1
     except ZernikeException:
         assert True
     except Exception as e:
+        assert(e is not None)
         assert False
     else:
         assert False
+
 
 def test_bogus_mul():
     z1 = ZernikeVector(Z04=1000)
     try:
-        z2 = z1 * "bazz"
+        z1 * "bazz"
     except ZernikeException:
         assert True
     except Exception as e:
+        assert(e is not None)
         assert False
     else:
         assert False
 
+
 def test_bogus_pow():
     z1 = ZernikeVector(Z04=1000)
     try:
-        z2 = z1 ** "bazz"
+        z1 ** "bazz"
     except ZernikeException:
         assert True
     except Exception as e:
+        assert(e is not None)
         assert False
     else:
         assert False
+
 
 def test_bogus_key():
     zv = ZernikeVector()
@@ -163,9 +188,11 @@ def test_bogus_key():
     except ZernikeException:
         assert True
     except Exception as e:
+        assert(e is not None)
         assert False
     else:
         assert False
+
 
 def test_repr():
     zv = ZernikeVector(Z04=1000, Z05=500, modestart=2)
@@ -175,20 +202,24 @@ def test_repr():
     zv['Z99'] = 1.0
     assert(len(repr(zv)) > 0)
 
+
 def test_str():
     zv = ZernikeVector(Z04=1000, Z05=500, modestart=2)
     assert(len(str(zv)) > 0)
+
 
 def test_pprint():
     zv = ZernikeVector(Z04=1000, Z05=500, Z80=100, modestart=2)
     s = zv.pretty_print()
     assert(len(s) > 0)
 
+
 def test_zernike_del():
     zv = ZernikeVector(Z04=1000, Z05=500, modestart=2)
     assert(len(zv) == 4)
     del zv['Z05']
     assert(len(zv) == 3)
+
 
 def test_zernike_add():
     z1 = ZernikeVector(Z04=1000, errorbars={'Z04': 10})
@@ -197,12 +228,14 @@ def test_zernike_add():
     a2 = z2 + z1
     assert(a1 == a2)
 
+
 def test_zernike_add_scalar():
     z1 = ZernikeVector(Z04=1000)
     z2 = 100.
     a1 = z1 + z2
     a2 = z2 + z1
     assert(a1 == a2)
+
 
 def test_zernike_mult_scalar():
     z1 = ZernikeVector(Z04=1000)
@@ -211,12 +244,14 @@ def test_zernike_mult_scalar():
     a2 = z2 * z1
     assert(a1 == a2)
 
+
 def test_zernike_mult():
     z1 = ZernikeVector(Z04=1000, errorbars={'Z04': 10})
     z2 = ZernikeVector(Z06=100, errorbars={'Z06': 10})
     a1 = z1 * z2
     a2 = z2 * z1
     assert(a1 == a2)
+
 
 def test_zernike_sub():
     z1 = ZernikeVector(Z04=1000, errorbars={'Z04': 10})
@@ -227,12 +262,14 @@ def test_zernike_sub():
     a2 = z1.__rsub__(z2)
     assert(a1 == -1*a2)
 
+
 def test_zernike_sub_scalar():
     z1 = ZernikeVector(Z04=1000)
     z2 = 500.
     a1 = z1 - z2
     a2 = z2 - z1
     assert(a1 == -1*a2)
+
 
 def test_zernike_div_scalar():
     z1 = ZernikeVector(Z04=1000)
@@ -244,6 +281,7 @@ def test_zernike_div_scalar():
     a1 = z1.__div__(z2)
     a2 = z1.__rdiv__(z2)
     assert(a1 == 1. / a2)
+
 
 def test_zernike_div():
     z1 = ZernikeVector(Z04=1000, errorbars={'Z04': 10})
@@ -262,6 +300,7 @@ def test_zernike_div():
     assert(a1['Z04'] == 1. / a3['Z04'])
     assert(a4['Z04'] == 1. / a3['Z04'])
 
+
 def test_zernike_div_nan():
     z1 = ZernikeVector(Z04=1000)
     z2 = ZernikeVector(Z06=100)
@@ -269,21 +308,25 @@ def test_zernike_div_nan():
     a2 = z2 / z1
     assert(a1 == 1. / a2)
 
+
 def test_zernike_pow():
     amp = 1000
     z1 = ZernikeVector(Z04=amp, errorbars={'Z04': 10})
     z2 = z1 ** 2
     assert(amp**2 == z2['Z04'].value)
 
+
 def test_p2v():
     zv = ZernikeVector(Z04=1000)
     p2v = zv.peak2valley
     assert(p2v > 0.0)
 
+
 def test_rms():
     zv = ZernikeVector(Z04=1000)
     rms = zv.rms
     assert(rms > 0.0)
+
 
 def test_from_array():
     zv = ZernikeVector(coeffs=[0, 0, 1000], modestart=2)
@@ -293,9 +336,11 @@ def test_from_array():
     assert(len(zv2) == 2)
     assert(zv2['Z06'].value == 500.0)
 
+
 def test_noll_vector():
     arr = noll_normalization_vector(nmodes=20)
     assert(len(arr) == 20)
+
 
 def test_ignore():
     zv = ZernikeVector(Z04=1000, Z05=500, modestart=2)
@@ -305,6 +350,7 @@ def test_ignore():
     zv.restore('Z05')
     assert(len(zv) == 4)
     assert(zv['Z05'].value == 500.0)
+
 
 def test_rotate():
     zv = ZernikeVector(Z05=500)
@@ -316,6 +362,7 @@ def test_rotate():
     c = zv['Z05'].value
     assert(a == -c)
 
+
 def test_loadsave():
     zv = ZernikeVector(Z04=100, Z05=200, Z06=-500)
     zv.save(filename="test.json")
@@ -323,22 +370,25 @@ def test_loadsave():
     for c in zv2:
         assert(zv2[c] == zv[c])
     try:
-        zv3 = ZernikeVector(coeffs="bogus.json")
+        ZernikeVector(coeffs="bogus.json")
     except ZernikeException:
         assert True
     except Exception as e:
+        assert(e is not None)
         assert False
     else:
         assert False
 
+
 def test_labels():
     zv = ZernikeVector(Z04=100, Z05=200, Z06=-500)
-    l = zv.label('Z04')
+    long = zv.label('Z04')
     ls = zv.shortlabel('Z04')
-    assert(len(l) > len(ls))
+    assert(len(long) > len(ls))
     ll = zv.label('Z80')
     lls = zv.shortlabel('Z80')
     assert(len(ll) == len(lls))
+
 
 @cleanup
 def test_plots():

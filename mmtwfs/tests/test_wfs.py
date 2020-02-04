@@ -21,6 +21,7 @@ def test_check_wfsdata():
     except WFSConfigException:
         assert True
     except Exception as e:
+        assert(e is not None)
         assert False
     else:
         assert False
@@ -30,6 +31,7 @@ def test_check_wfsdata():
     except WFSConfigException:
         assert True
     except Exception as e:
+        assert(e is not None)
         assert False
     else:
         assert False
@@ -40,24 +42,29 @@ def test_check_wfsdata():
     except WFSConfigException:
         assert True
     except Exception as e:
+        assert(e is not None)
         assert False
     else:
         assert False
+
 
 def test_wfses():
     for s in mmtwfs_config['wfs']:
         wfs = WFSFactory(wfs=s, plot=True, test="foo")
         assert(wfs.test == "foo")
 
+
 def test_bogus_wfs():
     try:
-        wfs = WFSFactory(wfs="bazz")
+        WFSFactory(wfs="bazz")
     except WFSConfigException:
         assert True
     except Exception as e:
+        assert(e is not None)
         assert False
     else:
         assert False
+
 
 def test_connect():
     wfs = WFSFactory(wfs='f5')
@@ -65,10 +72,12 @@ def test_connect():
     wfs.disconnect()
     assert(not wfs.connected)  # can't always access systems...
 
+
 def test_make_mask():
     test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "test_newf9.fits"))
     mask = mk_wfs_mask(test_file, thresh_factor=4., outfile=None)
     assert(mask.min() == 0.0)
+
 
 @cleanup
 def test_mmirs_analysis():
@@ -79,6 +88,7 @@ def test_mmirs_analysis():
     testval = int(zresults['zernike']['Z10'].value)
     assert((testval > 320) & (testval < 330))
 
+
 @cleanup
 def test_mmirs_pacman():
     test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "mmirs_wfs_rename_0566.fits"))
@@ -86,6 +96,7 @@ def test_mmirs_pacman():
     results = mmirs.measure_slopes(test_file)
     testval = results['xcen']
     assert((testval > 227) & (testval < 229))
+
 
 @cleanup
 def test_mmirs_pupil_mask():
@@ -95,6 +106,7 @@ def test_mmirs_pupil_mask():
     fig, ax = plt.subplots()
     ngood = mmirs.plotgrid_hdr(hdr, ax)
     assert(ngood > 0)
+
 
 @cleanup
 def test_mmirs_pickoff_plots():
@@ -110,19 +122,22 @@ def test_mmirs_pickoff_plots():
     mmirs.plotgrid(7, 52, ax)
     assert(fig is not None)
 
+
 @cleanup
 def test_mmirs_bogus_pupil_mask():
     mmirs = WFSFactory(wfs='mmirs')
     hdr = {}
     fig, ax = plt.subplots()
     try:
-        ngood = mmirs.plotgrid_hdr(hdr, ax)
+        mmirs.plotgrid_hdr(hdr, ax)
     except WFSCommandException:
         assert True
     except Exception as e:
+        assert(e is not None)
         assert False
     else:
         assert False
+
 
 @cleanup
 def test_f9_analysis():
@@ -133,6 +148,7 @@ def test_f9_analysis():
     testval = int(zresults['zernike']['Z09'].value)
     assert((testval > 440) & (testval < 450))
 
+
 @cleanup
 def test_newf9_analysis():
     test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "test_newf9.fits"))
@@ -141,6 +157,7 @@ def test_newf9_analysis():
     zresults = f9.fit_wavefront(results)
     testval = int(zresults['zernike']['Z09'].value)
     assert((testval > 90) & (testval < 110))
+
 
 @cleanup
 def test_f5_analysis():
@@ -151,28 +168,35 @@ def test_f5_analysis():
     testval = int(zresults['zernike']['Z10'].value)
     assert((testval > 120) & (testval < 140))
 
+
 @cleanup
 def test_bino_analysis():
-    test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "wfs_ff_cal_img_2017.1113.111402.fits"))
+    test_file = pkg_resources.resource_filename(
+        "mmtwfs",
+        os.path.join("data", "test_data", "wfs_ff_cal_img_2017.1113.111402.fits")
+    )
     wfs = WFSFactory(wfs='binospec')
     results = wfs.measure_slopes(test_file, mode="binospec")
     zresults = wfs.fit_wavefront(results)
     testval = int(zresults['zernike']['Z10'].value)
     assert((testval > -60) & (testval < -40))
 
+
 @cleanup
 def test_too_few_spots():
     test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "mmirs_bogus.fits"))
     mmirs = WFSFactory(wfs='mmirs')
     results = mmirs.measure_slopes(test_file)
-    assert(results['slopes'] == None)
+    assert(results['slopes'] is None)
+
 
 @cleanup
 def test_no_spots():
     test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "mmirs_blank.fits"))
     mmirs = WFSFactory(wfs='mmirs')
     results = mmirs.measure_slopes(test_file)
-    assert(results['slopes'] == None)
+    assert(results['slopes'] is None)
+
 
 def test_correct_primary():
     wfs = WFSFactory(wfs='f5')
@@ -180,11 +204,13 @@ def test_correct_primary():
     f, m1f, zv_masked = wfs.calculate_primary(zv)
     assert(m1f == 0.0)
 
+
 def test_correct_focus():
     wfs = WFSFactory(wfs='f5')
     zv = ZernikeVector()
     corr = wfs.calculate_focus(zv)
     assert(corr == 0.0)
+
 
 def test_correct_coma():
     wfs = WFSFactory(wfs='f5')
@@ -192,6 +218,7 @@ def test_correct_coma():
     cx, cy = wfs.calculate_cc(zv)
     assert(cx == 0.0)
     assert(cy == 0.0)
+
 
 def test_recenter():
     test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "test_newf9.fits"))
@@ -201,6 +228,7 @@ def test_recenter():
     assert(np.abs(az) > 0.0)
     assert(np.abs(el) > 0.0)
 
+
 def test_f5_recenter():
     test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "auto_wfs_0037_ave.fits"))
     f5 = WFSFactory(wfs='f5')
@@ -208,6 +236,7 @@ def test_f5_recenter():
     az, el = f5.calculate_recenter(results)
     assert(np.abs(az) > 0.0)
     assert(np.abs(el) > 0.0)
+
 
 def test_clear():
     wfs = WFSFactory(wfs='f5')
