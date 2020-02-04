@@ -1,10 +1,6 @@
 # GitHub Actions workflow for mmtwfs continuous integration.
 #
-# This file configures several different jobs:
-# - tox on Linux, Python 3.7.
-# - tox on Linux, Python 3.8.
-# - tox on OSX, Python 3.8.
-# - flake8 syntax check.
+# This file configures testing using tox and tox.ini to define the test environments and matrices.
 
 name: Python Tests
 
@@ -12,20 +8,13 @@ on: [push, pull_request]
 
 jobs:
 
-  # Run unit tests on Linux
-  pytest-linux:
+  tox_tests:
     runs-on: ubuntu-latest
     if: "!contains(github.event.head_commit.message, '[ci skip]')"
     strategy:
+      max-parallel: 4
       matrix:
-        name: [3.7, 3.8]
-        include:
-          - name: 3.7
-            python-version: 3.7
-            pytest-command: tox -e test
-          - name: 3.8
-            python-version: 3.8
-            pytest-command: tox -e test
+        python-version: [3.7, 3.8]
     steps:
     - uses: actions/checkout@v1
     - name: Set up Python ${{ matrix.python-version }}
@@ -34,57 +23,14 @@ jobs:
         python-version: ${{ matrix.python-version }}
     - name: Install base dependencies
       run: |
-        python -m pip install --upgrade pip setuptools wheel numpy tox
-    - name: Test with ${{ matrix.pytest-command }}
+        python -m pip install --upgrade pip
+        python -m pip install numpy tox tox-gh-actions
+    - name: Test with tox
       run: |
-        ${{ matrix.pytest-command }}
-
-  # Run unit tests on Mac OSX
-  pytest-osx:
-    runs-on: macos-latest
-    if: "!contains(github.event.head_commit.message, '[ci skip]')"
-    strategy:
-      matrix:
-        python-version: [3.8]
-    steps:
-    - uses: actions/checkout@v1
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v1
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install base dependencies
-      run: |
-        python -m pip install --upgrade pip setuptools wheel numpy tox
-    - name: Test and calculate coverage
-      run: |
-        tox -e test
-        tox -e report
+        tox
     - name: Upload coverage to codecov
       uses: codecov/codecov-action@v1
       with:
         token: ${{ secrets.CODECOV }}
         file: ./coverage.xml
         fail_ci_if_error: true
-
-  # Use the `flake8` tool to check for syntax errors
-  flake8-linter:
-    runs-on: ubuntu-latest
-    if: "!contains(github.event.head_commit.message, '[ci skip]')"
-    strategy:
-      matrix:
-        python-version: [3.8]
-    steps:
-    - uses: actions/checkout@v1
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v1
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install flake8
-      run: |
-        python -m pip install --upgrade pip flake8
-    - name: Lint with flake8
-      run: |
-        # stop the build if there are Python syntax errors or undefined names
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude="setup.py,setup_package.py,conftest.py,test_*,notebooks,docs"
-        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics --exclude="setup.py,setup_package.py,conftest.py,test_*,notebooks,docs"
