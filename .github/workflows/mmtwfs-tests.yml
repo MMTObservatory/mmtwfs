@@ -53,5 +53,5 @@ jobs:
         python -m pip install numpy tox
     - name: Test with tox -e scipy14
       run: |
-        tox -e scipy14
+        tox -e scipy14 -qq
       if: always()
