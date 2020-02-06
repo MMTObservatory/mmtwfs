@@ -3,7 +3,6 @@ include README.md
 include CITATION.cff
 include LICENSE.rst
 include setup.cfg
-include tests/coveragerc
 
 recursive-include mmtwfs *.pyx *.c *.pxd
 recursive-include mmtwfs/data *
