@@ -5,7 +5,7 @@ Introduction
 ------------
 
 .. note::
-    `mmtwfs` works only with astropy version 2.0 or later and python 3.6 or later.
+    `mmtwfs` works only with astropy version 3.0 or later and python 3.6 or later.
 
 The `mmtwfs` package provides:
 
@@ -32,7 +32,7 @@ Getting Started
 ---------------
 
 A ``WFS`` object can be created using the :meth:`~mmtwfs.wfs.WFSFactory` method. The ``wfs`` keyword is used to specify which ``WFS``
-subclass to construct. The default configuration for each supported WFS is defined in :py:mod:`~mmtwfs.config`:
+subclass to construct. The default configuration for each supported WFS is defined in :py:mod:`~mmtwfs.config.mmtwfs_config`:
 
     >>> from mmtwfs.wfs import WFSFactory
     >>> bino_wfs = WFSFactory(wfs="binospec")

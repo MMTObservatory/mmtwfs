@@ -15,6 +15,7 @@ from ..telescope import TelescopeFactory, MMT
 from ..zernike import ZernikeVector
 from ..custom_exceptions import WFSConfigException
 
+
 def test_telescope():
     for s in mmtwfs_config['secondary']:
         tel = mmtwfs_config['secondary'][s]['telescope']
@@ -26,6 +27,7 @@ def test_telescope():
             assert(not t.connected)
         assert(t.secondary.diameter == mmtwfs_config['secondary'][s]['diameter'])
 
+
 def test_pupil_mask():
     for s in mmtwfs_config['secondary']:
         tel = mmtwfs_config['secondary'][s]['telescope']
@@ -35,18 +37,21 @@ def test_pupil_mask():
         assert(mask.max() == 1.0)
         assert(mask.min() == 0.0)
 
+
 def test_bogus_pupil_mask():
     for s in mmtwfs_config['secondary']:
         tel = mmtwfs_config['secondary'][s]['telescope']
         t = TelescopeFactory(telescope=tel, secondary=s)
         try:
-            mask = t.pupil_mask(size=900)
+            t.pupil_mask(size=900)
         except WFSConfigException:
             assert True
         except Exception as e:
+            assert(e is not None)
             assert False
         else:
             assert False
+
 
 def test_psf():
     for s in mmtwfs_config['secondary']:
@@ -58,6 +63,7 @@ def test_psf():
         assert(p_im.max() < 1.0)
         assert(p_fig is not None)
 
+
 def test_force_file():
     t = MMT()
     # define a zernike vector with AST45 of -1000 nm and check if the correction equals the forces required to bend
@@ -67,6 +73,7 @@ def test_force_file():
     t.to_rcell(f_table, filename="forcefile")
     test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "AST45_p1000.frc"))
     assert(filecmp.cmp("forcefile", test_file))
+
 
 def test_correct_primary():
     t = MMT()
@@ -80,6 +87,7 @@ def test_correct_primary():
     nullforce, nullfocus = t.clear_forces()
     assert(nullfocus == 0.0)
     assert(np.allclose(nullforce['force'].data, 0.0))
+
 
 @cleanup
 def test_plots():

@@ -1,11 +1,11 @@
-.git
 .ipynb_checkpoints
 .coverage
 coverage.xml
 Dockerfile
 .DS_Store
-.gitignore
 .pytest_cache
+.tox
+.tmp
 __pycache__
 build
 dist
