@@ -1,4 +1,4 @@
-# GitHub Actions workflow for mmtwfs continuous integration.
+# GitHub Actions workflow for mmtwfs testing and continuous integration.
 #
 # This file configures testing using tox and tox.ini to define and configure the test environments.
 
