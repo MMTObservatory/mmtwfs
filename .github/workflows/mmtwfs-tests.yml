@@ -1,6 +1,6 @@
 # GitHub Actions workflow for mmtwfs continuous integration.
 #
-# This file configures testing using tox and tox.ini to define the test environments and matrices.
+# This file configures testing using tox and tox.ini to define and configure the test environments.
 
 name: Python Tests
 
