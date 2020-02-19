@@ -183,6 +183,19 @@ def test_bino_analysis():
 
 
 @cleanup
+def test_flwo_analysis():
+    test_file = pkg_resources.resource_filename(
+        "mmtwfs",
+        os.path.join("data", "test_data", "1195.star.p2m18.fits")
+    )
+    wfs = WFSFactory(wfs="flwo15")
+    results= wfs.measure_slopes(test_file)
+    zresults = wfs.fit_wavefront(results)
+    testval = int(zresults['zernike']['Z06'].value)
+    assert((testval > 800) & (testval < 900))
+
+
+@cleanup
 def test_too_few_spots():
     test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "mmirs_bogus.fits"))
     mmirs = WFSFactory(wfs='mmirs')
