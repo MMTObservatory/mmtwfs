@@ -167,11 +167,20 @@ class Telescope(object):
 
 class FLWO12(Telescope):
     """
-    Defines configuration and methods for the FLWO 1.2-metre
+    Defines configuration and methods for the FLWO 1.2-meter
     """
     def __init__(self, config={}, **kwargs):
         config = merge_config(config, dict(**kwargs))
         super(FLWO12, self).__init__(telescope="flwo12", secondary="flwo12", config=config)
+
+
+class FLWO15(Telescope):
+    """
+    Defines configuration and methods for the FLWO 1.5-meter
+    """
+    def __init__(self, config={}, **kwargs):
+        config = merge_config(config, dict(**kwargs))
+        super(FLWO15, self).__init__(telescope="flwo15", secondary="flwo15", config=config)
 
 
 class MMT(Telescope):

@@ -55,6 +55,13 @@ class FLWO12(Secondary):
     pass
 
 
+class FLWO15(Secondary):
+    """
+    Secondary mirror configuration for the FLWO 1.5-meter
+    """
+    pass
+
+
 class MMTSecondary(object):
     """
     Mixin class that defines methods specific to MMT secondary mirror systems

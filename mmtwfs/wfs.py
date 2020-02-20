@@ -1771,3 +1771,10 @@ class FLWO12(WFS):
     def trim_overscan(self, data, hdr=None):
         # remove last column that is always set to 0
         return data[:, :510]
+
+
+class FLWO15(FLWO12):
+    """
+    Defines configuration and methods for the WFS on the FLWO 1.5-meter
+    """
+    pass
