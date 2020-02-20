@@ -189,7 +189,7 @@ def test_flwo_analysis():
         os.path.join("data", "test_data", "1195.star.p2m18.fits")
     )
     wfs = WFSFactory(wfs="flwo15")
-    results= wfs.measure_slopes(test_file)
+    results = wfs.measure_slopes(test_file)
     zresults = wfs.fit_wavefront(results)
     testval = int(zresults['zernike']['Z06'].value)
     assert((testval > 800) & (testval < 900))
