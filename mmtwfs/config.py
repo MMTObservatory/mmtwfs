@@ -448,7 +448,7 @@ mmtwfs_config = {
             "nzern": 21,  # number of zernike modes to fit
             "az_parity": -1,  # E/W flip in image motion
             "el_parity": 1,  # N/S flip in image motion
-            "wfs_mask": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "flwo_mask.fits")),
+            "wfs_mask": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "flwo12_mask.fits")),
             "reference_file": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "LED2sec_22.fits")),
             "modes": {
                 "default": {
@@ -483,7 +483,7 @@ mmtwfs_config = {
             "nzern": 21,  # number of zernike modes to fit
             "az_parity": -1,  # E/W flip in image motion
             "el_parity": 1,  # N/S flip in image motion
-            "wfs_mask": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "flwo_mask.fits")),
+            "wfs_mask": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "flwo15_mask.fits")),
             "reference_file": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "LED2sec_22.fits")),
             "modes": {
                 "default": {
