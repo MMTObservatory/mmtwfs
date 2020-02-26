@@ -154,6 +154,10 @@ def wfsfind(data, fwhm=7.0, threshold=5.0, plot=True, ap_radius=5.0, std=None):
     daofind = photutils.DAOStarFinder(fwhm=fwhm, threshold=threshold*std, sharphi=0.95)
     sources = daofind(data)
 
+    if sources is None:
+        msg = "WFS spot detection failed or no spots detected."
+        raise WFSAnalysisFailed(value=msg)
+
     nsrcs = len(sources)
     if nsrcs == 0:
         msg = "No WFS spots detected."
