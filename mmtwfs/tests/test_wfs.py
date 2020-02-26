@@ -211,6 +211,14 @@ def test_no_spots():
     assert(results['slopes'] is None)
 
 
+@cleanup
+def test_frosted_donut():
+    test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "f9wfs_20200225-205600.fits"))
+    wfs = WFSFactory(wfs='newf9')
+    results = wfs.measure_slopes(test_file)
+    assert(results['slopes'] is None)
+
+
 def test_correct_primary():
     wfs = WFSFactory(wfs='f5')
     zv = ZernikeVector(Z04=1000)
