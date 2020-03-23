@@ -158,6 +158,7 @@ def wfsfind(data, fwhm=7.0, threshold=5.0, plot=True, ap_radius=5.0, std=None):
         msg = "WFS spot detection failed or no spots detected."
         raise WFSAnalysisFailed(value=msg)
 
+    # this may be redundant given the above check...
     nsrcs = len(sources)
     if nsrcs == 0:
         msg = "No WFS spots detected."
@@ -249,6 +250,11 @@ def center_pupil(input_data, pup_mask, threshold=0.8, sigma=10., plot=True):
     match = feature.match_template(smo, pup_mask, pad_input=True)
     find_thresh = threshold * match.max()
     t = photutils.detection.find_peaks(match, find_thresh, box_size=5, centroid_func=photutils.centroids.centroid_com)
+
+    if t is None:
+        msg = "No valid pupil or spot pattern detected."
+        raise WFSAnalysisFailed(value=msg)
+
     peak = t['peak_value'].max()
     xps = []
     yps = []
