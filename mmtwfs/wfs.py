@@ -240,7 +240,7 @@ def center_pupil(input_data, pup_mask, threshold=0.8, sigma=10., plot=True):
         X and Y pixel coordinates of the pupil center
     """
     data = np.copy(check_wfsdata(input_data))
-    pup_mask = check_wfsdata(pup_mask)
+    pup_mask = check_wfsdata(pup_mask).astype(np.float64)  # need to force float64 here to make scipy >= 1.4 happy...
 
     # smooth the image to increae the S/N.
     smo = ndimage.gaussian_filter(data, sigma)
