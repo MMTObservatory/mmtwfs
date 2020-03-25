@@ -274,7 +274,7 @@ def center_pupil(input_data, pup_mask, threshold=0.8, sigma=10., plot=True):
     return xp, yp, fig
 
 
-def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True):
+def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True, cen=None):
     """
     Use wfsfind to locate and centroid spots.  Measure their S/N ratios and the sigma of a 2D gaussian fit to
     the co-added spot.
@@ -299,7 +299,11 @@ def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True):
     data = check_wfsdata(data)
 
     # set maxiters to None to let this clip all the way to convergence
-    mean, median, stddev = stats.sigma_clipped_stats(data, sigma=3.0, maxiters=None)
+    if cen is None:
+        mean, median, stddev = stats.sigma_clipped_stats(data, sigma=3.0, maxiters=None)
+    else:
+        xcen, ycen = int(cen[1]), int(cen[0])
+        mean, median, stddev = stats.sigma_clipped_stats(data[ycen-50:ycen+50, xcen-50:ycen+50], sigma=3.0, maxiters=None)
 
     # use wfsfind() and pass it the clipped stddev from here
     with warnings.catch_warnings():
@@ -432,7 +436,7 @@ def fit_apertures(pars, ref, spots):
 
 
 def get_slopes(data, ref, pup_mask, fwhm=7., thresh=5., cen=[255, 255],
-               cen_thresh=0.8, cen_sigma=10., cen_tol=50., spot_snr_thresh=5.0, plot=True):
+               cen_thresh=0.8, cen_sigma=10., cen_tol=50., spot_snr_thresh=3.0, plot=True):
     """
     Analyze a WFS image and produce pixel offsets between reference and observed spot positions.
 
@@ -456,7 +460,7 @@ def get_slopes(data, ref, pup_mask, fwhm=7., thresh=5., cen=[255, 255],
         Width of gaussian filter applied to image by `~mmtwfs.wfs.center_pupil`
     cen_tol : float (default: 50.0)
         Tolerance for difference between expected and measureed pupil center
-    spot_snr_thresh : float (default: 5.0)
+    spot_snr_thresh : float (default: 3.0)
         S/N tolerance for a WFS spot to be considered valid for analysis
     plot : bool
         Toggle plotting of image with aperture overlays
@@ -498,7 +502,7 @@ def get_slopes(data, ref, pup_mask, fwhm=7., thresh=5., cen=[255, 255],
     ref_spacing = np.mean([ref.xspacing, ref.yspacing])
     apsize = ref_spacing
 
-    srcs, masks, snrs, sigma, wfsfind_fig = get_apertures(data, apsize, fwhm=fwhm, thresh=thresh)
+    srcs, masks, snrs, sigma, wfsfind_fig = get_apertures(data, apsize, fwhm=fwhm, thresh=thresh, cen=(xcen, ycen))
 
     # ignore low S/N spots
     srcs = srcs[snrs > spot_snr_thresh]
@@ -915,8 +919,9 @@ class WFS(object):
         cr_mask, data = detect_cosmics(trimdata, sigclip=5., niter=5, cleantype='medmask', psffwhm=5.)
 
         # calculate the background and subtract it
-        bkg_estimator = photutils.MedianBackground()
-        bkg = photutils.Background2D(data, (10, 10), filter_size=(5, 5), bkg_estimator=bkg_estimator)
+        bkg_estimator = photutils.ModeEstimatorBackground()
+        mask = photutils.make_source_mask(data, nsigma=2, npixels=5, dilate_size=11)
+        bkg = photutils.Background2D(data, (10, 10), filter_size=(5, 5), bkg_estimator=bkg_estimator, mask=mask)
         data -= bkg.background
 
         return data, hdr
@@ -1327,8 +1332,9 @@ class NewF9(F9):
         cr_mask, data = detect_cosmics(rawdata, sigclip=15., niter=5, cleantype='medmask', psffwhm=10.)
 
         # calculate the background and subtract it
-        bkg_estimator = photutils.MedianBackground()
-        bkg = photutils.Background2D(data, (50, 50), filter_size=(15, 15), bkg_estimator=bkg_estimator)
+        bkg_estimator = photutils.ModeEstimatorBackground()
+        mask = photutils.make_source_mask(data, nsigma=2, npixels=7, dilate_size=13)
+        bkg = photutils.Background2D(data, (50, 50), filter_size=(15, 15), bkg_estimator=bkg_estimator, mask=mask)
         data -= bkg.background
 
         return data, hdr
@@ -1359,8 +1365,9 @@ class F5(WFS):
         cr_mask, data = detect_cosmics(trimdata, sigclip=15., niter=5, cleantype='medmask', psffwhm=10.)
 
         # calculate the background and subtract it
-        bkg_estimator = photutils.MedianBackground()
-        bkg = photutils.Background2D(data, (20, 20), filter_size=(10, 10), bkg_estimator=bkg_estimator)
+        bkg_estimator = photutils.ModeEstimatorBackground()
+        mask = photutils.make_source_mask(data, nsigma=2, npixels=5, dilate_size=11)
+        bkg = photutils.Background2D(data, (20, 20), filter_size=(10, 10), bkg_estimator=bkg_estimator, mask=mask)
         data -= bkg.background
 
         return data, hdr
@@ -1745,8 +1752,9 @@ class MMIRS(F5):
         cr_mask, data = detect_cosmics(trimdata, sigclip=5., niter=5, cleantype='medmask', psffwhm=5.)
 
         # calculate the background and subtract it
-        bkg_estimator = photutils.MedianBackground()
-        bkg = photutils.Background2D(data, (10, 10), filter_size=(5, 5), bkg_estimator=bkg_estimator)
+        bkg_estimator = photutils.ModeEstimatorBackground()
+        mask = photutils.make_source_mask(data, nsigma=2, npixels=5, dilate_size=11)
+        bkg = photutils.Background2D(data, (20, 20), filter_size=(7, 7), bkg_estimator=bkg_estimator, mask=mask)
         data -= bkg.background
 
         return data, hdr

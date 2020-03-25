@@ -86,7 +86,7 @@ def test_mmirs_analysis():
     results = mmirs.measure_slopes(test_file)
     zresults = mmirs.fit_wavefront(results)
     testval = int(zresults['zernike']['Z10'].value)
-    assert((testval > 320) & (testval < 330))
+    assert((testval > 335) & (testval < 345))
 
 
 @cleanup
@@ -192,7 +192,7 @@ def test_flwo_analysis():
     results = wfs.measure_slopes(test_file)
     zresults = wfs.fit_wavefront(results)
     testval = int(zresults['zernike']['Z06'].value)
-    assert((testval > 800) & (testval < 900))
+    assert((testval > 600) & (testval < 700))
 
 
 @cleanup
