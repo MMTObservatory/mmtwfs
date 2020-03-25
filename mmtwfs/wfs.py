@@ -326,7 +326,7 @@ def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True):
                 spot += subim
 
             signal = subim.sum()
-            noise = np.sqrt(stddev**2 / (subim.shape[0] * subim.shape[1]))
+            noise = np.sqrt(stddev**2 * subim.shape[0] * subim.shape[1])
             snr = signal / noise
             snrs.append(snr)
 
@@ -431,7 +431,8 @@ def fit_apertures(pars, ref, spots):
     return dist
 
 
-def get_slopes(data, ref, pup_mask, fwhm=7., thresh=5., cen=[255, 255], cen_thresh=0.8, cen_sigma=10., cen_tol=50., plot=True):
+def get_slopes(data, ref, pup_mask, fwhm=7., thresh=5., cen=[255, 255],
+               cen_thresh=0.8, cen_sigma=10., cen_tol=50., spot_snr_thresh=5.0, plot=True):
     """
     Analyze a WFS image and produce pixel offsets between reference and observed spot positions.
 
@@ -455,6 +456,8 @@ def get_slopes(data, ref, pup_mask, fwhm=7., thresh=5., cen=[255, 255], cen_thre
         Width of gaussian filter applied to image by `~mmtwfs.wfs.center_pupil`
     cen_tol : float (default: 50.0)
         Tolerance for difference between expected and measureed pupil center
+    spot_snr_thresh : float (default: 5.0)
+        S/N tolerance for a WFS spot to be considered valid for analysis
     plot : bool
         Toggle plotting of image with aperture overlays
 
@@ -497,10 +500,8 @@ def get_slopes(data, ref, pup_mask, fwhm=7., thresh=5., cen=[255, 255], cen_thre
 
     srcs, masks, snrs, sigma, wfsfind_fig = get_apertures(data, apsize, fwhm=fwhm, thresh=thresh)
 
-    # if we don't detect spots in at least half of the reference apertures, we can't usually get a good wavefront measurement
-    if len(srcs) < 0.5 * len(ref.masked_apertures['xcentroid']):
-        msg = "Only %d spots detected out of %d apertures." % (len(srcs), len(ref.masked_apertures['xcentroid']))
-        raise WFSAnalysisFailed(value=msg)
+    # ignore low S/N spots
+    srcs = srcs[snrs > spot_snr_thresh]
 
     # get grid spacing of the data
     xspacing, yspacing = grid_spacing(data, srcs)
@@ -511,6 +512,11 @@ def get_slopes(data, ref, pup_mask, fwhm=7., thresh=5., cen=[255, 255], cen_thre
     # apply masking to detected sources to avoid partially illuminated apertures at the edges
     srcs['dist'] = np.sqrt((srcs['xcentroid'] - xcen)**2 + (srcs['ycentroid'] - ycen)**2)
     srcs = srcs[(srcs['dist'] > pup_inner*init_scale) & (srcs['dist'] < pup_outer*init_scale)]
+
+    # if we don't detect spots in at least half of the reference apertures, we can't usually get a good wavefront measurement
+    if len(srcs) < 0.5 * len(ref.masked_apertures['xcentroid']):
+        msg = "Only %d spots detected out of %d apertures." % (len(srcs), len(ref.masked_apertures['xcentroid']))
+        raise WFSAnalysisFailed(value=msg)
 
     src_aps = photutils.CircularAperture(
         list(zip(srcs['xcentroid'], srcs['ycentroid'])),
