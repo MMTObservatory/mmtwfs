@@ -179,7 +179,7 @@ def test_bino_analysis():
     results = wfs.measure_slopes(test_file, mode="binospec")
     zresults = wfs.fit_wavefront(results)
     testval = int(zresults['zernike']['Z10'].value)
-    assert((testval > -60) & (testval < -40))
+    assert((testval > 130) & (testval < 140))
 
 
 @cleanup
