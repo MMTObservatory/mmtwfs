@@ -343,7 +343,7 @@ mmtwfs_config = {
             "default_mode": None,
             "eff_wave": 750 * u.nm,  # effective wavelength of the thruput response of the system
             "cor_coords": [245.0, 253.0],
-            "find_fwhm": 6.0,
+            "find_fwhm": 8.0,
             "find_thresh": 4.0,
             "cen_thresh": 0.7,
             "cen_sigma": 6.0,

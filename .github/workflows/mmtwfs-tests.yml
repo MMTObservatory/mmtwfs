@@ -37,26 +37,6 @@ jobs:
         file: ./coverage.xml
         fail_ci_if_error: true
 
-  scipy_bug:
-    runs-on: ubuntu-latest
-    if: "!contains(github.event.head_commit.message, '[ci skip]')"
-    strategy:
-      matrix:
-        python-version: [3.8]
-    steps:
-    - uses: actions/checkout@v1
-    - name: Set up Python ${{ matrix.python-version }} to test scipy 1.4.x
-      uses: actions/setup-python@v1
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install base dependencies
-      run: |
-        python -m pip install --upgrade pip
-        python -m pip install numpy tox
-    - name: Test with tox -e scipy14
-      run: |
-        tox -e scipy14 -qq
-
   doc_test:
     runs-on: ubuntu-latest
     if: "!contains(github.event.head_commit.message, '[ci skip]')"
