@@ -1508,6 +1508,59 @@ class Binospec(F5):
 
         return focal_r, focal_phi
 
+    def in_wfs_region(self, xw, yw, x, y):
+        """
+        Determine if a position is within the region available to Binospec's WFS
+        """
+        return True  # placekeeper until the optical prescription is implemented
+
+    def pupil_mask(self, hdr, npts=14):
+        """
+        Generate a synthetic pupil mask
+        """
+        if hdr is not None:
+            x_wfs = hdr.get('STARXMM', 150.0)
+            y_wfs = hdr.get('STARYMM', 0.0)
+        else:
+            x_wfs = 150.0
+            y_wfs = 0.0
+            log.warning("Header information not available for Binospec pupil mask. Assuming default position.")
+
+        good = []
+        center = self.pup_size / 2.
+        obsc = self.telescope.obscuration.value
+        spacing = 2.0 / npts
+        for x in np.arange(-1, 1, spacing):
+            for y in np.arange(-1, 1, spacing):
+                r = np.hypot(x, y)
+                if (r < 1 and np.hypot(x, y) >= obsc):
+                    if self.in_wfs_region(x_wfs, y_wfs, x, y):
+                        x_impos = center * (x + 1.)
+                        y_impos = center * (y + 1.)
+                        amp = 1.
+                        # this is kind of a hacky way to dim spots near the edge, but easier than doing full calc
+                        # of the aperture intersection with pupil. it also doesn't need to be that accurate for the
+                        # purposes of the cross-correlation used to register the pupil.
+                        if r > 1. - spacing:
+                            amp = 1. - (r - (1. - spacing)) / spacing
+                        if r - obsc < spacing:
+                            amp = (r - obsc) / spacing
+                        good.append((amp, x_impos, y_impos))
+
+        yi, xi = np.mgrid[0:self.pup_size, 0:self.pup_size]
+        im = np.zeros((self.pup_size, self.pup_size))
+        sigma = 3.
+        for g in good:
+            im += Gaussian2D(g[0], g[1], g[2], sigma, sigma)(xi, yi)
+
+        # Measured by hand from reference LED image
+        cam_rot = 0.595
+
+        im_rot = rotate(im, cam_rot, reshape=False)
+        im_rot[im_rot < 1e-2] = 0.0
+
+        return im_rot
+
 
 class MMIRS(F5):
     """
