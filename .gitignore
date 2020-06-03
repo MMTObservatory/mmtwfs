@@ -54,6 +54,9 @@ coverage.xml
 # OS X stuff
 .DS_store
 
+# vscode stuff
+.vscode/
+
 # Django stuff:
 *.log
 local_settings.py

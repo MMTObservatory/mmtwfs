@@ -454,13 +454,13 @@ def norm_coefficient(m, n):
     return norm_coeff
 
 
-def noll_coefficient(l):
+def noll_coefficient(ll):
     """
     Calculate the Noll coefficent to normalize mode **l** to unit variance.
 
     Parameters
     ----------
-    l : int
+    ll : int
         Noll mode number
 
     Returns
@@ -468,10 +468,10 @@ def noll_coefficient(l):
     norm_coeff : float
         Noll normalization coefficient
     """
-    if l < 1:
-        raise ZernikeException(f"Noll modes start at l=1. l={l} is not valid.")
+    if ll < 1:
+        raise ZernikeException(f"Noll modes start at l=1. l={ll} is not valid.")
 
-    n, m = noll_to_zernike(l)
+    n, m = noll_to_zernike(ll)
     norm_coeff = norm_coefficient(m, n)
     return norm_coeff
 
