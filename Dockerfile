@@ -1,6 +1,8 @@
-FROM python:latest
+FROM python:slim
 
 MAINTAINER T. E. Pickering "te.pickering@gmail.com"
+
+RUN apt update && apt -y install tcl
 
 COPY . .
 
