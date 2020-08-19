@@ -1,5 +1,9 @@
 name: Publish to Docker
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - master
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -7,8 +11,9 @@ jobs:
     steps:
     - uses: actions/checkout@master
     - name: Publish to Registry
-      uses: elgohr/Publish-Docker-Github-Action@master
+      uses: docker/build-push-action@v1
       with:
-        name: mmtobservatory/mmtwfs
+        repository: mmtobservatory/mmtwfs
         username: ${{ secrets.DOCKER_USER }}
         password: ${{ secrets.DOCKER_TOKEN }}
+        tags: latest
