@@ -21,7 +21,7 @@ def srvlookup(server):
     Perform a SRV lookup of 'server' and return its hostname and port.
     """
     try:
-        response = resolver.resolve(server, 'SRV')
+        response = resolver.query(server, 'SRV')
         host = response[0].target.to_text()
         port = response[0].port
     except Exception as e:
