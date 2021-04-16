@@ -1,4 +1,5 @@
-# %%
+#!/usr/bin/env python
+
 from datetime import datetime
 import traceback
 import functools
@@ -11,18 +12,16 @@ import os
 import sys
 from pathlib import Path
 
+import argparse
+
 import numpy as np
 import scipy
 import pandas as pd
 
 import matplotlib
-#matplotlib.use('nbagg')
 from matplotlib import style
 style.use('ggplot')
 import matplotlib.pyplot as plt
-
-%load_ext autoreload
-%autoreload 2
 
 from astropy import stats
 from astropy.io import fits, ascii
@@ -33,28 +32,20 @@ import astropy.units as u
 from astropy.io import fits
 from mmtwfs.wfs import WFSFactory
 
+import logging
+
+
+log = logging.getLogger('WFS Reanalyze')
+log.setLevel(logging.INFO)
+
+ch = logging.StreamHandler(sys.stdout)
+ch.setLevel(logging.INFO)
+formatter = logging.Formatter('%(levelname)s - %(message)s')
+ch.setFormatter(formatter)
+log.addHandler(ch)
+
 tz = pytz.timezone("America/Phoenix")
 
-# %%
-def get_traceback(f):
-    @functools.wraps(f)
-    def wrapper(*args, **kwargs):
-        try:
-            return f(*args, **kwargs)
-        except Exception as ex:
-            ret = '#' * 60
-            ret += "\nException caught:"
-            ret += "\n"+'-'*60
-            ret += "\n" + traceback.format_exc()
-            ret += "\n" + '-' * 60
-            ret += "\n"+ "#" * 60
-            print(sys.stderr, ret)
-            sys.stderr.flush()
-            raise ex
- 
-    return wrapper
-
-# %%
 # instantiate all of the WFS systems...
 wfs_keys = ['f9', 'newf9', 'f5', 'mmirs', 'binospec']
 wfs_systems = {}
@@ -62,7 +53,6 @@ wfs_names = {}
 for w in wfs_keys:
     wfs_systems[w] = WFSFactory(wfs=w)
     wfs_names[w] = wfs_systems[w].name
-plt.close('all')
 
 # give mmirs a default
 wfs_systems['mmirs'].default_mode = 'mmirs1'
@@ -74,14 +64,14 @@ wfs_systems['oldf9'] = wfs_systems['f9']
 wfs_systems['mmirs'].cen_tol = 120.
 wfs_systems['binospec'].cen_tol = 120.
 
-# %%
+
 def check_image(f, wfskey=None):
     hdr = {}
     with fits.open(f, output_verify="ignore") as hdulist:
         for h in hdulist:
             hdr.update(h.header)
         data = hdulist[-1].data
-    
+
     if 'CURR_TEMP' in hdr:
         hdr['OSSTEMP'] = hdr['CURR_TEMP']
 
@@ -123,13 +113,14 @@ def check_image(f, wfskey=None):
         if wfskey is None and 'SEC' in hdr:  # mmirs has SEC in header as well and is caught above
             if 'F5' in hdr['SEC']:
                 wfskey = 'f5'
-                
-        if wfskey is None and if Path(f.parent / "F5").exists():
+
+        # some early F/5 data had no real id in their headers...
+        if wfskey is None and Path(f.parent / "F5").exists():
             wfskey = 'f5'
-            
+
     if wfskey is None:
         # if wfskey is still None at this point, whinge.
-        print(f"Can't determine WFS for {f.name}...")
+        log.error(f"Can't determine WFS for {f.name}...")
 
     if 'AIRMASS' not in hdr:
         if 'SECZ' in hdr:
@@ -139,9 +130,9 @@ def check_image(f, wfskey=None):
 
     if 'EXPTIME' not in hdr:
         hdr['EXPTIME'] = np.nan
-            
+
     # we need to fix the headers in all cases to have a proper DATE-OBS entry with
-    # properly formatted FITS timestamp.  in the meantime, this hack gets us what we need 
+    # properly formatted FITS timestamp.  in the meantime, this hack gets us what we need
     # for analysis in pandas.
     dtime = None
     if 'DATEOBS' in hdr:
@@ -188,39 +179,38 @@ def check_image(f, wfskey=None):
                     dtime = local_dt.astimezone(pytz.utc)
 
     if dtime is None:
-        print(f"No valid timestamp in header for {f.name}...")
+        log.error(f"No valid timestamp in header for {f.name}...")
         obstime = None
     else:
         obstime = dtime.isoformat().replace('+00:00', '')
-        
+
     hdr['WFSKEY'] = wfskey
     hdr['OBS-TIME'] = obstime
     return data, hdr
 
-# %%
-@get_traceback
-def process_image(f):
+
+def process_image(f, force=False):
     """
-    Process FITS file, f, to get info we want from the header and then analyse it with the 
-    appropriate WFS instance. Return results in a comma-separated line that will be collected 
+    Process FITS file, f, to get info we want from the header and then analyse it with the
+    appropriate WFS instance. Return results in a comma-separated line that will be collected
     and saved in a CSV file.
     """
     if "Ref" in str(f) or "sog" in str(f):
         return None
-    
+
     outfile = f.parent / (f.stem + ".output")
-    if Path.exists(outfile):
-        print(f"Already processed {f.name}...")
+    if not force and Path.exists(outfile):
+        log.info(f"Already processed {f.name}, loading previous data...")
         with open(outfile, 'r') as fp:
             line = fp.readlines()[0]
             return line
-    
+
     try:
         data, hdr = check_image(f)
     except Exception as e:
-        print(f"Problem checking {f}: {e}")
+        log.error(f"Problem checking {f}: {e}")
         return None
-    
+
     wfskey = hdr['WFSKEY']
     obstime = hdr['OBS-TIME']
     airmass = hdr['AIRMASS']
@@ -243,13 +233,13 @@ def process_image(f):
         chamt = hdr.get('CHAM_T', np.nan)
     else:
         chamt = hdr.get('T_CHAM', np.nan)
-    
+
     # being conservative here and only using data that has proper slope determination
     # and wavefront solution. also want to get statistics on the quality of the wavefront fits.
     try:
         results = wfs_systems[wfskey].measure_slopes(str(f), plot=False)
     except:
-        print(f"Problem analyzing {f.name}...")
+        log.error(f"Problem analyzing {f.name}...")
         results = {}
         results['slopes'] = None
 
@@ -268,116 +258,83 @@ def process_image(f):
                 fp.write(line)
             return line
         except Exception as e:
-            print(f"Problem fitting wavefront for {f.name}: {e}")
+            log.error(f"Problem fitting wavefront for {f.name}: {e}")
             return None
     else:
         return None
 
-#rootdir = Path("/Users/tim/MMT/wfsdat")
-#rootdir = Path("/Volumes/LaCie 8TB/wfsdat")
-#rootdir = Path("/Volumes/Seagate2TB/wfsdat")
-rootdir = Path("/mnt/f/wfsdat")
 
-# %%
-dirs = sorted(list(rootdir.glob("2005*")))  # pathlib, where have you been all my life!
-csv_header = "time,wfs,file,exptime,airmass,az,el,osst,outt,chamt,tiltx,tilty,transx,transy,focus,focerr,cc_x_err,cc_y_err,xcen,ycen,seeing,raw_seeing,fwhm,wavefront_rms,residual_rms\n"
-slow = False
-for d in dirs:
-    if d.is_dir():
-        #if Path.exists(d / "reanalyze_results.csv"):
-        #    print("Already processed %s..." % d.name)
-        #else:
-        try:
-            lines = []
-            lines.append(csv_header)
-            night = int(d.name)  # valid WFS directories are ints of the form YYYYMMDD. if not this form, int barfs
-            msg = f"checking {night}... "
-            fitsfiles = d.glob("*.fits")
-            print(msg)
-            if slow:
-                plines = []
-                for f in fitsfiles:
-                    print("Processing %s..." % f) 
-                    l = process_image(f)
-                    plines.append(l)
+def main():
+    """
+    Take directories as argument and go through each one to process files in parallel using Pool.map()
+    """
+    parser = argparse.ArgumentParser(description='Utility for parallelized batch reprocessing of WFS data')
+
+    parser.add_argument(
+        '-r', '--rootdir',
+        metavar="<Root directory containing WFS data>",
+        default="."
+    )
+
+    parser.add_argument(
+        '-d', '--dirs',
+        metavar="<Glob of directories to process>",
+        default="*"
+    )
+
+    parser.add_argument(
+        '--forcedir',
+        metavar="<Force rebuild of CSV for a directory>",
+        action='store_true'
+    )
+
+    parser.add_argument(
+        '--force',
+        metavar="<Force reanalysis of individual data files>",
+        action="store_true"
+    )
+
+    parser.add_argument(
+        '-n', '--nproc',
+        metavar="<Number of parallel processes to use>",
+        default=int(multiprocessing.cpu_count()/2)  # MKL uses a lot of threads so best to limit Pool to half available cores
+    )
+
+    args = parser.parse_args()
+
+    rootdir = Path(args.rootdir)
+
+    log.info(f"Using {args.nproc} cores...")
+
+    dirs = sorted(list(rootdir.glob(args.dirs)))  # pathlib, where have you been all my life!
+    csv_header = "time,wfs,file,exptime,airmass,az,el,osst,outt,chamt,tiltx,tilty,transx,transy,focus,focerr,cc_x_err,cc_y_err,xcen,ycen,seeing,raw_seeing,fwhm,wavefront_rms,residual_rms\n"
+    slow = False
+    for d in dirs:
+        if d.is_dir():
+            if not args.forcedir and Path.exists(d / "reanalyze_results.csv"):
+                log.info(f"Already processed {d.name}...")
             else:
-                nproc = 8 # my mac mini's i7 has 6 cores and py37 can use hyperthreading for more... 
-                with Pool(processes=nproc) as pool:  # my mac mini's i7 has 6 cores... 
-                    plines = pool.map(process_image, fitsfiles)  # plines comes out in same order as fitslines!
-            
-            plines = list(filter(None.__ne__, plines))  # trim out any None entries\
-            if len(plines) > 0:
-                lines.extend(plines)
-                with open(d / "reanalyze_results.csv", "w") as f:
-                    f.writelines(lines)
-        except ValueError as e:  # this means running int(d.name) failed so it's not a valid directory...
-            print(f"Skipping %s... ({e})" % d.name)
-
-# %%
-process_image(Path("/Volumes/LaCie 8TB/wfsdat/20170109/elcoll_40_0019.fits"))
-
-# check 20170318
-
-# %%
-f = Path("/Volumes/Seagate2TB/wfsdat/20170109/reanalyze_results.csv")
-t = ascii.read(f)
-az = Column(np.zeros(len(t)), name='az')
-el = Column(np.zeros(len(t)), name='el')
-osst = Column(np.zeros(len(t)), name='osst')
-outt = Column(np.zeros(len(t)), name='outt')
-chamt = Column(np.zeros(len(t)), name='chamt')
-t.add_column(az)
-t.add_column(el)
-t.add_column(osst)
-t.add_column(outt)
-t.add_column(chamt)
-for r in t:
-    with fits.open(f.parent / r['file']) as hl:
-        hdr = hl[-1].header
-        if np.isnan(r['focus']):
-            focus = hdr.get('TRANSZ', np.nan)
-            r['focus'] = focus
-        a = hdr.get('AZ', np.nan)
-        if a < 0:
-            a += 360.
-        r['az'] = a
-        r['el'] = hdr.get('EL', np.nan)
-        r['osst'] = hdr.get('OSSTEMP', np.nan)
-        r['outt'] = hdr.get('OUT_T', np.nan)
-        r['chamt'] = hdr.get('CHAM_T', np.nan)
-t
-
-# %%
-for d in dirs:
-    if d.is_dir():
-        if Path.exists(d / "reanalyze_results.csv"):
-            f = d / "reanalyze_results.csv"
-            print(f"fixing {f}...")
-            t = ascii.read(f)
-            #osst = Column(np.zeros(len(t)), name='osst')
-            #outt = Column(np.zeros(len(t)), name='outt')
-            #chamt = Column(np.zeros(len(t)), name='chamt')
-            #t.add_column(osst)
-            #t.add_column(outt)
-            #t.add_column(chamt)
-            for r in t:
-                with fits.open(f.parent / r['file']) as hl:
-                    hdr = hl[0].header
-                    if np.isnan(r['focus']):
-                        focus = hdr.get('TRANSZ', np.nan)
-                        r['focus'] = focus
-                    a = hdr.get('AZ', np.nan)
-                    if a < 0:
-                        a += 360.
-                    r['az'] = a
-                    r['el'] = hdr.get('EL', np.nan)
-                    r['osst'] = hdr.get('OSSTEMP', np.nan)
-                    if 'OUT_T' in hdr:
-                        r['outt'] = hdr.get('OUT_T', np.nan)
+                try:
+                    lines = []
+                    lines.append(csv_header)
+                    night = int(d.name)  # valid WFS directories are ints of the form YYYYMMDD. if not this form, int barfs
+                    fitsfiles = d.glob("*.fits")
+                    log.info(f"Processing {d}...")
+                    if slow:
+                        plines = []
+                        for f in fitsfiles:
+                            log.debug(f"Processing {f}...")
+                            l = process_image(f, force=args.force)
+                            plines.append(l)
                     else:
-                        r['outt'] = hdr.get('T_OUT', np.nan)
-                    if 'CHAM_T' in hdr:
-                        r['chamt'] = hdr.get('CHAM_T', np.nan)
-                    else:
-                        r['chamt'] = hdr.get('T_CHAM', np.nan)
-            t.write(f, overwrite=True)
+                        with Pool(processes=args.nproc) as pool:
+                            plines = pool.map(process_image, fitsfiles)  # plines comes out in same order as fitslines!
+
+                    plines = list(filter(None.__ne__, plines))  # trim out any None entries
+                    if len(plines) > 0:
+                        lines.extend(plines)
+                        with open(d / "reanalyze_results.csv", "w") as f:
+                            f.writelines(lines)
+
+                except ValueError as e:  # this means running int(d.name) failed so it's not a valid directory...
+                    log.warn(f"Skipping %s... ({e})" % d.name)
