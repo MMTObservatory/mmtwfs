@@ -309,7 +309,7 @@ def main():
     csv_header = "time,wfs,file,exptime,airmass,az,el,osst,outt,chamt,tiltx,tilty,"\
         "transx,transy,focus,focerr,cc_x_err,cc_y_err,xcen,ycen,seeing,raw_seeing,fwhm,wavefront_rms,residual_rms\n"
 
-    log.info(f"Found {len(dirs)} files to process...")
+    log.info(f"Found {len(dirs)} directories to process...")
 
     for d in dirs:
         d = rootdir / d
@@ -321,8 +321,8 @@ def main():
                     lines = []
                     lines.append(csv_header)
                     _ = int(d.name)  # valid WFS directories are ints of the form YYYYMMDD. if not this form, int barfs
-                    fitsfiles = d.glob("*.fits")
-                    log.info(f"Processing {d}...")
+                    fitsfiles = sorted(list(d.glob("*.fits")))
+                    log.info(f"Processing {len(fitsfiles)} images in {d}...")
                     with Pool(processes=args.nproc) as pool:
                         process = partial(process_image, force=args.force)
                         plines = pool.map(process, fitsfiles)  # plines comes out in same order as fitslines!
