@@ -272,31 +272,34 @@ def main():
 
     parser.add_argument(
         '-r', '--rootdir',
-        metavar="<Root directory containing WFS data>",
+        metavar="<root dir>",
+        help="Directory containing WFS data. Defaults to current working directory.",
         default="."
     )
 
     parser.add_argument(
         '-d', '--dirs',
-        metavar="<Glob of directories to process>",
+        metavar="<glob>",
+        help="Glob of directories to process. Defaults to *.",
         default="*"
     )
 
     parser.add_argument(
         '--forcedir',
-        metavar="<Force rebuild of CSV for a directory>",
+        help="Force rebuild of CSV for a directory",
         action='store_true'
     )
 
     parser.add_argument(
         '--force',
-        metavar="<Force reanalysis of individual data files>",
+        help="Force reanalysis of individual data files",
         action="store_true"
     )
 
     parser.add_argument(
         '-n', '--nproc',
-        metavar="<Number of parallel processes to use>",
+        metavar="<# processes>",
+        help="Number of parallel processes. Defaults to half number of available cores.",
         default=int(multiprocessing.cpu_count()/2)  # MKL uses a lot of threads so best to limit Pool to half available cores
     )
 
