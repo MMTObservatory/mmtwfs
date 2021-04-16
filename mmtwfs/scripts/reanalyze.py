@@ -3,9 +3,8 @@
 from datetime import datetime
 import multiprocessing
 from multiprocessing import Pool
-
+from functools import partial
 import pytz
-import sys
 from pathlib import Path
 
 import argparse
@@ -18,7 +17,8 @@ from astropy.time import Time
 from astropy.io import fits
 from mmtwfs.wfs import WFSFactory
 
-import logging, coloredlogs
+import logging
+import coloredlogs
 
 from astropy.utils.exceptions import AstropyWarning, AstropyDeprecationWarning
 
@@ -308,7 +308,9 @@ def main():
     dirs = sorted(list(args.dirs))  # pathlib, where have you been all my life!
     csv_header = "time,wfs,file,exptime,airmass,az,el,osst,outt,chamt,tiltx,tilty,"\
         "transx,transy,focus,focerr,cc_x_err,cc_y_err,xcen,ycen,seeing,raw_seeing,fwhm,wavefront_rms,residual_rms\n"
-    slow = False
+
+    log.info(f"Found {len(dirs)} files to process...")
+
     for d in dirs:
         d = rootdir / d
         if d.is_dir():
@@ -321,15 +323,9 @@ def main():
                     _ = int(d.name)  # valid WFS directories are ints of the form YYYYMMDD. if not this form, int barfs
                     fitsfiles = d.glob("*.fits")
                     log.info(f"Processing {d}...")
-                    if slow:
-                        plines = []
-                        for f in fitsfiles:
-                            log.debug(f"Processing {f}...")
-                            line = process_image(f, force=args.force)
-                            plines.append(line)
-                    else:
-                        with Pool(processes=args.nproc) as pool:
-                            plines = pool.map(process_image, fitsfiles)  # plines comes out in same order as fitslines!
+                    with Pool(processes=args.nproc) as pool:
+                        process = partial(process_image, force=args.force)
+                        plines = pool.map(process, fitsfiles)  # plines comes out in same order as fitslines!
 
                     plines = list(filter(None.__ne__, plines))  # trim out any None entries
                     if len(plines) > 0:
