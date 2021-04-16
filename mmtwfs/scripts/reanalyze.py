@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 import argparse
+import warnings
 
 import numpy as np
 import scipy
@@ -34,6 +35,11 @@ from mmtwfs.wfs import WFSFactory
 
 import logging
 
+from astropy.utils.exceptions import AstropyWarning, AstropyDeprecationWarning
+
+
+warnings.simplefilter('ignore', category=AstropyWarning)
+warnings.simplefilter('ignore', category=AstropyDeprecationWarning)
 
 log = logging.getLogger('WFS Reanalyze')
 log.setLevel(logging.INFO)
@@ -117,6 +123,10 @@ def check_image(f, wfskey=None):
         # some early F/5 data had no real id in their headers...
         if wfskey is None and Path(f.parent / "F5").exists():
             wfskey = 'f5'
+
+        # also try for early old F/9 data...
+        if wfskey is None and Path(f.parent / "F9").exists():
+            wfskey = 'oldf9'
 
     if wfskey is None:
         # if wfskey is still None at this point, whinge.
