@@ -49,6 +49,7 @@ wfs_systems['oldf9'] = wfs_systems['f9']
 wfs_systems['mmirs'].cen_tol = 120.
 wfs_systems['binospec'].cen_tol = 120.
 wfs_systems['oldf9'].cen_tol = 75.
+wfs_systems['f5'].cen_tol = 75.
 
 def check_image(f, wfskey=None):
     hdr = {}
