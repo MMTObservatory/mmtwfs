@@ -48,7 +48,7 @@ wfs_systems['oldf9'] = wfs_systems['f9']
 # loosen mmirs centering tolerance to deal with past camera misalignments
 wfs_systems['mmirs'].cen_tol = 120.
 wfs_systems['binospec'].cen_tol = 120.
-
+wfs_systems['oldf9'].cen_tol = 75.
 
 def check_image(f, wfskey=None):
     hdr = {}
