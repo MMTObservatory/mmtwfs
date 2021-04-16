@@ -18,7 +18,7 @@ from astropy.time import Time
 from astropy.io import fits
 from mmtwfs.wfs import WFSFactory
 
-import logging
+import logging, coloredlogs
 
 from astropy.utils.exceptions import AstropyWarning, AstropyDeprecationWarning
 
@@ -27,13 +27,7 @@ warnings.simplefilter('ignore', category=AstropyWarning)
 warnings.simplefilter('ignore', category=AstropyDeprecationWarning)
 
 log = logging.getLogger('WFS Reanalyze')
-log.setLevel(logging.INFO)
-
-ch = logging.StreamHandler(sys.stdout)
-ch.setLevel(logging.INFO)
-formatter = logging.Formatter('%(levelname)s - %(message)s')
-ch.setFormatter(formatter)
-log.addHandler(ch)
+coloredlogs.install(level='INFO', logger=log)
 
 tz = pytz.timezone("America/Phoenix")
 
@@ -197,8 +191,10 @@ def process_image(f, force=False):
     if not force and Path.exists(outfile):
         log.info(f"Already processed {f.name}, loading previous data...")
         with open(outfile, 'r') as fp:
-            line = fp.readlines()[0]
-            return line
+            lines = fp.readlines()
+
+        if len(lines) > 0:
+            return lines[0]
 
     try:
         data, hdr = check_image(f)
@@ -279,6 +275,7 @@ def main():
     parser.add_argument(
         '-d', '--dirs',
         metavar="<glob>",
+        nargs='+',
         help="Glob of directories to process. Defaults to *.",
         default="*"
     )
@@ -308,11 +305,12 @@ def main():
 
     log.info(f"Using {args.nproc} cores...")
 
-    dirs = sorted(list(rootdir.glob(args.dirs)))  # pathlib, where have you been all my life!
+    dirs = sorted(list(args.dirs))  # pathlib, where have you been all my life!
     csv_header = "time,wfs,file,exptime,airmass,az,el,osst,outt,chamt,tiltx,tilty,"\
         "transx,transy,focus,focerr,cc_x_err,cc_y_err,xcen,ycen,seeing,raw_seeing,fwhm,wavefront_rms,residual_rms\n"
     slow = False
     for d in dirs:
+        d = rootdir / d
         if d.is_dir():
             if not args.forcedir and Path.exists(d / "reanalyze_results.csv"):
                 log.info(f"Already processed {d.name}...")
