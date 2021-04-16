@@ -1,14 +1,10 @@
 #!/usr/bin/env python
 
 from datetime import datetime
-import traceback
-import functools
 import multiprocessing
 from multiprocessing import Pool
 
 import pytz
-import time
-import os
 import sys
 from pathlib import Path
 
@@ -16,20 +12,9 @@ import argparse
 import warnings
 
 import numpy as np
-import scipy
-import pandas as pd
 
-import matplotlib
-from matplotlib import style
-style.use('ggplot')
-import matplotlib.pyplot as plt
-
-from astropy import stats
-from astropy.io import fits, ascii
-from astropy.table import Column
 from astropy.time import Time
 
-import astropy.units as u
 from astropy.io import fits
 from mmtwfs.wfs import WFSFactory
 
@@ -174,7 +159,7 @@ def check_image(f, wfskey=None):
                 timestring = hdr['DATE-OBS'] + " UTC"
                 try:
                     dtime = datetime.strptime(timestring, "%Y-%m-%dT%H:%M:%S.%f %Z")
-                except:
+                except Exception:
                     dtime = datetime.strptime(timestring, "%Y-%m-%dT%H:%M:%S %Z")
                 # mmirs uses local time in this header pre-2019
                 if wfskey == 'mmirs' and dtime < datetime.fromisoformat("2019-01-01T12:00:00"):
@@ -248,8 +233,8 @@ def process_image(f, force=False):
     # and wavefront solution. also want to get statistics on the quality of the wavefront fits.
     try:
         results = wfs_systems[wfskey].measure_slopes(str(f), plot=False)
-    except:
-        log.error(f"Problem analyzing {f.name}...")
+    except Exception as e:
+        log.error(f"Problem analyzing {f.name}: {e}")
         results = {}
         results['slopes'] = None
 
@@ -259,7 +244,11 @@ def process_image(f, force=False):
             zv = zresults['zernike']
             focerr = wfs_systems[wfskey].calculate_focus(zv)
             cc_x_err, cc_y_err = wfs_systems[wfskey].calculate_cc(zv)
-            line = f"{obstime},{wfskey},{f.name},{exptime},{airmass},{az},{el},{osst},{outt},{chamt},{tiltx},{tilty},{transx},{transy},{focus},{focerr.value},{cc_x_err.value},{cc_y_err.value},{results['xcen']},{results['ycen']},{results['seeing'].value},{results['raw_seeing'].value},{results['fwhm']},{zresults['zernike_rms'].value},{zresults['residual_rms'].value}\n"
+            line = f"{obstime},{wfskey},{f.name},{exptime},{airmass},{az},{el},{osst},{outt}," \
+                f"{chamt},{tiltx},{tilty},{transx},{transy},{focus},{focerr.value},{cc_x_err.value}," \
+                f"{cc_y_err.value},{results['xcen']},{results['ycen']},{results['seeing'].value}," \
+                f"{results['raw_seeing'].value},{results['fwhm']},{zresults['zernike_rms'].value}," \
+                f"{zresults['residual_rms'].value}\n"
             zfile = f.parent / (f.stem + ".reanalyze.zernike")
             zresults['zernike'].save(filename=zfile)
             spotfile = f.parent / (f.stem + ".spots.csv")
@@ -320,7 +309,8 @@ def main():
     log.info(f"Using {args.nproc} cores...")
 
     dirs = sorted(list(rootdir.glob(args.dirs)))  # pathlib, where have you been all my life!
-    csv_header = "time,wfs,file,exptime,airmass,az,el,osst,outt,chamt,tiltx,tilty,transx,transy,focus,focerr,cc_x_err,cc_y_err,xcen,ycen,seeing,raw_seeing,fwhm,wavefront_rms,residual_rms\n"
+    csv_header = "time,wfs,file,exptime,airmass,az,el,osst,outt,chamt,tiltx,tilty,"\
+        "transx,transy,focus,focerr,cc_x_err,cc_y_err,xcen,ycen,seeing,raw_seeing,fwhm,wavefront_rms,residual_rms\n"
     slow = False
     for d in dirs:
         if d.is_dir():
@@ -330,15 +320,15 @@ def main():
                 try:
                     lines = []
                     lines.append(csv_header)
-                    night = int(d.name)  # valid WFS directories are ints of the form YYYYMMDD. if not this form, int barfs
+                    _ = int(d.name)  # valid WFS directories are ints of the form YYYYMMDD. if not this form, int barfs
                     fitsfiles = d.glob("*.fits")
                     log.info(f"Processing {d}...")
                     if slow:
                         plines = []
                         for f in fitsfiles:
                             log.debug(f"Processing {f}...")
-                            l = process_image(f, force=args.force)
-                            plines.append(l)
+                            line = process_image(f, force=args.force)
+                            plines.append(line)
                     else:
                         with Pool(processes=args.nproc) as pool:
                             plines = pool.map(process_image, fitsfiles)  # plines comes out in same order as fitslines!
