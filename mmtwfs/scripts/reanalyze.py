@@ -297,6 +297,7 @@ def main():
         '-n', '--nproc',
         metavar="<# processes>",
         help="Number of parallel processes. Defaults to half number of available cores.",
+        type=int,
         default=int(multiprocessing.cpu_count()/2)  # MKL uses a lot of threads so best to limit Pool to half available cores
     )
 
