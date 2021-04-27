@@ -15,7 +15,7 @@ jobs:
       matrix:
         os: [ubuntu-latest]
         python-ver: [8]
-        tox-env: [cov, alldeps, astropydev]
+        tox-env: [cov, alldeps]
     steps:
     - uses: actions/checkout@v1
     - name: Set up python 3.${{ matrix.python-ver }} with tox environment ${{ matrix.tox-env }} on ${{ matrix.os }}
