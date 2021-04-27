@@ -51,6 +51,7 @@ wfs_systems['binospec'].cen_tol = 120.
 wfs_systems['oldf9'].cen_tol = 75.
 wfs_systems['f5'].cen_tol = 75.
 
+
 def check_image(f, wfskey=None):
     hdr = {}
     with fits.open(f, output_verify="ignore") as hdulist:
@@ -149,6 +150,13 @@ def check_image(f, wfskey=None):
             else:
                 timestring = d + " " + hdr['TIME-OBS'] + " UTC"
             dtime = datetime.strptime(timestring, "%Y-%m-%d %H:%M:%S %Z")
+        elif wfskey == "newf9":
+            if 'MJD' in hdr:
+                dtime = Time(hdr['MJD'], format='mjd').to_datetime()
+            else:
+                dt = datetime.fromtimestamp(f.stat().st_ctime)
+                local_dt = tz.localize(dt)
+                dtime = local_dt.astimezone(pytz.utc)
         else:
             if 'DATE-OBS' in hdr:
                 timestring = hdr['DATE-OBS'] + " UTC"

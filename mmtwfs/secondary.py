@@ -69,9 +69,6 @@ class MMTSecondary(object):
     def __init__(self, config={}):
         super(MMTSecondary, self).__init__(config=config)
 
-        # get host/port to use for hexapod communication
-        self.host, self.port = srvlookup(self.hexserv)
-
         # use this boolean to determine if corrections are actually to be sent
         self.connected = False
 
@@ -94,6 +91,8 @@ class MMTSecondary(object):
         Set state to connected so that calculated corrections will be sent to the relevant systems
         """
         if self.host is not None:
+            # get host/port to use for hexapod communication
+            self.host, self.port = srvlookup(self.hexserv)
             sock = self.hex_sock()
             if sock is None:
                 self.connected = False
