@@ -151,8 +151,13 @@ def check_image(f, wfskey=None):
                 timestring = d + " " + hdr['TIME-OBS'] + " UTC"
             dtime = datetime.strptime(timestring, "%Y-%m-%d %H:%M:%S %Z")
         elif wfskey == "newf9":
-            if 'MJD' in hdr:
+            par_dir = f.parent.name
+            if "20" in par_dir:
+                timestring = f"{par_dir} {hdr['UT']} UTC"
+                dtime = datetime.strptime(timestring, "%Y%m%d %H:%M:%S %Z")
+            elif 'MJD' in hdr:
                 dtime = Time(hdr['MJD'], format='mjd').to_datetime()
+                log.info(f"newf9 got {dtime} from {hdr['MJD']}...")
             else:
                 dt = datetime.fromtimestamp(f.stat().st_ctime)
                 local_dt = tz.localize(dt)

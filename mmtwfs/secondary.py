@@ -70,6 +70,8 @@ class MMTSecondary(object):
         super(MMTSecondary, self).__init__(config=config)
 
         # use this boolean to determine if corrections are actually to be sent
+        self.host = None
+        self.port = None
         self.connected = False
 
     def inc_offset(self, offset, axis, value):
@@ -90,16 +92,17 @@ class MMTSecondary(object):
         """
         Set state to connected so that calculated corrections will be sent to the relevant systems
         """
-        if self.host is not None:
+        if self.host is None or self.port is None:
             # get host/port to use for hexapod communication
             self.host, self.port = srvlookup(self.hexserv)
-            sock = self.hex_sock()
-            if sock is None:
-                self.connected = False
-            else:
-                self.connected = True
-                sock.shutdown(socket.SHUT_RDWR)
-                sock.close()
+
+        sock = self.hex_sock()
+        if sock is None:
+            self.connected = False
+        else:
+            self.connected = True
+            sock.shutdown(socket.SHUT_RDWR)
+            sock.close()
 
     def hex_sock(self):
         """
