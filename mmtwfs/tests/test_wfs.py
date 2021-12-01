@@ -192,7 +192,7 @@ def test_flwo_analysis():
     results = wfs.measure_slopes(test_file)
     zresults = wfs.fit_wavefront(results)
     testval = int(zresults['zernike']['Z06'].value)
-    assert((testval > 600) & (testval < 700))
+    assert((testval > 700) & (testval < 1000))
 
 
 @cleanup
