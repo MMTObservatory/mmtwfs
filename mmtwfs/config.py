@@ -299,7 +299,7 @@ mmtwfs_config = {
             "find_fwhm": 12.0,
             "find_thresh": 5.0,
             "cen_thresh": 0.7,
-            "cen_sigma": 6.0,
+            "cen_sigma": 15.0,
             "cen_tol": 150.,
             "rotation": -225. * u.deg,
             "lenslet_pitch": 625 * u.um,  # width of each lenslet
