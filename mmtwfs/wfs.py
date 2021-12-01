@@ -302,7 +302,7 @@ def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True, cen=None):
     if cen is None:
         mean, median, stddev = stats.sigma_clipped_stats(data, sigma=3.0, maxiters=None)
     else:
-        xcen, ycen = int(cen[1]), int(cen[0])
+        xcen, ycen = int(cen[0]), int(cen[1])
         mean, median, stddev = stats.sigma_clipped_stats(data[ycen-50:ycen+50, xcen-50:ycen+50], sigma=3.0, maxiters=None)
 
     # use wfsfind() and pass it the clipped stddev from here
