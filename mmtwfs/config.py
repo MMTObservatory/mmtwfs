@@ -179,7 +179,7 @@ mmtwfs_config = {
             "find_fwhm": 9.0,  # FWHM for DAOfind kernel
             "find_thresh": 5.0,  # threshold for DAOfind
             "cen_thresh": 0.7,  # threshold for finding peaks in correlation image used for pupil registration
-            "cen_sigma": 5.0,  # sigma of smoothing kernel used on data before pupil registration
+            "cen_sigma": 10.0,  # sigma of smoothing kernel used on data before pupil registration
             "cen_tol": 50.,  # distance from cor_coords allowed for a wavefront analysis to be considered potentially valid
             "rotation": 234.0 * u.deg,  # rotation of aperture locations w.r.t. the primary mirror
             "lenslet_pitch": 600 * u.um,  # width of each lenslet
