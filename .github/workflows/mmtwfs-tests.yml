@@ -29,9 +29,9 @@ jobs:
           name: py38-astropyLTS
         - linux: build_docs
         - linux: linkcheck
-        - linux: py310-astropydev-numpydev
-          name: py310-dev
-          continue-on-error: true
+#        - linux: py310-astropydev-numpydev
+#          name: py310-dev
+#          continue-on-error: true
       coverage: 'codecov'
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV }}
