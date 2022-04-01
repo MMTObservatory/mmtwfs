@@ -23,21 +23,20 @@ class CompMirror(object):
     Defines how to query and command the comparison mirror within the F/9 topbox
     """
     def __init__(self, host=None, port=None):
-        # get host/port for topbox communication. if not specified, use srvlookup to get from MMTO DNS.
-        if host is None and port is None:
-            self.host, self.port = srvlookup("_lampbox._tcp.mmto.arizona.edu")
-        else:
-            self.host = host
-            self.port = port
-
         # use this boolean to determine if commands are actually to be sent
         self.connected = False
+        self.host = host
+        self.port = port
 
     def connect(self):
         """
         Set state to connected so that commands will be sent
         """
-        if self.host is not None and not self.connected:
+        if not self.connected:
+            if self.host is None or self.port is None:
+                # get host/port for topbox communication. if not specified, use srvlookup to get from MMTO DNS.
+                self.host, self.port = srvlookup("_lampbox._tcp.mmto.arizona.edu")
+
             sock = self.netsock()
             if sock is None:
                 self.connected = False

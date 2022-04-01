@@ -1,6 +1,6 @@
 FROM python:latest
 
-MAINTAINER T. E. Pickering "te.pickering@gmail.com"
+LABEL maintainer="te.pickering@gmail.com"
 
 COPY . .
 
