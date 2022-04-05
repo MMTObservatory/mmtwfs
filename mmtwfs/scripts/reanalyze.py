@@ -6,9 +6,13 @@ from multiprocessing import Pool
 from functools import partial
 import pytz
 from pathlib import Path
-
 import argparse
 import warnings
+import logging
+
+import coloredlogs
+
+import matplotlib
 
 import numpy as np
 
@@ -17,11 +21,10 @@ from astropy.time import Time
 from astropy.io import fits
 from mmtwfs.wfs import WFSFactory
 
-import logging
-import coloredlogs
-
 from astropy.utils.exceptions import AstropyWarning, AstropyDeprecationWarning
 
+# Force non-interactive backend
+matplotlib.use('Agg')
 
 warnings.simplefilter('ignore', category=AstropyWarning)
 warnings.simplefilter('ignore', category=AstropyDeprecationWarning)
@@ -104,6 +107,11 @@ def check_image(f, wfskey=None):
         # some early F/5 data had no real id in their headers...
         if wfskey is None and Path(f.parent / "F5").exists():
             wfskey = 'f5'
+
+        # the new pyindi interface specifies F/5 WFS in the header
+        if 'INSTRUME' in hdr:
+            if 'F/5 WFS' in hdr['INSTRUME']:
+                wfskey = 'f5'
 
         # also try for early old F/9 data...
         if wfskey is None and Path(f.parent / "F9").exists():
