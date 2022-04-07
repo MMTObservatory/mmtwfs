@@ -106,7 +106,7 @@ def R_mn(m, n, rho):
     m = np.abs(m)
     wf = 0.0
     for k in range(int((n - m)/2) + 1):
-        wf += rho**(n - 2.0*k) * (-1.0)**k * fac(n-k) / (fac(k) * fac(int((n + m)/2) - k) * fac(int((n - m)/2) - k))
+        wf += rho**(n - 2*k) * (-1)**k * fac(n-k) / (fac(k) * fac(int((n + m)/2) - k) * fac(int((n - m)/2) - k))
 
     return wf
 
