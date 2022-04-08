@@ -1,3 +1,28 @@
+2.1.0 (2022-04-08)
+------------------
+
+General
+^^^^^^^
+
+Significant performance enhancements:
+
+- Use KD-tree for matching observed and reference aperture coordinates
+- Implement caching and reuse of zernike polynomial terms when calculating set of slopes
+
+Overall improvement of about a factor of two in performance when doing a full analysis of a typical Shack-Hartmann image.
+
+
+2.0.2 (2022-04-06)
+------------------
+
+Bug Fixes
+^^^^^^^^^
+
+- Bump ``python_requires`` to 3.8
+- Convert README to ``.rst`` format
+- Move dependencies from ``all`` to ``install_requires`` so ``pip`` installs from PyPI pull in everything that's needed.
+
+
 2.0.0 (2022-04-05)
 ------------------
 
