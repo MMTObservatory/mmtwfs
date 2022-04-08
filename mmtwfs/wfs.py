@@ -383,7 +383,6 @@ def aperture_distance(refx, refy, spotx, spoty):
     Calculate the sum of the distances between each reference aperture and the closest measured spot position.
     This total distance is the statistic to minimize when fitting the reference aperture grid to the data.
     """
-    tot_dist = 0.0
     refs = np.array([refx, refy]).transpose()
     spots = np.array([spotx, spoty]).transpose()
     tree = cKDTree(refs)
