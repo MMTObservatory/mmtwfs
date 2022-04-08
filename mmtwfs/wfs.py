@@ -18,6 +18,7 @@ import matplotlib.cm as cm
 from skimage import feature
 from scipy import ndimage, optimize
 from scipy.ndimage import rotate
+from scipy.spatial import cKDTree
 
 import lmfit
 
@@ -383,11 +384,11 @@ def aperture_distance(refx, refy, spotx, spoty):
     This total distance is the statistic to minimize when fitting the reference aperture grid to the data.
     """
     tot_dist = 0.0
-    refs = np.array([refx, refy])
-    spots = np.array([spotx, spoty])
-    for i in np.arange(len(refx)):
-        dists = np.sqrt((spots[0]-refs[0][i])**2 + (spots[1]-refs[1][i])**2)
-        tot_dist += np.min(dists)
+    refs = np.array([refx, refy]).transpose()
+    spots = np.array([spotx, spoty]).transpose()
+    tree = cKDTree(refs)
+    mindist, _ = tree.query(spots)
+    tot_dist = mindist.sum()
     return np.log(tot_dist)
 
 
