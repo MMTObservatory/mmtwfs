@@ -78,7 +78,7 @@ def pol2cart(polarr):
     return arr
 
 
-def R_mn(m, n, rho):
+def R_mn(m, n, rho, cache=None):
     """
     Make radial Zernike polynomial on coordinate grid **rho**.
 
@@ -100,18 +100,25 @@ def R_mn(m, n, rho):
     -----
     See https://en.wikipedia.org/wiki/Zernike_polynomials for details.
     """
+    if cache is not None:
+        if ('R_mn', n, m) in cache:
+            return cache[('R_mn', n, m)]
+
     if np.mod(n-m, 2) == 1:
         return 0.0
 
     m = np.abs(m)
     wf = 0.0
     for k in range(int((n - m)/2) + 1):
-        wf += rho**(n - 2.0*k) * (-1.0)**k * fac(n-k) / (fac(k) * fac(int((n + m)/2) - k) * fac(int((n - m)/2) - k))
+        wf += rho**(n - 2*k) * (-1)**k * fac(n-k) / (fac(k) * fac(int((n + m)/2) - k) * fac(int((n - m)/2) - k))
+
+    if cache is not None:
+        cache[('R_mn', n, m)] = wf
 
     return wf
 
 
-def dR_drho(m, n, rho):
+def dR_drho(m, n, rho, cache=None):
     """
     First derivative of Zernike radial polynomial, R(m, n, rho) calculated on coordinate grid **rho**.
 
@@ -133,8 +140,15 @@ def dR_drho(m, n, rho):
     -----
     See http://adsabs.harvard.edu/abs/2014OptLE..52....7N for details.
     """
-    dR_mn = R_mn(m, n, rho) * (rho**2 * (n + 2.) + m) / (rho * (1. - rho**2)) - \
-        R_mn(m+1, n+1, rho) * (n + m + 2.) / (1. - rho**2)
+    if cache is not None:
+        if ('dR_drho', n, m) in cache:
+            return cache[('dR_drho', n, m)]
+
+    dR_mn = R_mn(m, n, rho, cache=cache) * (rho**2 * (n + 2.) + m) / (rho * (1. - rho**2)) - \
+        R_mn(m+1, n+1, rho, cache=cache) * (n + m + 2.) / (1. - rho**2)
+
+    if cache is not None:
+        cache[('dR_drho', n, m)] = dR_mn
 
     return dR_mn
 
@@ -187,7 +201,7 @@ def dtheta_dphi(m, phi):
     return dtheta
 
 
-def zernike(m, n, rho, phi, norm=False):
+def zernike(m, n, rho, phi, norm=False, cache=None):
     """
     Calculate Zernike mode (m, n) on grid **rho** and **phi**.
     **rho** and **phi** must be radial and azimuthal coordinate grids of identical shape, respectively.
@@ -218,12 +232,12 @@ def zernike(m, n, rho, phi, norm=False):
     if norm:
         nc = norm_coefficient(m, n)
 
-    wf = nc * R_mn(m, n, rho) * theta_m(m, phi)
+    wf = nc * R_mn(m, n, rho, cache=cache) * theta_m(m, phi)
 
     return wf
 
 
-def dZ_dx(m, n, rho, phi, norm=False):
+def dZ_dx(m, n, rho, phi, norm=False, cache=None):
     """
     Calculate the X slopes of Zernike mode (m, n) on grid **rho** and **phi**.
 
@@ -249,19 +263,26 @@ def dZ_dx(m, n, rho, phi, norm=False):
     -----
     See http://adsabs.harvard.edu/abs/2014OptLE..52....7N for details.
     """
+    if cache is not None:
+        if ('dZ_dx', n, m) in cache:
+            return cache[('dZ_dx', n, m)]
+
     nc = 1.0
     if norm:
         nc = norm_coefficient(m, n)
 
-    dwf = dR_drho(m, n, rho) * theta_m(m, phi) * np.cos(phi) - \
-        R_mn(m, n, rho) * dtheta_dphi(m, phi) * np.sin(phi) / rho
+    dwf = dR_drho(m, n, rho, cache=cache) * theta_m(m, phi) * np.cos(phi) - \
+        R_mn(m, n, rho, cache=cache) * dtheta_dphi(m, phi) * np.sin(phi) / rho
 
     dwf *= nc
+
+    if cache is not None:
+        cache[('dZ_dx', n, m)] = dwf
 
     return dwf
 
 
-def dZ_dy(m, n, rho, phi, norm=False):
+def dZ_dy(m, n, rho, phi, norm=False, cache=None):
     """
     Calculate the Y slopes of Zernike mode (m, n) on grid **rho** and **phi**.
 
@@ -287,14 +308,21 @@ def dZ_dy(m, n, rho, phi, norm=False):
     -----
     See http://adsabs.harvard.edu/abs/2014OptLE..52....7N for details.
     """
+    if cache is not None:
+        if ('dZ_dy', n, m) in cache:
+            return cache[('dZ_dy', n, m)]
+
     nc = 1.0
     if norm:
         nc = norm_coefficient(m, n)
 
-    dwf = dR_drho(m, n, rho) * theta_m(m, phi) * np.sin(phi) + \
-        R_mn(m, n, rho) * dtheta_dphi(m, phi) * np.cos(phi) / rho
+    dwf = dR_drho(m, n, rho, cache=cache) * theta_m(m, phi) * np.sin(phi) + \
+        R_mn(m, n, rho, cache=cache) * dtheta_dphi(m, phi) * np.cos(phi) / rho
 
     dwf *= nc
+
+    if cache is not None:
+        cache[('dZ_dy', n, m)] = dwf
 
     return dwf
 
@@ -331,7 +359,7 @@ def noll_to_zernike(j):
     return (n, m)
 
 
-def zernike_noll(j, rho, phi, norm=False):
+def zernike_noll(j, rho, phi, norm=False, cache=None):
     """
     Calculate Noll Zernike mode **j** on grid **rho** and **phi**.
     **rho** and **phi** must be radial and azimuthal coordinate grids of identical shape, respectively.
@@ -353,11 +381,11 @@ def zernike_noll(j, rho, phi, norm=False):
         Wavefront described by Noll Zernike mode, j. Same shape as **rho** and **phi**.
     """
     n, m = noll_to_zernike(j)
-    wf = zernike(m, n, rho, phi, norm)
+    wf = zernike(m, n, rho, phi, norm, cache=cache)
     return wf
 
 
-def zernike_slope_noll(j, rho, phi, norm=False):
+def zernike_slope_noll(j, rho, phi, norm=False, cache=None):
     """
     Calculate X/Y slopes for Noll Zernike mode **j** on grid **rho** and **phi**.
     **rho** and **phi** must be radial and azimuthal coordinate grids of identical shape, respectively.
@@ -379,8 +407,8 @@ def zernike_slope_noll(j, rho, phi, norm=False):
         X/Y wavefront slopes of Noll Zernike mode, j. Same shapes as **rho** and **phi**.
     """
     n, m = noll_to_zernike(j)
-    dwx = dZ_dx(m, n, rho, phi, norm=norm)
-    dwy = dZ_dy(m, n, rho, phi, norm=norm)
+    dwx = dZ_dx(m, n, rho, phi, norm=norm, cache=cache)
+    dwy = dZ_dy(m, n, rho, phi, norm=norm, cache=cache)
     return dwx, dwy
 
 
@@ -406,9 +434,10 @@ def zernike_slopes(zv, rho, phi, norm=False):
     """
     xslope = 0.
     yslope = 0.
+    cache = {}
     for k, v in zv.items():
         mode = int(k.replace("Z", ""))
-        dwx, dwy = zernike_slope_noll(mode, rho, phi, norm=norm)
+        dwx, dwy = zernike_slope_noll(mode, rho, phi, norm=norm, cache=cache)
         xslope += v * dwx
         yslope += v * dwy
     return xslope, yslope
