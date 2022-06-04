@@ -1,8 +1,13 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 # coding=utf-8
 
+import os
 import asyncio
 import logging
+import re
+import pkg_resources
+from pathlib import Path
+
 
 log = logging.getLogger("Cell")
 log.setLevel(logging.DEBUG)
@@ -95,11 +100,14 @@ class Cell:
         -------
         None
         """
-        log.debug(f"Sending message: {msg}")
-        # the cell code predates UTF-8 by many years so encode to ascii to be safe
-        msg = msg.encode('ascii', 'ignore')
-        self.writer.write(msg)
-        await self.writer.drain()
+        if self.is_connected:
+            log.debug(f"Sending message: {msg}")
+            # the cell code predates UTF-8 by many years so encode to ascii to be safe
+            msg = msg.encode('ascii', 'ignore')
+            self.writer.write(msg)
+            await self.writer.drain()
+        else:
+            log.warning(f"Cell not connected, {msg} not sent")
 
         return None
 
@@ -107,13 +115,60 @@ class Cell:
         """
         Receive message from the cell
         """
-        log.debug("Receiving message from cell")
-        if self.reader.at_eof():
-            raise Exception("No data available from cell connection")
+        response = None
+        if self.is_connected:
+            log.debug("Receiving message from cell")
+            if self.reader.at_eof():
+                raise Exception("No data available from cell connection")
 
-        response = await self.reader.read(self.read_width)
-        response = response.decode('ascii')
-        log.debug(f"Received from cell: {response}")
+            response = await self.reader.read(self.read_width)
+            response = response.decode('ascii')
+            log.debug(f"Received from cell: {response}")
+        else:
+            log.warning("Can't receive data, cell not connected")
 
         return response
 
+    async def ident(self):
+        """
+        Send ident to the cell so it can log who's talking to it
+        """
+        response = None
+        if self.is_connected:
+            id_msg = "@ident mmtwfs\n"
+            self.send(id_msg)
+            response = await self.recv()
+        else:
+            log.warning("Can't sent ident command to cell, not connected")
+
+        return response
+
+    async def send_force_file(self, forcefile):
+        """
+        Send file containing influence forces to the cell
+        """
+        response = None
+        forcefile = Path(forcefile)
+        if self.is_connected:
+            self.send(f"set_zinf_newtons {forcefile.name}\n")
+            with open(forcefile, 'r') as fp:
+                for line in fp.readlines():
+                    if re.search("^#", line) or re.search("^\s*$", line):
+                        continue
+                    line = line.replace("\t", " ")
+                    self.send(line)
+            self.send(".EOF\n")
+            response = await self.recv()
+        else:
+            log.warning("Can't send forces to cell, not connected")
+
+        return response
+
+    async def send_null_forces(self):
+        """
+        Send file containing null force set to the cell
+        """
+        response = None
+        forcefile = pkg_resources.resource_filename(__name__, os.path.join("data", "null_forces"))
+        response = await self.send_force_file(forcefile)
+        return response
