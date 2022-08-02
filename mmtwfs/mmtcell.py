@@ -53,6 +53,8 @@ class Cell:
             log.debug("Connection to cell refused.")
             raise
 
+        self.ident()
+
         return None
 
     async def disconnect(self):
@@ -149,7 +151,7 @@ class Cell:
         """
         response = None
         forcefile = Path(forcefile)
-        if self.is_connected:
+        if forcefile.exists() and self.is_connected:
             self.send(f"set_zinf_newtons {forcefile.name}\n")
             with open(forcefile, 'r') as fp:
                 for line in fp.readlines():
@@ -160,7 +162,10 @@ class Cell:
             self.send(".EOF\n")
             response = await self.recv()
         else:
-            log.warning("Can't send forces to cell, not connected")
+            if not self.is_connected:
+                log.warning("Can't send forces to cell, not connected")
+            if not forcefile.exists():
+                log.warning(f"Cell force file, {forcefile}, does not exist")
 
         return response
 
