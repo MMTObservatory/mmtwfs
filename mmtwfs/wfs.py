@@ -1367,7 +1367,7 @@ class F5(WFS):
         # calculate the background and subtract it
         bkg_estimator = photutils.ModeEstimatorBackground()
         mask = photutils.make_source_mask(data, nsigma=2, npixels=5, dilate_size=11)
-        bkg = photutils.Background2D(data, (20, 20), filter_size=(10, 10), bkg_estimator=bkg_estimator, mask=mask)
+        bkg = photutils.Background2D(data, (20, 20), filter_size=(11, 11), bkg_estimator=bkg_estimator, mask=mask)
         data -= bkg.background
 
         return data, hdr
