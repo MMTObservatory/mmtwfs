@@ -33,11 +33,12 @@ from astroscrappy import detect_cosmics
 
 from ccdproc.utils.slices import slice_from_string
 
-from .config import recursive_subclasses, merge_config, mmtwfs_config
-from .telescope import TelescopeFactory
-from .f9topbox import CompMirror
-from .zernike import ZernikeVector, zernike_slopes, cart2pol, pol2cart
-from .custom_exceptions import WFSConfigException, WFSAnalysisFailed, WFSCommandException
+from mmtwfs.config import recursive_subclasses, merge_config, mmtwfs_config
+from mmtwfs.telescope import TelescopeFactory
+from mmtwfs.f9topbox import CompMirror
+from mmtwfs.zernike import ZernikeVector, zernike_slopes, cart2pol, pol2cart
+from mmtwfs.photometry import make_spot_mask
+from mmtwfs.custom_exceptions import WFSConfigException, WFSAnalysisFailed, WFSCommandException
 
 import logging
 import logging.handlers
@@ -133,7 +134,7 @@ def mk_wfs_mask(data, thresh_factor=50., outfile="wfs_mask.fits"):
 
 def wfsfind(data, fwhm=7.0, threshold=5.0, plot=True, ap_radius=5.0, std=None):
     """
-    Use photutils.DAOStarFinder() to find and centroid spots in a Shack-Hartmann WFS image.
+    Use photutils.detection.DAOStarFinder() to find and centroid spots in a Shack-Hartmann WFS image.
 
     Parameters
     ----------
@@ -152,7 +153,7 @@ def wfsfind(data, fwhm=7.0, threshold=5.0, plot=True, ap_radius=5.0, std=None):
     data = check_wfsdata(data)
     if std is None:
         mean, median, std = stats.sigma_clipped_stats(data, sigma=3.0, maxiters=5)
-    daofind = photutils.DAOStarFinder(fwhm=fwhm, threshold=threshold*std, sharphi=0.95)
+    daofind = photutils.detection.DAOStarFinder(fwhm=fwhm, threshold=threshold*std, sharphi=0.95)
     sources = daofind(data)
 
     if sources is None:
@@ -173,10 +174,10 @@ def wfsfind(data, fwhm=7.0, threshold=5.0, plot=True, ap_radius=5.0, std=None):
         fig, ax = plt.subplots()
         fig.set_label("WFSfind")
         positions = list(zip(sources['xcentroid'], sources['ycentroid']))
-        apertures = photutils.CircularAperture(positions, r=ap_radius)
+        apertures = photutils.aperture.CircularAperture(positions, r=ap_radius)
         norm = wfs_norm(data)
         ax.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
-        apertures.plot(color='red', lw=1.5, alpha=0.5, axes=ax)
+        apertures.plot(color='red', lw=1.5, alpha=0.5, ax=ax)
     return sources, fig
 
 
@@ -314,7 +315,7 @@ def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True, cen=None):
     # we use circular apertures here because they generate square masks of the appropriate size.
     # rectangular apertures produced masks that were sqrt(2) too large.
     # see https://github.com/astropy/photutils/issues/499 for details.
-    apers = photutils.CircularAperture(
+    apers = photutils.aperture.CircularAperture(
         list(zip(srcs['xcentroid'], srcs['ycentroid'])),
         r=apsize/2.
     )
@@ -522,7 +523,7 @@ def get_slopes(data, ref, pup_mask, fwhm=7., thresh=5., cen=[255, 255],
         msg = "Only %d spots detected out of %d apertures." % (len(srcs), len(ref.masked_apertures['xcentroid']))
         raise WFSAnalysisFailed(value=msg)
 
-    src_aps = photutils.CircularAperture(
+    src_aps = photutils.aperture.CircularAperture(
         list(zip(srcs['xcentroid'], srcs['ycentroid'])),
         r=apsize/2.
     )
@@ -573,7 +574,7 @@ def get_slopes(data, ref, pup_mask, fwhm=7., thresh=5., cen=[255, 255],
     trim_refx = ref.masked_apertures['xcentroid'][ref_mask] + fit_results['xcen']
     trim_refy = ref.masked_apertures['ycentroid'][ref_mask] + fit_results['ycen']
 
-    ref_aps = photutils.CircularAperture(
+    ref_aps = photutils.aperture.CircularAperture(
         list(zip(trim_refx, trim_refy)),
         r=ref_spacing/2.
     )
@@ -590,7 +591,7 @@ def get_slopes(data, ref, pup_mask, fwhm=7., thresh=5., cen=[255, 255],
         aps_fig.set_label("Aperture Positions")
         ax.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
         ax.scatter(pup_center[0], pup_center[1])
-        src_aps.plot(color='blue', axes=ax)
+        src_aps.plot(color='blue', ax=ax)
 
     # need full slopes array the size of the complete set of reference apertures and pre-filled with np.nan for masking
     slopes = np.nan * np.ones((2, len(ref.masked_apertures['xcentroid'])))
@@ -699,7 +700,7 @@ class SH_Reference(object):
         # make masks for each reference spot and fit a 2D gaussian to get its FWHM. the reference FWHM is subtracted in
         # quadrature from the observed FWHM when calculating the seeing.
         apsize = np.mean([self.xspacing, self.yspacing])
-        apers = photutils.CircularAperture(
+        apers = photutils.aperture.CircularAperture(
             list(zip(self.apertures['xcentroid'], self.apertures['ycentroid'])),
             r=apsize/2.
         )
@@ -919,9 +920,9 @@ class WFS(object):
         cr_mask, data = detect_cosmics(trimdata, sigclip=5., niter=5, cleantype='medmask', psffwhm=5.)
 
         # calculate the background and subtract it
-        bkg_estimator = photutils.ModeEstimatorBackground()
-        mask = photutils.make_source_mask(data, nsigma=2, npixels=5, dilate_size=11)
-        bkg = photutils.Background2D(data, (10, 10), filter_size=(5, 5), bkg_estimator=bkg_estimator, mask=mask)
+        bkg_estimator = photutils.background.ModeEstimatorBackground()
+        mask = make_spot_mask(data, nsigma=2, npixels=5, dilate_size=11)
+        bkg = photutils.background.Background2D(data, (10, 10), filter_size=(5, 5), bkg_estimator=bkg_estimator, mask=mask)
         data -= bkg.background
 
         return data, hdr
@@ -1048,7 +1049,7 @@ class WFS(object):
             figures['slopes'].set_label("Aperture Positions and Spot Movement")
             ax = figures['slopes'].axes[0]
             ax.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
-            aps.plot(color='blue', axes=ax)
+            aps.plot(color='blue', ax=ax)
             ax.quiver(x, y, uu, vv, scale_units='xy', scale=0.2, pivot='tip', color='red')
             xl = [0.1*data.shape[1]]
             yl = [0.95*data.shape[0]]
@@ -1332,9 +1333,9 @@ class NewF9(F9):
         cr_mask, data = detect_cosmics(rawdata, sigclip=15., niter=5, cleantype='medmask', psffwhm=10.)
 
         # calculate the background and subtract it
-        bkg_estimator = photutils.ModeEstimatorBackground()
-        mask = photutils.make_source_mask(data, nsigma=2, npixels=7, dilate_size=13)
-        bkg = photutils.Background2D(data, (50, 50), filter_size=(15, 15), bkg_estimator=bkg_estimator, mask=mask)
+        bkg_estimator = photutils.background.ModeEstimatorBackground()
+        mask = make_spot_mask(data, nsigma=2, npixels=7, dilate_size=13)
+        bkg = photutils.background.Background2D(data, (50, 50), filter_size=(15, 15), bkg_estimator=bkg_estimator, mask=mask)
         data -= bkg.background
 
         return data, hdr
@@ -1365,9 +1366,9 @@ class F5(WFS):
         cr_mask, data = detect_cosmics(trimdata, sigclip=15., niter=5, cleantype='medmask', psffwhm=10.)
 
         # calculate the background and subtract it
-        bkg_estimator = photutils.ModeEstimatorBackground()
-        mask = photutils.make_source_mask(data, nsigma=2, npixels=5, dilate_size=11)
-        bkg = photutils.Background2D(data, (20, 20), filter_size=(11, 11), bkg_estimator=bkg_estimator, mask=mask)
+        bkg_estimator = photutils.background.ModeEstimatorBackground()
+        mask = make_spot_mask(data, nsigma=2, npixels=5, dilate_size=11)
+        bkg = photutils.background.Background2D(data, (20, 20), filter_size=(11, 11), bkg_estimator=bkg_estimator, mask=mask)
         data -= bkg.background
 
         return data, hdr
@@ -1805,9 +1806,9 @@ class MMIRS(F5):
         cr_mask, data = detect_cosmics(trimdata, sigclip=5., niter=5, cleantype='medmask', psffwhm=5.)
 
         # calculate the background and subtract it
-        bkg_estimator = photutils.ModeEstimatorBackground()
-        mask = photutils.make_source_mask(data, nsigma=2, npixels=5, dilate_size=11)
-        bkg = photutils.Background2D(data, (20, 20), filter_size=(7, 7), bkg_estimator=bkg_estimator, mask=mask)
+        bkg_estimator = photutils.background.ModeEstimatorBackground()
+        mask = make_spot_mask(data, nsigma=2, npixels=5, dilate_size=11)
+        bkg = photutils.background.Background2D(data, (20, 20), filter_size=(7, 7), bkg_estimator=bkg_estimator, mask=mask)
         data -= bkg.background
 
         return data, hdr
