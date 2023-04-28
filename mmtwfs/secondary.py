@@ -8,9 +8,9 @@ import socket
 
 import astropy.units as u
 
-from .utils import srvlookup
-from .config import recursive_subclasses, merge_config, mmtwfs_config
-from .custom_exceptions import WFSConfigException, WFSCommandException
+from mmtwfs.utils import srvlookup
+from mmtwfs.config import recursive_subclasses, merge_config, mmtwfs_config
+from mmtwfs.custom_exceptions import WFSConfigException, WFSCommandException
 
 import logging
 import logging.handlers

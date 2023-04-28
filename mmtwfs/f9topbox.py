@@ -9,7 +9,7 @@ import socket
 import logging
 import logging.handlers
 
-from .utils import srvlookup
+from mmtwfs.utils import srvlookup
 
 log = logging.getLogger("F/9 TopBox")
 log.setLevel(logging.INFO)
