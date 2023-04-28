@@ -155,7 +155,7 @@ class Cell:
             self.send(f"set_zinf_newtons {forcefile.name}\n")
             with open(forcefile, 'r') as fp:
                 for line in fp.readlines():
-                    if re.search("^#", line) or re.search("^\s*$", line):
+                    if re.search("^#", line) or re.search('^\s*$', line):  # noqa
                         continue
                     line = line.replace("\t", " ")
                     self.send(line)

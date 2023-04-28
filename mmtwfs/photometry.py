@@ -10,6 +10,7 @@ from astropy.stats import SigmaClip
 
 from photutils.segmentation.detect import detect_sources, detect_threshold
 
+
 def make_spot_mask(
         data,
         nsigma,
@@ -18,7 +19,7 @@ def make_spot_mask(
         sigclip_sigma=3.0,
         sigclip_iters=5,
         dilate_size=11
-    ):
+):
     """
     Make a WFS spot mask using source segmentation and binary dilation. This
     is a modified version of the deprecated function
@@ -70,8 +71,6 @@ def make_spot_mask(
     mask : 2D bool `~numpy.ndarray`
         A 2D boolean image containing the source mask.
     """
-    from scipy import ndimage
-
     sigma_clip = SigmaClip(sigma=sigclip_sigma, maxiters=sigclip_iters)
     threshold = detect_threshold(data, nsigma, background=None, error=None,
                                  mask=mask, sigma_clip=sigma_clip)

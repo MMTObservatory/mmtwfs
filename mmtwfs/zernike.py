@@ -1444,7 +1444,7 @@ class ZernikeVector(MutableMapping):
         surf = ax.plot_surface(x, y, ph, rstride=1, cstride=1, linewidth=0, alpha=0.6, cmap='plasma')
         v = max(abs(ph.max().value), abs(ph.min().value))
         ax.set_zlim(-v*5, v*5)
-        #cset = ax.contourf(x, y, ph, zdir='z', offset=-v*5, cmap='plasma')
+        # cset = ax.contourf(x, y, ph, zdir='z', offset=-v*5, cmap='plasma')
         ax.xaxis.set_ticks([-1, 0, 1])
         ax.yaxis.set_ticks([-1, 0, 1])
         cbar = fig.colorbar(surf, shrink=1, aspect=30, ax=ax)
