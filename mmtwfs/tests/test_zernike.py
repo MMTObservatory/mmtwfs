@@ -1,15 +1,18 @@
 # -*- coding: utf-8 -*-
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 
+import os
+import pytest
+
+import matplotlib.pyplot as plt
+
 import numpy as np
 
 import astropy.units as u
 
-from matplotlib.testing.decorators import cleanup
-
-from ..zernike import ZernikeVector, noll_normalization_vector, noll_coefficient, R_mn, norm_coefficient, zernike, \
+from mmtwfs.zernike import ZernikeVector, noll_normalization_vector, noll_coefficient, R_mn, norm_coefficient, zernike, \
     dZ_dx, dZ_dy, noll_to_zernike
-from ..custom_exceptions import ZernikeException
+from mmtwfs.custom_exceptions import ZernikeException
 
 
 def test_R_mn():
@@ -378,6 +381,7 @@ def test_loadsave():
         assert False
     else:
         assert False
+    os.remove("test.json")
 
 
 def test_labels():
@@ -390,7 +394,7 @@ def test_labels():
     assert(len(ll) == len(lls))
 
 
-@cleanup
+@pytest.mark.filterwarnings("ignore:The input coordinates to pcolormesh")
 def test_plots():
     zv = ZernikeVector(Z04=100, Z05=200, Z06=-500)
     f1 = zv.bar_chart(title="bar chart", residual=100.)
@@ -411,3 +415,4 @@ def test_plots():
     assert(f3 is not None)
     f4 = zv.fringe_bar_chart()
     assert(f4 is not None)
+    plt.close('all')

@@ -5,15 +5,15 @@ import os
 import pkg_resources
 import filecmp
 
+import matplotlib.pyplot as plt
+
 import numpy as np
 import astropy.units as u
 
-from matplotlib.testing.decorators import cleanup
-
-from ..config import mmtwfs_config
-from ..telescope import TelescopeFactory, MMT
-from ..zernike import ZernikeVector
-from ..custom_exceptions import WFSConfigException
+from mmtwfs.config import mmtwfs_config
+from mmtwfs.telescope import TelescopeFactory, MMT
+from mmtwfs.zernike import ZernikeVector
+from mmtwfs.custom_exceptions import WFSConfigException
 
 
 def test_telescope():
@@ -62,6 +62,7 @@ def test_psf():
         p_im = p[0].data
         assert(p_im.max() < 1.0)
         assert(p_fig is not None)
+        plt.close('all')
 
 
 def test_force_file():
@@ -73,6 +74,7 @@ def test_force_file():
     t.to_rcell(f_table, filename="forcefile")
     test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "AST45_p1000.frc"))
     assert(filecmp.cmp("forcefile", test_file))
+    os.remove("forcefile")
 
 
 def test_correct_primary():
@@ -89,10 +91,10 @@ def test_correct_primary():
     assert(np.allclose(nullforce['force'].data, 0.0))
 
 
-@cleanup
 def test_plots():
     t = MMT()
     zv = ZernikeVector(Z05=1000, Z11=250)
     f_table = t.bending_forces(zv=zv)
     fig = t.plot_forces(f_table)
     assert(fig is not None)
+    plt.close('all')

@@ -1,9 +1,9 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 # coding=utf-8
 
-from ..config import mmtwfs_config
-from ..secondary import SecondaryFactory
-from ..custom_exceptions import WFSConfigException, WFSCommandException
+from mmtwfs.config import mmtwfs_config
+from mmtwfs.secondary import SecondaryFactory
+from mmtwfs.custom_exceptions import WFSConfigException, WFSCommandException
 
 
 def test_secondaries():
