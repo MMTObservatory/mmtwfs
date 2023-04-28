@@ -26,7 +26,7 @@ import astropy.units as u
 from collections.abc import MutableMapping
 from math import factorial as fac
 
-from .custom_exceptions import ZernikeException
+from mmtwfs.custom_exceptions import ZernikeException
 
 
 __all__ = ['ZernikeVector', 'cart2pol', 'pol2cart', 'R_mn', 'dR_drho', 'theta_m', 'dtheta_dphi', 'zernike', 'dZ_dx', 'dZ_dy',
@@ -1352,7 +1352,7 @@ class ZernikeVector(MutableMapping):
         ax.set_ylabel(f"Wavefront Amplitude ({self.units})")
         if title is not None:
             ax.set_title(title)
-        cb = fig.colorbar(cmap)
+        cb = fig.colorbar(cmap, ax=ax)
         cb.set_label(f"{self.units}")
         return fig
 
@@ -1413,7 +1413,7 @@ class ZernikeVector(MutableMapping):
         ax.set_ylabel(f"RMS Wavefront Error ({self.units})")
         if title is not None:
             ax.set_title(title)
-        cb = fig.colorbar(cmap)
+        cb = fig.colorbar(cmap, ax=ax)
         cb.set_label(f"{self.units}")
         return fig
 
@@ -1441,12 +1441,12 @@ class ZernikeVector(MutableMapping):
         fig = plt.figure(figsize=(8, 6))
         fig.set_label("3D Wavefront Map")
         ax = fig.add_subplot(111, projection='3d')
-        ax.plot_surface(x, y, ph, rstride=1, cstride=1, linewidth=0, alpha=0.6, cmap='plasma')
+        surf = ax.plot_surface(x, y, ph, rstride=1, cstride=1, linewidth=0, alpha=0.6, cmap='plasma')
         v = max(abs(ph.max().value), abs(ph.min().value))
         ax.set_zlim(-v*5, v*5)
-        cset = ax.contourf(x, y, ph, zdir='z', offset=-v*5, cmap='plasma')
+        #cset = ax.contourf(x, y, ph, zdir='z', offset=-v*5, cmap='plasma')
         ax.xaxis.set_ticks([-1, 0, 1])
         ax.yaxis.set_ticks([-1, 0, 1])
-        cbar = fig.colorbar(cset, shrink=1, aspect=30)
+        cbar = fig.colorbar(surf, shrink=1, aspect=30, ax=ax)
         cbar.set_label(self.units.name, rotation=0)
         return fig
