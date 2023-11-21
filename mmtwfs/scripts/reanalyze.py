@@ -350,12 +350,12 @@ def main():
                         process = partial(process_image, force=args.force)
                         plines = pool.map(process, fitsfiles)  # plines comes out in same order as fitslines!
 
-                    plines = list(filter(None.__ne__, plines))  # trim out any None entries
+                    plines = [line for line in plines if line is not None]  # trim out any None entries
+
                     if len(plines) > 0:
                         lines.extend(plines)
-                        if lines is not None:
-                            with open(d / "reanalyze_results.csv", "w") as f:
-                                f.writelines(lines)
+                        with open(d / "reanalyze_results.csv", "w") as f:
+                            f.writelines(lines)
 
                 except ValueError as e:  # this means running int(d.name) failed so it's not a valid directory...
                     log.warn(f"Skipping %s... ({e})" % d.name)
