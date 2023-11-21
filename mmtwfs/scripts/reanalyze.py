@@ -353,8 +353,9 @@ def main():
                     plines = list(filter(None.__ne__, plines))  # trim out any None entries
                     if len(plines) > 0:
                         lines.extend(plines)
-                        with open(d / "reanalyze_results.csv", "w") as f:
-                            f.writelines(lines)
+                        if lines is not None:
+                            with open(d / "reanalyze_results.csv", "w") as f:
+                                f.writelines(lines)
 
                 except ValueError as e:  # this means running int(d.name) failed so it's not a valid directory...
                     log.warn(f"Skipping %s... ({e})" % d.name)
