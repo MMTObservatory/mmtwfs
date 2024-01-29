@@ -350,7 +350,8 @@ def main():
                         process = partial(process_image, force=args.force)
                         plines = pool.map(process, fitsfiles)  # plines comes out in same order as fitslines!
 
-                    plines = list(filter(None.__ne__, plines))  # trim out any None entries
+                    plines = [line for line in plines if line is not None]  # trim out any None entries
+
                     if len(plines) > 0:
                         lines.extend(plines)
                         with open(d / "reanalyze_results.csv", "w") as f:
