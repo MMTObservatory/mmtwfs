@@ -352,7 +352,7 @@ mmtwfs_config = {
             "lenslet_pitch": 600 * u.um,  # width of each lenslet
             "lenslet_fl": 40 * u.mm,  # focal length of each lenslet_fl
             "pix_um": 13 * u.um * 2,  # pixel size in micrometers, always binned 2x2
-            "pix_size": 0.156 * u.arcsec,
+            "pix_size": 0.2035 * u.arcsec,
             "pup_size": 345,  # pixels
             "pup_inner": 40,
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
@@ -401,7 +401,7 @@ mmtwfs_config = {
             "lenslet_pitch": 600 * u.um,  # width of each lenslet
             "lenslet_fl": 40 * u.mm,  # focal length of each lenslet_fl
             "pix_um": 13 * u.um * 2,  # pixel size in micrometers, always binned 2x2
-            "pix_size": 0.156 * u.arcsec,
+            "pix_size": 0.153 * u.arcsec,
             "pup_size": 300,  # pixels
             "pup_inner": 45,
             "m1_gain": 0.5,  # default gain to apply to primary mirror corrections
