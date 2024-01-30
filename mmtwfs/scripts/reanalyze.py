@@ -57,7 +57,7 @@ wfs_systems['f5'].cen_tol = 75.
 
 def check_image(f, wfskey=None):
     hdr = {}
-    with fits.open(f, output_verify="fix", ignore_missing_simple=True) as hdulist:
+    with fits.open(f, output_verify="fix+ignore", ignore_missing_simple=True) as hdulist:
         for h in hdulist:
             hdr.update(h.header)
         data = hdulist[-1].data
