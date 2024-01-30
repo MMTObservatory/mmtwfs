@@ -84,7 +84,8 @@ def check_wfsdata(data, header=False):
     if isinstance(data, (str, pathlib.PosixPath)):
         # we're a fits file (hopefully)
         try:
-            with fits.open(data, ignore_missing_simple=True).verify('fix') as h:
+            with fits.open(data, ignore_missing_simple=True) as h:
+                h.verify('fix')
                 data = h[-1].data  # binospec images put the image data into separate extension so always grab last available.
                 if header:
                     hdr = h[-1].header
