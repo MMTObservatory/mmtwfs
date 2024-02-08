@@ -75,6 +75,13 @@ def check_image(f, wfskey=None):
         if 'mmirs' in f.name:
             wfskey = 'mmirs'
 
+        if wfskey == 'mmirs':
+            if 'CAMERA' not in hdr:
+                if hdr['WFSNAME'] == 'mmirs1':
+                    hdr['CAMERA'] = 1
+                else:
+                    hdr['CAMERA'] = 2
+
         # check for binospec
         if 'bino' in f.name or 'wfs_ff_cal_img' in f.name:
             wfskey = 'binospec'
