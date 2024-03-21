@@ -1,7 +1,12 @@
+[tool.ruff]
+line-length = 132
+
 [build-system]
 
-requires = ["setuptools",
-            "setuptools_scm",
-            "wheel"]
+requires = [
+    "setuptools",
+    "setuptools_scm",
+    "wheel"
+]
 
 build-backend = 'setuptools.build_meta'

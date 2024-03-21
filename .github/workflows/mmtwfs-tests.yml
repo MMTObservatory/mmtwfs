@@ -21,17 +21,18 @@ jobs:
       envs: |
         - linux: codestyle
           pytest: false
-        - linux: py39-alldeps-cov
-          name: py39
-        - macos: py39
-          name: py39-macos
-        - linux: py38-astropylts
-          name: py38-astropyLTS
+        - linux: py312-alldeps-cov
+          name: py312
+        - macos: py312
+          name: py312-macos
+        - linux: py312-astropydev
+          name: py312-astropy-latest
+          continue-on-error: true
+        - linux: py312-numpydev
+          name: py312-numpy-latest
+          continue-on-error: true
         - linux: build_docs
         - linux: linkcheck
-#        - linux: py310-astropydev-numpydev
-#          name: py310-dev
-#          continue-on-error: true
       coverage: 'codecov'
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV }}

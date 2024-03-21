@@ -16,10 +16,10 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import matplotlib.colors as col
 
-from .config import recursive_subclasses, merge_config, mmtwfs_config
-from .custom_exceptions import WFSConfigException
-from .secondary import SecondaryFactory
-from .zernike import ZernikeVector
+from mmtwfs.config import recursive_subclasses, merge_config, mmtwfs_config
+from mmtwfs.custom_exceptions import WFSConfigException
+from mmtwfs.secondary import SecondaryFactory
+from mmtwfs.zernike import ZernikeVector
 
 import logging
 import logging.handlers
@@ -479,6 +479,6 @@ class MMT(Telescope):
         if m1focus is not None:
             ax.set_title("M1 Focus Offset: {0:0.1f}".format(m1focus))
         ax.set_axis_off()
-        cb = fig.colorbar(cmap)
+        cb = fig.colorbar(cmap, ax=ax)
         cb.set_label("Actuator Force (N)")
         return fig

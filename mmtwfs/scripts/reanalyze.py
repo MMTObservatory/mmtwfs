@@ -57,7 +57,8 @@ wfs_systems['f5'].cen_tol = 75.
 
 def check_image(f, wfskey=None):
     hdr = {}
-    with fits.open(f, output_verify="ignore", ignore_missing_simple=True) as hdulist:
+    with fits.open(f, ignore_missing_simple=True) as hdulist:
+        hdulist.verify('silentfix')
         for h in hdulist:
             hdr.update(h.header)
         data = hdulist[-1].data
@@ -73,6 +74,13 @@ def check_image(f, wfskey=None):
                 wfskey = 'mmirs'
         if 'mmirs' in f.name:
             wfskey = 'mmirs'
+
+        if wfskey == 'mmirs':
+            if 'CAMERA' not in hdr:
+                if hdr['WFSNAME'] == 'mmirs1':
+                    hdr['CAMERA'] = 1
+                else:
+                    hdr['CAMERA'] = 2
 
         # check for binospec
         if 'bino' in f.name or 'wfs_ff_cal_img' in f.name:
@@ -350,7 +358,8 @@ def main():
                         process = partial(process_image, force=args.force)
                         plines = pool.map(process, fitsfiles)  # plines comes out in same order as fitslines!
 
-                    plines = list(filter(None.__ne__, plines))  # trim out any None entries
+                    plines = [line for line in plines if line is not None]  # trim out any None entries
+
                     if len(plines) > 0:
                         lines.extend(plines)
                         with open(d / "reanalyze_results.csv", "w") as f:
