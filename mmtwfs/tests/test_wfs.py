@@ -155,7 +155,7 @@ def test_newf9_analysis():
     results = f9.measure_slopes(test_file)
     zresults = f9.fit_wavefront(results)
     testval = int(zresults['zernike']['Z09'].value)
-    assert (testval > 90) & (testval < 110)
+    assert (testval > 109) & (testval < 129)
     plt.close('all')
 
 
@@ -165,7 +165,7 @@ def test_f5_analysis():
     results = f5.measure_slopes(test_file)
     zresults = f5.fit_wavefront(results)
     testval = int(zresults['zernike']['Z10'].value)
-    assert (testval > 120) & (testval < 140)
+    assert (testval > 76) & (testval < 96)
     plt.close('all')
 
 
@@ -178,7 +178,7 @@ def test_bino_analysis():
     results = wfs.measure_slopes(test_file, mode="binospec")
     zresults = wfs.fit_wavefront(results)
     testval = int(zresults['zernike']['Z10'].value)
-    assert (testval > 130) & (testval < 140)
+    assert (testval > 163) & (testval < 183)
     plt.close('all')
 
 

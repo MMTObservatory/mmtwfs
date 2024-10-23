@@ -10,7 +10,6 @@ import warnings
 import pathlib
 
 import numpy as np
-import photutils
 
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
@@ -30,6 +29,11 @@ from astropy.modeling.models import Gaussian2D, Polynomial2D
 from astropy.modeling.fitting import LevMarLSQFitter
 from astropy.table import conf as table_conf
 from astroscrappy import detect_cosmics
+
+from photutils.detection import DAOStarFinder, find_peaks
+from photutils.aperture import CircularAperture
+from photutils.centroids import centroid_com
+from photutils.background import Background2D, ModeEstimatorBackground
 
 from ccdproc.utils.slices import slice_from_string
 
@@ -154,7 +158,7 @@ def wfsfind(data, fwhm=7.0, threshold=5.0, plot=True, ap_radius=5.0, std=None):
     data = check_wfsdata(data)
     if std is None:
         mean, median, std = stats.sigma_clipped_stats(data, sigma=3.0, maxiters=5)
-    daofind = photutils.detection.DAOStarFinder(fwhm=fwhm, threshold=threshold*std, sharphi=0.95)
+    daofind = DAOStarFinder(fwhm=fwhm, threshold=threshold*std, sharphi=0.95)
     sources = daofind(data)
 
     if sources is None:
@@ -175,7 +179,7 @@ def wfsfind(data, fwhm=7.0, threshold=5.0, plot=True, ap_radius=5.0, std=None):
         fig, ax = plt.subplots()
         fig.set_label("WFSfind")
         positions = list(zip(sources['xcentroid'], sources['ycentroid']))
-        apertures = photutils.aperture.CircularAperture(positions, r=ap_radius)
+        apertures = CircularAperture(positions, r=ap_radius)
         norm = wfs_norm(data)
         ax.imshow(data, cmap='Greys', origin='lower', norm=norm, interpolation='None')
         apertures.plot(color='red', lw=1.5, alpha=0.5, ax=ax)
@@ -252,7 +256,7 @@ def center_pupil(input_data, pup_mask, threshold=0.8, sigma=10., plot=True):
     # the location of the peak of the correlation will be the center of the WFS pattern.
     match = feature.match_template(smo, pup_mask, pad_input=True)
     find_thresh = threshold * match.max()
-    t = photutils.detection.find_peaks(match, find_thresh, box_size=5, centroid_func=photutils.centroids.centroid_com)
+    t = find_peaks(match, find_thresh, box_size=5, centroid_func=centroid_com)
 
     if t is None:
         msg = "No valid pupil or spot pattern detected."
@@ -316,7 +320,7 @@ def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True, cen=None):
     # we use circular apertures here because they generate square masks of the appropriate size.
     # rectangular apertures produced masks that were sqrt(2) too large.
     # see https://github.com/astropy/photutils/issues/499 for details.
-    apers = photutils.aperture.CircularAperture(
+    apers = CircularAperture(
         list(zip(srcs['xcentroid'], srcs['ycentroid'])),
         r=apsize/2.
     )
@@ -524,7 +528,7 @@ def get_slopes(data, ref, pup_mask, fwhm=7., thresh=5., cen=[255, 255],
         msg = "Only %d spots detected out of %d apertures." % (len(srcs), len(ref.masked_apertures['xcentroid']))
         raise WFSAnalysisFailed(value=msg)
 
-    src_aps = photutils.aperture.CircularAperture(
+    src_aps = CircularAperture(
         list(zip(srcs['xcentroid'], srcs['ycentroid'])),
         r=apsize/2.
     )
@@ -575,7 +579,7 @@ def get_slopes(data, ref, pup_mask, fwhm=7., thresh=5., cen=[255, 255],
     trim_refx = ref.masked_apertures['xcentroid'][ref_mask] + fit_results['xcen']
     trim_refy = ref.masked_apertures['ycentroid'][ref_mask] + fit_results['ycen']
 
-    ref_aps = photutils.aperture.CircularAperture(
+    ref_aps = CircularAperture(
         list(zip(trim_refx, trim_refy)),
         r=ref_spacing/2.
     )
@@ -701,7 +705,7 @@ class SH_Reference(object):
         # make masks for each reference spot and fit a 2D gaussian to get its FWHM. the reference FWHM is subtracted in
         # quadrature from the observed FWHM when calculating the seeing.
         apsize = np.mean([self.xspacing, self.yspacing])
-        apers = photutils.aperture.CircularAperture(
+        apers = CircularAperture(
             list(zip(self.apertures['xcentroid'], self.apertures['ycentroid'])),
             r=apsize/2.
         )
@@ -921,9 +925,9 @@ class WFS(object):
         cr_mask, data = detect_cosmics(trimdata, sigclip=5., niter=5, cleantype='medmask', psffwhm=5.)
 
         # calculate the background and subtract it
-        bkg_estimator = photutils.background.ModeEstimatorBackground()
+        bkg_estimator = ModeEstimatorBackground()
         mask = make_spot_mask(data, nsigma=2, npixels=5, dilate_size=11)
-        bkg = photutils.background.Background2D(data, (10, 10), filter_size=(5, 5), bkg_estimator=bkg_estimator, mask=mask)
+        bkg = Background2D(data, (10, 10), filter_size=(5, 5), bkg_estimator=bkg_estimator, mask=mask)
         data -= bkg.background
 
         return data, hdr
@@ -1334,9 +1338,9 @@ class NewF9(F9):
         cr_mask, data = detect_cosmics(rawdata, sigclip=15., niter=5, cleantype='medmask', psffwhm=10.)
 
         # calculate the background and subtract it
-        bkg_estimator = photutils.background.ModeEstimatorBackground()
+        bkg_estimator = ModeEstimatorBackground()
         mask = make_spot_mask(data, nsigma=2, npixels=7, dilate_size=13)
-        bkg = photutils.background.Background2D(data, (50, 50), filter_size=(15, 15), bkg_estimator=bkg_estimator, mask=mask)
+        bkg = Background2D(data, (50, 50), filter_size=(15, 15), bkg_estimator=bkg_estimator, mask=mask)
         data -= bkg.background
 
         return data, hdr
@@ -1367,9 +1371,9 @@ class F5(WFS):
         cr_mask, data = detect_cosmics(trimdata, sigclip=15., niter=5, cleantype='medmask', psffwhm=10.)
 
         # calculate the background and subtract it
-        bkg_estimator = photutils.background.ModeEstimatorBackground()
+        bkg_estimator = ModeEstimatorBackground()
         mask = make_spot_mask(data, nsigma=2, npixels=5, dilate_size=11)
-        bkg = photutils.background.Background2D(data, (20, 20), filter_size=(11, 11), bkg_estimator=bkg_estimator, mask=mask)
+        bkg = Background2D(data, (20, 20), filter_size=(11, 11), bkg_estimator=bkg_estimator, mask=mask)
         data -= bkg.background
 
         return data, hdr
@@ -1807,9 +1811,9 @@ class MMIRS(F5):
         cr_mask, data = detect_cosmics(trimdata, sigclip=5., niter=5, cleantype='medmask', psffwhm=5.)
 
         # calculate the background and subtract it
-        bkg_estimator = photutils.background.ModeEstimatorBackground()
+        bkg_estimator = ModeEstimatorBackground()
         mask = make_spot_mask(data, nsigma=2, npixels=5, dilate_size=11)
-        bkg = photutils.background.Background2D(data, (20, 20), filter_size=(7, 7), bkg_estimator=bkg_estimator, mask=mask)
+        bkg = Background2D(data, (20, 20), filter_size=(7, 7), bkg_estimator=bkg_estimator, mask=mask)
         data -= bkg.background
 
         return data, hdr
