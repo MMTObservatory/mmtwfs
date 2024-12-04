@@ -26,7 +26,7 @@ from astropy.io import fits
 from astropy.io import ascii
 from astropy import stats, visualization, timeseries
 from astropy.modeling.models import Gaussian2D, Polynomial2D
-from astropy.modeling.fitting import LevMarLSQFitter
+from astropy.modeling.fitting import SLSQPLSQFitter
 from astropy.table import conf as table_conf
 from astroscrappy import detect_cosmics
 
@@ -350,9 +350,9 @@ def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True, cen=None):
             g2d = Gaussian2D(amplitude=spot.max(), x_mean=spot.shape[1]/2, y_mean=spot.shape[0]/2)
             p2d = Polynomial2D(degree=0)
             model = g2d + p2d
-            fitter = LevMarLSQFitter()
+            fitter = SLSQPLSQFitter()
             y, x = np.mgrid[:spot.shape[0], :spot.shape[1]]
-            fit = fitter(model, x, y, spot)
+            fit = fitter(model, x, y, spot, verblevel=0)
 
             sigma = 0.5 * (fit.x_stddev_0.value + fit.y_stddev_0.value)
 
