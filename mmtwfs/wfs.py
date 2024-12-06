@@ -25,8 +25,8 @@ import astropy.units as u
 from astropy.io import fits
 from astropy.io import ascii
 from astropy import stats, visualization, timeseries
-from astropy.modeling.models import Gaussian2D, Polynomial2D
-from astropy.modeling.fitting import SimplexLSQFitter
+from astropy.modeling.models import Gaussian2D
+from astropy.modeling.fitting import DogBoxLSQFitter
 from astropy.table import conf as table_conf
 from astroscrappy import detect_cosmics
 
@@ -53,9 +53,11 @@ warnings.simplefilter(action="ignore", category=FutureWarning)
 table_conf.replace_warnings = ['attributes']
 
 
-__all__ = ['SH_Reference', 'WFS', 'F9', 'NewF9', 'F5', 'Binospec', 'MMIRS', 'WFSFactory', 'wfs_norm', 'check_wfsdata',
-           'wfsfind', 'grid_spacing', 'center_pupil', 'get_apertures', 'match_apertures', 'aperture_distance', 'fit_apertures',
-           'get_slopes', 'make_init_pars', 'slope_diff', 'mk_wfs_mask']
+__all__ = [
+    'SH_Reference', 'WFS', 'F9', 'NewF9', 'F5', 'Binospec', 'MMIRS', 'WFSFactory', 'wfs_norm', 'check_wfsdata',
+    'wfsfind', 'grid_spacing', 'center_pupil', 'get_apertures', 'match_apertures', 'aperture_distance', 'fit_apertures',
+    'get_slopes', 'make_init_pars', 'slope_diff', 'mk_wfs_mask'
+]
 
 
 def wfs_norm(data, interval=visualization.ZScaleInterval(contrast=0.05), stretch=visualization.LinearStretch()):
@@ -342,19 +344,25 @@ def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True, cen=None):
             snrs.append(snr)
 
         snrs = np.array(snrs)
+        # calculate background from edges of the spot image
+        back = np.mean([
+            spot[:2, :].mean(),
+            spot[-2:, :].mean(),
+            spot[:, :2].mean(),
+            spot[:, -2:].mean()
+        ])
+        spot -= back
 
         # set up 2D gaussian model plus constant background to fit to the coadded spot
         with warnings.catch_warnings():
             # ignore astropy warnings about issues with the fit...
             warnings.simplefilter("ignore")
-            g2d = Gaussian2D(amplitude=spot.max(), x_mean=spot.shape[1]/2, y_mean=spot.shape[0]/2)
-            p2d = Polynomial2D(degree=0)
-            model = g2d + p2d
-            fitter = SimplexLSQFitter()
+            model = Gaussian2D(amplitude=spot.max(), x_mean=spot.shape[1]/2, y_mean=spot.shape[0]/2)
+            fitter = DogBoxLSQFitter()
             y, x = np.mgrid[:spot.shape[0], :spot.shape[1]]
             fit = fitter(model, x, y, spot)
 
-            sigma = 0.5 * (fit.x_stddev_0.value + fit.y_stddev_0.value)
+            sigma = 0.5 * (fit.x_stddev.value + fit.y_stddev.value)
 
     return srcs, masks, snrs, sigma, wfsfind_fig
 
