@@ -261,7 +261,7 @@ mmtwfs_config = {
             "nzern": 21,  # number of zernike modes to fit
             "az_parity": -1,  # E/W flip in image motion
             "el_parity": 1,  # N/S flip in image motion
-            "wfs_mask": WFS_DATA_DIR / "ref_images"/  "oldf9_mask.fits",
+            "wfs_mask": WFS_DATA_DIR / "ref_images" / "oldf9_mask.fits",
             "reference_file": WFS_DATA_DIR / "ref_images" / "f9_ref.fits",
             "modes": {
                 "blue": {
@@ -310,7 +310,7 @@ mmtwfs_config = {
             "az_parity": 1,  # E/W flip in image motion
             "el_parity": -1,  # N/S flip in image motion
             "wfs_mask": WFS_DATA_DIR / "ref_images" / "newf9_mask.fits",
-            "reference_file": WFS_DATA_DIR / "ref_images"/  "f9_new_ref.fits",
+            "reference_file": WFS_DATA_DIR / "ref_images" / "f9_new_ref.fits",
             "modes": {
                 "blue": {
                     "label": "Blue Channel",
