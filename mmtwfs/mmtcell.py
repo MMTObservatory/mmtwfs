@@ -1,11 +1,10 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 # coding=utf-8
 
-import os
 import asyncio
 import logging
 import re
-import pkg_resources
+import importlib
 from pathlib import Path
 
 
@@ -174,6 +173,6 @@ class Cell:
         Send file containing null force set to the cell
         """
         response = None
-        forcefile = pkg_resources.resource_filename(__name__, os.path.join("data", "null_forces"))
+        forcefile = importlib.resources.files(__name__) / "data" / "null_forces"
         response = await self.send_force_file(forcefile)
         return response

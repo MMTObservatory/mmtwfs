@@ -1,8 +1,7 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 # coding=utf-8
 
-import pkg_resources
-import os
+import importlib
 
 import numpy as np
 
@@ -12,6 +11,9 @@ from mmtwfs.zernike import ZernikeVector
 from mmtwfs.config import mmtwfs_config
 from mmtwfs.wfs import WFSFactory, check_wfsdata, mk_wfs_mask
 from mmtwfs.custom_exceptions import WFSConfigException, WFSCommandException
+
+
+WFS_DATA_DIR = importlib.resources.files("mmtwfs") / "data"
 
 
 def test_check_wfsdata():
@@ -75,13 +77,13 @@ def test_connect():
 
 
 def test_make_mask():
-    test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "test_newf9.fits"))
+    test_file = WFS_DATA_DIR / "test_data" / "test_newf9.fits"
     mask = mk_wfs_mask(test_file, thresh_factor=4., outfile=None)
     assert mask.min() == 0.0
 
 
 def test_mmirs_analysis():
-    test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "mmirs_wfs_0150.fits"))
+    test_file = WFS_DATA_DIR / "test_data" / "mmirs_wfs_0150.fits"
     mmirs = WFSFactory(wfs='mmirs')
     results = mmirs.measure_slopes(test_file)
     zresults = mmirs.fit_wavefront(results)
@@ -91,7 +93,7 @@ def test_mmirs_analysis():
 
 
 def test_mmirs_pacman():
-    test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "mmirs_wfs_rename_0566.fits"))
+    test_file = WFS_DATA_DIR / "test_data" / "mmirs_wfs_rename_0566.fits"
     mmirs = WFSFactory(wfs='mmirs')
     results = mmirs.measure_slopes(test_file)
     testval = results['xcen']
@@ -100,7 +102,7 @@ def test_mmirs_pacman():
 
 
 def test_mmirs_pupil_mask():
-    test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "mmirs_wfs_0150.fits"))
+    test_file = WFS_DATA_DIR / "test_data" / "mmirs_wfs_0150.fits"
     mmirs = WFSFactory(wfs='mmirs')
     data, hdr = check_wfsdata(test_file, header=True)
     fig, ax = plt.subplots()
@@ -140,7 +142,7 @@ def test_mmirs_bogus_pupil_mask():
 
 
 def test_f9_analysis():
-    test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "TREX_p500_0000.fits"))
+    test_file = WFS_DATA_DIR / "test_data" / "TREX_p500_0000.fits"
     f9 = WFSFactory(wfs='f9')
     results = f9.measure_slopes(test_file)
     zresults = f9.fit_wavefront(results)
@@ -150,7 +152,7 @@ def test_f9_analysis():
 
 
 def test_newf9_analysis():
-    test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "test_newf9.fits"))
+    test_file = WFS_DATA_DIR / "test_data" / "test_newf9.fits"
     f9 = WFSFactory(wfs='newf9')
     results = f9.measure_slopes(test_file)
     zresults = f9.fit_wavefront(results)
@@ -160,7 +162,7 @@ def test_newf9_analysis():
 
 
 def test_f5_analysis():
-    test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "auto_wfs_0037_ave.fits"))
+    test_file = WFS_DATA_DIR / "test_data" / "auto_wfs_0037_ave.fits"
     f5 = WFSFactory(wfs='f5')
     results = f5.measure_slopes(test_file)
     zresults = f5.fit_wavefront(results)
@@ -170,10 +172,7 @@ def test_f5_analysis():
 
 
 def test_bino_analysis():
-    test_file = pkg_resources.resource_filename(
-        "mmtwfs",
-        os.path.join("data", "test_data", "wfs_ff_cal_img_2017.1113.111402.fits")
-    )
+    test_file = WFS_DATA_DIR / "test_data" / "wfs_ff_cal_img_2017.1113.111402.fits"
     wfs = WFSFactory(wfs='binospec')
     results = wfs.measure_slopes(test_file, mode="binospec")
     zresults = wfs.fit_wavefront(results)
@@ -183,10 +182,7 @@ def test_bino_analysis():
 
 
 def test_flwo_analysis():
-    test_file = pkg_resources.resource_filename(
-        "mmtwfs",
-        os.path.join("data", "test_data", "1195.star.p2m18.fits")
-    )
+    test_file = WFS_DATA_DIR / "test_data" / "1195.star.p2m18.fits"
     wfs = WFSFactory(wfs="flwo15")
     results = wfs.measure_slopes(test_file)
     zresults = wfs.fit_wavefront(results)
@@ -196,7 +192,7 @@ def test_flwo_analysis():
 
 
 def test_too_few_spots():
-    test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "mmirs_bogus.fits"))
+    test_file = WFS_DATA_DIR / "test_data" / "mmirs_bogus.fits"
     mmirs = WFSFactory(wfs='mmirs')
     results = mmirs.measure_slopes(test_file)
     assert results['slopes'] is None
@@ -204,7 +200,7 @@ def test_too_few_spots():
 
 
 def test_no_spots():
-    test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "mmirs_blank.fits"))
+    test_file = WFS_DATA_DIR / "test_data" / "mmirs_blank.fits"
     mmirs = WFSFactory(wfs='mmirs')
     results = mmirs.measure_slopes(test_file)
     assert results['slopes'] is None
@@ -212,7 +208,7 @@ def test_no_spots():
 
 
 def test_frosted_donut():
-    test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "f9wfs_20200225-205600.fits"))
+    test_file = WFS_DATA_DIR / "test_data" / "f9wfs_20200225-205600.fits"
     wfs = WFSFactory(wfs='newf9')
     results = wfs.measure_slopes(test_file)
     assert results['slopes'] is None
@@ -242,7 +238,7 @@ def test_correct_coma():
 
 
 def test_recenter():
-    test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "test_newf9.fits"))
+    test_file = WFS_DATA_DIR / "test_data" / "test_newf9.fits"
     f9 = WFSFactory(wfs='newf9')
     results = f9.measure_slopes(test_file, plot=False)
     az, el = f9.calculate_recenter(results)
@@ -252,7 +248,7 @@ def test_recenter():
 
 
 def test_f5_recenter():
-    test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "auto_wfs_0037_ave.fits"))
+    test_file = WFS_DATA_DIR / "test_data" / "auto_wfs_0037_ave.fits"
     f5 = WFSFactory(wfs='f5')
     results = f5.measure_slopes(test_file, plot=False)
     az, el = f5.calculate_recenter(results)

@@ -1365,7 +1365,7 @@ class F5(WFS):
         self.sock = None
 
         # load lookup table for off-axis aberrations
-        self.aberr_table = ascii.read(self.aberr_table_file)
+        self.aberr_table = ascii.read(str(self.aberr_table_file))
 
     def process_image(self, fitsfile):
         """

@@ -5,13 +5,15 @@
 config.py - Configuration data and utility functions
 """
 
-import os
-import pkg_resources
+import importlib
 
 import astropy.units as u
 
 
 __all__ = ['recursive_subclasses', 'merge_config', 'mmtwfs_config']
+
+
+WFS_DATA_DIR = importlib.resources.files(__name__) / "data"
 
 
 def recursive_subclasses(cls):
@@ -92,11 +94,11 @@ mmtwfs_config = {
             "psf_pixel_scale": 0.02,  # arcsec/pixel
             "psf_fov": 1.0,  # arcsec
             # influence matrix to map actuator forces to surface displacement
-            "surf2act_file": pkg_resources.resource_filename(__name__, os.path.join("data", "Surf2ActTEL_32.bin")),
+            "surf2act_file": WFS_DATA_DIR / "Surf2ActTEL_32.bin",
             # coordinates of finite element nodes used in surf2act
-            "nodecoor_file": pkg_resources.resource_filename(__name__, os.path.join("data", "bcv_node_coordinates.dat")),
+            "nodecoor_file": WFS_DATA_DIR / "bcv_node_coordinates.dat",
             # coordinates of the force actuators
-            "actuator_file": pkg_resources.resource_filename(__name__, os.path.join("data", "actuator_coordinates.dat")),
+            "actuator_file": WFS_DATA_DIR / "actuator_coordinates.dat",
             "zern_map": {  # map the old zernike mode indexing scheme to the Noll scheme used in ZernikeVector
                 "Z02": 0,
                 "Z03": 1,
@@ -193,15 +195,9 @@ mmtwfs_config = {
             "nzern": 21,  # number of zernike modes to fit
             "az_parity": -1,  # E/W flip in image motion
             "el_parity": -1,  # N/S flip in image motion
-            "wfs_mask": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "f5_mask.fits")),
-            "reference_file": pkg_resources.resource_filename(
-                __name__,
-                os.path.join("data", "ref_images", "f5_hecto_ref.fits")
-            ),
-            "aberr_table_file": pkg_resources.resource_filename(
-                __name__,
-                os.path.join("data", "f5zernfield_std_curvedsurface.TXT")
-            ),
+            "wfs_mask": WFS_DATA_DIR / "ref_images" / "f5_mask.fits",
+            "reference_file": WFS_DATA_DIR / "ref_images" / "f5_hecto_ref.fits",
+            "aberr_table_file": WFS_DATA_DIR / "f5zernfield_std_curvedsurface.TXT",
             "modes": {
                 "megacam": {
                     "label": "Megacam",
@@ -265,8 +261,8 @@ mmtwfs_config = {
             "nzern": 21,  # number of zernike modes to fit
             "az_parity": -1,  # E/W flip in image motion
             "el_parity": 1,  # N/S flip in image motion
-            "wfs_mask": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "oldf9_mask.fits")),
-            "reference_file": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "f9_ref.fits")),
+            "wfs_mask": WFS_DATA_DIR / "ref_images"/  "oldf9_mask.fits",
+            "reference_file": WFS_DATA_DIR / "ref_images" / "f9_ref.fits",
             "modes": {
                 "blue": {
                     "label": "Blue Channel",
@@ -313,8 +309,8 @@ mmtwfs_config = {
             "nzern": 21,  # number of zernike modes to fit
             "az_parity": 1,  # E/W flip in image motion
             "el_parity": -1,  # N/S flip in image motion
-            "wfs_mask": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "newf9_mask.fits")),
-            "reference_file": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "f9_new_ref.fits")),
+            "wfs_mask": WFS_DATA_DIR / "ref_images" / "newf9_mask.fits",
+            "reference_file": WFS_DATA_DIR / "ref_images"/  "f9_new_ref.fits",
             "modes": {
                 "blue": {
                     "label": "Blue Channel",
@@ -360,28 +356,22 @@ mmtwfs_config = {
             "nzern": 21,  # number of zernike modes to fit
             "az_parity": 1,  # E/W flip in image motion
             "el_parity": 1,  # N/S flip in image motion
-            "wfs_mask": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "mmirs_mask.fits")),
-            "aberr_table_file": pkg_resources.resource_filename(__name__, os.path.join("data", "mmirszernfield.tab")),
+            "wfs_mask": WFS_DATA_DIR / "ref_images" / "mmirs_mask.fits",
+            "aberr_table_file": WFS_DATA_DIR / "mmirszernfield.tab",
             "modes": {
                 "mmirs1": {
                     "label": "Camera 1",
                     "ref_zern": {
                         "Z04": -3176. * u.nm
                     },
-                    "reference_file": pkg_resources.resource_filename(
-                        __name__,
-                        os.path.join("data", "ref_images", "mmirs_camera1_ref.fits")
-                    ),
+                    "reference_file": WFS_DATA_DIR / "ref_images" / "mmirs_camera1_ref.fits"
                 },
                 "mmirs2": {
                     "label": "Camera 2",
                     "ref_zern": {
                         "Z04": 1059. * u.nm
                     },
-                    "reference_file": pkg_resources.resource_filename(
-                        __name__,
-                        os.path.join("data", "ref_images", "mmirs_camera2_ref.fits")
-                    ),
+                    "reference_file": WFS_DATA_DIR / "ref_images" / "mmirs_camera2_ref.fits"
                 }
             }
         },
@@ -409,18 +399,15 @@ mmtwfs_config = {
             "nzern": 21,  # number of zernike modes to fit
             "az_parity": 1,  # E/W flip in image motion
             "el_parity": 1,  # N/S flip in image motion
-            "wfs_mask": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "bino_mask.fits")),
-            "aberr_table_file": pkg_resources.resource_filename(__name__, os.path.join("data", "f5zernfield_flatsurface.tab")),
+            "wfs_mask": WFS_DATA_DIR / "ref_images" / "bino_mask.fits",
+            "aberr_table_file": WFS_DATA_DIR / "f5zernfield_flatsurface.tab",
             "modes": {
                 "binospec": {
                     "label": "Binospec",
                     "ref_zern": {
                         "Z04": 0.0 * u.nm
                     },
-                    "reference_file": pkg_resources.resource_filename(
-                        __name__,
-                        os.path.join("data", "ref_images", "binospec_ref.fits")
-                    )
+                    "reference_file": WFS_DATA_DIR / "ref_images" / "binospec_ref.fits"
                 }
             }
         },
@@ -448,8 +435,8 @@ mmtwfs_config = {
             "nzern": 21,  # number of zernike modes to fit
             "az_parity": -1,  # E/W flip in image motion
             "el_parity": 1,  # N/S flip in image motion
-            "wfs_mask": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "flwo12_mask.fits")),
-            "reference_file": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "LED2sec_22.fits")),
+            "wfs_mask": WFS_DATA_DIR / "ref_images" / "flwo12_mask.fits",
+            "reference_file": WFS_DATA_DIR / "ref_images" / "LED2sec_22.fits",
             "modes": {
                 "default": {
                     "label": "FLWO 1.2m WFS",
@@ -483,8 +470,8 @@ mmtwfs_config = {
             "nzern": 21,  # number of zernike modes to fit
             "az_parity": -1,  # E/W flip in image motion
             "el_parity": 1,  # N/S flip in image motion
-            "wfs_mask": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "flwo15_mask.fits")),
-            "reference_file": pkg_resources.resource_filename(__name__, os.path.join("data", "ref_images", "LED2sec_22.fits")),
+            "wfs_mask": WFS_DATA_DIR / "ref_images" / "flwo15_mask.fits",
+            "reference_file": WFS_DATA_DIR / "ref_images" / "LED2sec_22.fits",
             "modes": {
                 "default": {
                     "label": "FLWO 1.5m WFS",

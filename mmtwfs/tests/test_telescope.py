@@ -2,7 +2,7 @@
 # coding=utf-8
 
 import os
-import pkg_resources
+import importlib
 import filecmp
 
 import matplotlib.pyplot as plt
@@ -72,7 +72,7 @@ def test_force_file():
     zv = ZernikeVector(Z05=1000)
     f_table = t.bending_forces(zv=zv, gain=1.0)
     t.to_rcell(f_table, filename="forcefile")
-    test_file = pkg_resources.resource_filename("mmtwfs", os.path.join("data", "test_data", "AST45_p1000.frc"))
+    test_file = importlib.resources.files("mmtwfs") / "data" / "test_data" / "AST45_p1000.frc"
     assert filecmp.cmp("forcefile", test_file)
     os.remove("forcefile")
 
