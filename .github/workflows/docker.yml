@@ -1,7 +1,6 @@
 name: Publish to Docker
 
 on:
-  pull_request:
   push:
     tags:
       - 'v*'
