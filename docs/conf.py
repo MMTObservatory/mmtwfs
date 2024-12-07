@@ -30,6 +30,8 @@ import sys
 import datetime
 from importlib import import_module
 
+from mmtwfs.version import version as __version__
+
 try:
     from sphinx_astropy.conf.v1 import *  # noqa
 except ImportError:
@@ -80,9 +82,9 @@ import_module(setup_cfg['name'])
 package = sys.modules[setup_cfg['name']]
 
 # The short X.Y version.
-version = package.__version__.split('-', 1)[0]
+version = __version__.split('-', 1)[0]
 # The full version, including alpha/beta/rc tags.
-release = package.__version__
+release = __version__
 
 
 # -- Options for HTML output --------------------------------------------------
