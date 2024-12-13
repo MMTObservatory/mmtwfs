@@ -12,13 +12,7 @@ from photutils.segmentation.detect import detect_sources, detect_threshold
 
 
 def make_spot_mask(
-        data,
-        nsigma,
-        npixels,
-        mask=None,
-        sigclip_sigma=3.0,
-        sigclip_iters=5,
-        dilate_size=11
+    data, nsigma, npixels, mask=None, sigclip_sigma=3.0, sigclip_iters=5, dilate_size=11
 ):
     """
     Make a WFS spot mask using source segmentation and binary dilation. This
@@ -72,8 +66,9 @@ def make_spot_mask(
         A 2D boolean image containing the source mask.
     """
     sigma_clip = SigmaClip(sigma=sigclip_sigma, maxiters=sigclip_iters)
-    threshold = detect_threshold(data, nsigma, background=None, error=None,
-                                 mask=mask, sigma_clip=sigma_clip)
+    threshold = detect_threshold(
+        data, nsigma, background=None, error=None, mask=mask, sigma_clip=sigma_clip
+    )
 
     segm = detect_sources(data, threshold, npixels)
     if segm is None:

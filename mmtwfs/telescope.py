@@ -24,7 +24,8 @@ from mmtwfs.zernike import ZernikeVector
 import logging
 import logging.handlers
 
-# we need to wrap the poppy import in a context manager to trap its whinging about missing pysynphot stuff that we don't use.
+# we need to wrap the poppy import in a context manager to trap its whinging about
+# missing pysynphot stuff that we don't use.
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     import poppy
@@ -33,7 +34,7 @@ log = logging.getLogger("Telescope")
 log.setLevel(logging.INFO)
 
 
-__all__ = ['TelescopeFactory', 'MMT', 'FLWO12']
+__all__ = ["TelescopeFactory", "MMT", "FLWO12"]
 
 
 def TelescopeFactory(telescope="mmt", secondary="f5", config={}, **kwargs):
@@ -49,7 +50,9 @@ def TelescopeFactory(telescope="mmt", secondary="f5", config={}, **kwargs):
     tel_map = dict(list(zip(telescopes, types)))
 
     if telescope not in telescopes:
-        raise WFSConfigException(value=f"Specified telescope, {telescope}, not valid or not implemented.")
+        raise WFSConfigException(
+            value=f"Specified telescope, {telescope}, not valid or not implemented."
+        )
 
     tel_cls = tel_map[telescope](secondary=secondary, config=config)
     return tel_cls
@@ -59,25 +62,28 @@ class Telescope(object):
     """
     Defines generic configuration and methods that pertain to telescope and primary mirror systems
     """
+
     def __init__(self, telescope="mmt", secondary="f5", config={}, **kwargs):
         config = merge_config(config, dict(**kwargs))
-        if telescope not in mmtwfs_config['telescope']:
+        if telescope not in mmtwfs_config["telescope"]:
             msg = f"Invalid telescope specified, {telescope}."
             raise WFSConfigException(value=msg)
-        if secondary not in mmtwfs_config['secondary']:
+        if secondary not in mmtwfs_config["secondary"]:
             msg = f"Invalid secondary specified, {secondary}."
             raise WFSConfigException(value=msg)
-        if mmtwfs_config['secondary'][secondary]['telescope'] != telescope:
+        if mmtwfs_config["secondary"][secondary]["telescope"] != telescope:
             msg = f"Invalid secondary, {secondary}, for telescope, {telescope}."
             raise WFSConfigException(value=msg)
 
-        self.__dict__.update(merge_config(mmtwfs_config['telescope'][telescope], config))
+        self.__dict__.update(
+            merge_config(mmtwfs_config["telescope"][telescope], config)
+        )
 
         self.secondary = SecondaryFactory(secondary=secondary)
 
-        self.radius = self.diameter / 2.
+        self.radius = self.diameter / 2.0
         self.nmperrad = self.radius.to(u.nm).value
-        self.nmperasec = self.nmperrad / 206265.
+        self.nmperasec = self.nmperrad / 206265.0
 
         # ratio of the size of the central obstruction of the secondary to the size of the primary
         self.obscuration = self.secondary.diameter / self.diameter
@@ -88,7 +94,11 @@ class Telescope(object):
         # initialize poppy optical system used for calculating the PSFs
         self.osys = poppy.OpticalSystem()
         self.osys.add_pupil(self.pupil)
-        self.osys.add_pupil(poppy.ZernikeWFE(radius=self.radius.to(u.m).value, coefficients=[0.0, 0.0, 0.0, 0.0]))
+        self.osys.add_pupil(
+            poppy.ZernikeWFE(
+                radius=self.radius.to(u.m).value, coefficients=[0.0, 0.0, 0.0, 0.0]
+            )
+        )
         self.osys.add_detector(pixelscale=self.psf_pixel_scale, fov_arcsec=self.psf_fov)
 
     def _pupil_model(self):
@@ -100,9 +110,11 @@ class Telescope(object):
             secondary_radius=self.secondary.diameter.to(u.m).value / 2,
             n_supports=self.n_supports,
             support_width=self.support_width.to(u.m).value,
-            support_angle_offset=self.support_offset.to(u.deg).value
+            support_angle_offset=self.support_offset.to(u.deg).value,
         )
-        pup_model = poppy.CompoundAnalyticOptic(opticslist=[primary, secondary], name="MMTO")
+        pup_model = poppy.CompoundAnalyticOptic(
+            opticslist=[primary, secondary], name="MMTO"
+        )
         return pup_model
 
     def pupil_mask(self, rotation=0.0, size=512):
@@ -116,11 +128,13 @@ class Telescope(object):
         rotation = u.Quantity(rotation, u.deg)
 
         # not sure how to get the image data out directly, but the to_fits() method gives me a path...
-        pup_im = imrotate(self.pupil.to_fits(npix=size)[0].data.astype(float), rotation.value)
+        pup_im = imrotate(
+            self.pupil.to_fits(npix=size)[0].data.astype(float), rotation.value
+        )
         pup_im = pup_im / pup_im.max()
         return pup_im
 
-    def psf(self, zv=ZernikeVector(), wavelength=550.*u.nm, plot=True):
+    def psf(self, zv=ZernikeVector(), wavelength=550.0 * u.nm, plot=True):
         """
         Take a ZernikeVector and calculate resulting PSF at given wavelength.
         """
@@ -133,7 +147,7 @@ class Telescope(object):
         # poppy wants the piston term so whack it in there if modestart isn't already 1
         if zv.modestart != 1:
             zv.modestart = 1
-            zv['Z01'] = 0.0
+            zv["Z01"] = 0.0
 
         # poppy wants coeffs in meters
         zv.units = u.m
@@ -156,8 +170,15 @@ class Telescope(object):
         if plot:
             psf_fig, ax = plt.subplots()
             psf_fig.set_label("PSF at {0:0.0f}".format(wavelength))
-            norm = visualization.mpl_normalize.ImageNormalize(stretch=visualization.LinearStretch())
-            ims = ax.imshow(psf[0].data, extent=[-fov/2, fov/2, -fov/2, fov/2], cmap=cm.magma, norm=norm)
+            norm = visualization.mpl_normalize.ImageNormalize(
+                stretch=visualization.LinearStretch()
+            )
+            ims = ax.imshow(
+                psf[0].data,
+                extent=[-fov / 2, fov / 2, -fov / 2, fov / 2],
+                cmap=cm.magma,
+                norm=norm,
+            )
             ax.set_xlabel("arcsec")
             ax.set_ylabel("arcsec")
             cb = psf_fig.colorbar(ims)
@@ -169,24 +190,31 @@ class FLWO12(Telescope):
     """
     Defines configuration and methods for the FLWO 1.2-meter
     """
+
     def __init__(self, config={}, **kwargs):
         config = merge_config(config, dict(**kwargs))
-        super(FLWO12, self).__init__(telescope="flwo12", secondary="flwo12", config=config)
+        super(FLWO12, self).__init__(
+            telescope="flwo12", secondary="flwo12", config=config
+        )
 
 
 class FLWO15(Telescope):
     """
     Defines configuration and methods for the FLWO 1.5-meter
     """
+
     def __init__(self, config={}, **kwargs):
         config = merge_config(config, dict(**kwargs))
-        super(FLWO15, self).__init__(telescope="flwo15", secondary="flwo15", config=config)
+        super(FLWO15, self).__init__(
+            telescope="flwo15", secondary="flwo15", config=config
+        )
 
 
 class MMT(Telescope):
     """
     Defines configuration and methods that pertain to the MMT's telescope and primary mirror systems
     """
+
     def __init__(self, secondary="f5", config={}, **kwargs):
         config = merge_config(config, dict(**kwargs))
         super(MMT, self).__init__(telescope="mmt", secondary=secondary, config=config)
@@ -231,10 +259,10 @@ class MMT(Telescope):
         to correct for the surface displacement it describes.
         """
         # we don't want to bend any tilts...
-        if 'Z02' in zv:
-            zv['Z02'] = 0.0
-        if 'Z03' in zv:
-            zv['Z03'] = 0.0
+        if "Z02" in zv:
+            zv["Z02"] = 0.0
+        if "Z03" in zv:
+            zv["Z03"] = 0.0
 
         # convert to nm...
         zv.units = u.nm
@@ -243,33 +271,45 @@ class MMT(Telescope):
         zv.denormalize()
 
         # need to rotate the wavefront -90 degrees to match the BCV angle convention of +Y being 0 deg.
-        zv.rotate(-90*u.deg)
+        zv.rotate(-90 * u.deg)
 
         # get surface displacements at the BCV node positions. multiply the wavefront amplitude by 0.5 to account for
         # reflection off the surface.
-        surf_corr = -0.5 * gain * zv.total_phase(self.nodecoor['bcv_rho'], self.nodecoor['bcv_phi'])
+        surf_corr = (
+            -0.5
+            * gain
+            * zv.total_phase(self.nodecoor["bcv_rho"], self.nodecoor["bcv_phi"])
+        )
         if isinstance(surf_corr, float):  # means we got 0.0 from zv.total_phase()
             force_vec = np.zeros(self.n_act)
         else:
-            force_vec = np.dot(surf_corr, self.surf2act).value  # remove the units that got passed through
+            force_vec = np.dot(
+                surf_corr, self.surf2act
+            ).value  # remove the units that got passed through
 
         # return an astropy.table.Table so we can easily package actuator ID along with the force. its write() method
         # also provides a lot of flexibility in providing outputs that match the old system.
-        t = Table([self.actcoor['act_id'], force_vec], names=['actuator', 'force'])
+        t = Table([self.actcoor["act_id"], force_vec], names=["actuator", "force"])
         return t
 
     def to_rcell(self, t, filename="zfile", overwrite=True):
         """
         Take table generated by bending_forces() and write it to a file of a format that matches the old SHWFS system
         """
-        t.write(filename, format="ascii.no_header", delimiter="\t", formats={'force': ".1f"}, overwrite=overwrite)
+        t.write(
+            filename,
+            format="ascii.no_header",
+            delimiter="\t",
+            formats={"force": ".1f"},
+            overwrite=overwrite,
+        )
 
     def calculate_primary_corrections(self, zv, mask=[], gain=0.5):
         """
         Take ZernikeVector as input and determine corrections to apply to primary/secondary
         """
         # leave out tilts, focus, and coma from force calcs to start with
-        def_mask = ['Z02', 'Z03', 'Z04', 'Z07', 'Z08']
+        def_mask = ["Z02", "Z03", "Z04", "Z07", "Z08"]
         def_mask.extend(mask)
 
         # mask out all high order terms beyond 2nd order spherical
@@ -294,9 +334,11 @@ class MMT(Telescope):
         #   Z22 ~ 20r**6 - 30r**4 + 12r**2 - 1
         #   Z37 ~ 70r**8 - 140r**6 + 90r**4 - 20r**2 + 1
         #
-        zv_masked['Z04'] = -6.0 * zv_masked['Z11'] - 12.0 * zv_masked['Z22'] - 20.0 * zv_masked['Z37']
+        zv_masked["Z04"] = (
+            -6.0 * zv_masked["Z11"] - 12.0 * zv_masked["Z22"] - 20.0 * zv_masked["Z37"]
+        )
 
-        m1focus_corr = gain * zv_masked['Z04'] / self.secondary.focus_trans
+        m1focus_corr = gain * zv_masked["Z04"] / self.secondary.focus_trans
 
         t = self.bending_forces(zv=zv_masked, gain=gain)
 
@@ -308,11 +350,13 @@ class MMT(Telescope):
         forces that the cell reports were applied.
         """
         frac = 1.0
-        log.info(f"Using command, /mmt/scripts/cell_send_forces {filename}, to apply forces...")
+        log.info(
+            f"Using command, /mmt/scripts/cell_send_forces {filename}, to apply forces..."
+        )
         pipe = subprocess.Popen(
-            ['/mmt/scripts/cell_send_forces', f"{filename}"],
+            ["/mmt/scripts/cell_send_forces", f"{filename}"],
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+            stderr=subprocess.PIPE,
         )
 
         try:
@@ -321,8 +365,8 @@ class MMT(Telescope):
             pipe.kill()
             (stdout, stderr) = pipe.communicate()
 
-        outstr = stdout.decode('utf8')
-        outerr = stderr.decode('utf8')
+        outstr = stdout.decode("utf8")
+        outerr = stderr.decode("utf8")
 
         # had to dig into the cell code at /mmt/vxsource/mmt/cell/src/cell_inf.c to get the messages that are produces
         if "Able to Apply" in outstr:
@@ -361,9 +405,9 @@ class MMT(Telescope):
             log.info("Not connected; no commands sent to cell or hexapod.")
 
         self.last_forces = t.copy(copy_data=True)
-        self.last_forces['force'] *= frac
+        self.last_forces["force"] *= frac
         self.last_m1focus = frac * m1focus_corr.copy()
-        self.total_forces['force'] += frac * t['force']
+        self.total_forces["force"] += frac * t["force"]
         self.total_m1focus += frac * m1focus_corr
         return t, m1focus_corr
 
@@ -371,7 +415,7 @@ class MMT(Telescope):
         """
         Undo the last set of corrections.
         """
-        self.last_forces['force'] *= -1
+        self.last_forces["force"] *= -1
         self.last_m1focus *= -1
         frac = 1.0
         if self.connected:
@@ -383,7 +427,7 @@ class MMT(Telescope):
             log.info("Not connected; no undo commands sent.")
 
         self.total_m1focus += frac * self.last_m1focus
-        self.total_forces['force'] += frac * self.last_forces['force']
+        self.total_forces["force"] += frac * self.last_forces["force"]
         return self.last_forces.copy(), self.last_m1focus.copy()
 
     def clear_forces(self):
@@ -393,7 +437,11 @@ class MMT(Telescope):
         if self.connected:
             log.info("Clearing forces and spherical aberration focus offsets...")
             self.secondary.clear_m1spherical()
-            pipe = subprocess.Popen(['/mmt/scripts/cell_clear_forces'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            pipe = subprocess.Popen(
+                ["/mmt/scripts/cell_clear_forces"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
 
             try:
                 (stdout, stderr) = pipe.communicate(timeout=20)
@@ -401,8 +449,8 @@ class MMT(Telescope):
                 pipe.kill()
                 (stdout, stderr) = pipe.communicate()
 
-            outstr = stdout.decode('utf8')
-            outerr = stderr.decode('utf8')
+            outstr = stdout.decode("utf8")
+            outerr = stderr.decode("utf8")
             log.info(f"...{outstr.strip()}")
             if len(outerr) > 0:
                 log.warn(f"Got error from cell_clear_forces: {outerr}")
@@ -411,7 +459,7 @@ class MMT(Telescope):
 
         # the 'last' corrections are negations of the current total. reset the totals to 0.
         self.last_forces = self.total_forces.copy(copy_data=True)
-        self.last_forces['force'] *= -1
+        self.last_forces["force"] *= -1
         self.last_m1focus = -self.total_m1focus
         self.total_forces = self.bending_forces(zv=ZernikeVector())
         self.total_m1focus = 0.0
@@ -425,7 +473,11 @@ class MMT(Telescope):
         the influence of 1 lb of force on the mirror surface at each finite element node.  This matrix is
         stored in a binary file for compactness and speed of loading.
         """
-        surf2act = np.fromfile(self.surf2act_file, dtype=np.float32).reshape(self.n_act, self.n_node).transpose()
+        surf2act = (
+            np.fromfile(self.surf2act_file, dtype=np.float32)
+            .reshape(self.n_act, self.n_node)
+            .transpose()
+        )
         return surf2act
 
     def load_actuator_coordinates(self):
@@ -433,12 +485,14 @@ class MMT(Telescope):
         The actuator IDs and X/Y positions in mm are stored in a simple ASCII table.  Load it using
         astropy.io.ascii, convert to units of mirror radius, and add polar coordinates.
         """
-        coord = ascii.read(self.actuator_file, names=["act_id", "act_x", "act_y", "act_type"])
+        coord = ascii.read(
+            self.actuator_file, names=["act_id", "act_x", "act_y", "act_type"]
+        )
         for ax in ["act_x", "act_y"]:
             coord[ax] /= self.bcv_radius.to(u.mm).value
-        coord['act_rho'] = np.sqrt(coord['act_x']**2 + coord['act_y']**2)
-        coord['act_phi'] = np.arctan2(coord['act_y'], coord['act_x'])
-        coord['act_phi'].unit = u.radian
+        coord["act_rho"] = np.sqrt(coord["act_x"] ** 2 + coord["act_y"] ** 2)
+        coord["act_phi"] = np.arctan2(coord["act_y"], coord["act_x"])
+        coord["act_phi"].unit = u.radian
 
         return coord
 
@@ -447,33 +501,42 @@ class MMT(Telescope):
         The BCV finite element nodes IDs and X/Y/Z positions in mm are stored in a simple ASCII table.  Load it
         using astropy.io.ascii, convert to units of mirror radius, and add polar coordinates.
         """
-        coord = ascii.read(self.nodecoor_file, names=["bcv_id", "bcv_x", "bcv_y", "bcv_z"])
+        coord = ascii.read(
+            self.nodecoor_file, names=["bcv_id", "bcv_x", "bcv_y", "bcv_z"]
+        )
         for ax in ["bcv_x", "bcv_y"]:
             coord[ax] /= self.bcv_radius.to(u.mm).value
-        coord['bcv_rho'] = np.sqrt(coord['bcv_x']**2 + coord['bcv_y']**2)
-        coord['bcv_phi'] = np.arctan2(coord['bcv_y'], coord['bcv_x'])
-        coord['bcv_phi'].unit = u.radian
+        coord["bcv_rho"] = np.sqrt(coord["bcv_x"] ** 2 + coord["bcv_y"] ** 2)
+        coord["bcv_phi"] = np.arctan2(coord["bcv_y"], coord["bcv_x"])
+        coord["bcv_phi"].unit = u.radian
 
         return coord
 
-    def plot_forces(self, t, m1focus=None, limit=100.):
+    def plot_forces(self, t, m1focus=None, limit=100.0):
         """
         Plot actuator forces given force table as output from self.bending_forces()
         """
         coords = self.actcoor
         r_fac = 0.5 * self.diameter / self.bcv_radius  # adjust for slight difference
-        cmap = cm.ScalarMappable(col.Normalize(-1*limit, limit), cm.bwr)
+        cmap = cm.ScalarMappable(col.Normalize(-1 * limit, limit), cm.bwr)
         cmap._A = []  # grr stupid matplotlib
         fig, ax = plt.subplots()
         fig.set_label("M1 Actuator Forces")
-        xcor, ycor = coords['act_x']/r_fac, coords['act_y']/r_fac
-        ax.scatter(xcor, ycor, color=cmap.to_rgba(t['force']))
+        xcor, ycor = coords["act_x"] / r_fac, coords["act_y"] / r_fac
+        ax.scatter(xcor, ycor, color=cmap.to_rgba(t["force"]))
         for i, (x, y) in enumerate(zip(xcor, ycor)):
-            ax.text(x, y+0.02, t['actuator'][i],  horizontalalignment='center', verticalalignment='bottom', size='xx-small')
+            ax.text(
+                x,
+                y + 0.02,
+                t["actuator"][i],
+                horizontalalignment="center",
+                verticalalignment="bottom",
+                size="xx-small",
+            )
 
         ax.set_aspect(1.0)
-        circle1 = plt.Circle((0, 0), 1.0, fill=False, color='black', alpha=0.2)
-        circle2 = plt.Circle((0, 0), 0.9/6.5, fill=False, color='black', alpha=0.2)
+        circle1 = plt.Circle((0, 0), 1.0, fill=False, color="black", alpha=0.2)
+        circle2 = plt.Circle((0, 0), 0.9 / 6.5, fill=False, color="black", alpha=0.2)
         ax.add_artist(circle1)
         ax.add_artist(circle2)
         if m1focus is not None:

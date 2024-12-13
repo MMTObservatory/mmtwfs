@@ -27,6 +27,7 @@ class Cell:
     read_width : int
         Amount to read from the stream per read
     """
+
     def __init__(self):
         self.writer = None
         self.reader = None
@@ -37,13 +38,12 @@ class Cell:
         """
         Connect to the cell
         """
-        log.debug('Connecting to the cell')
+        log.debug("Connecting to the cell")
         future = asyncio.open_connection("mmtcell", 5810)
         # Handle timeouts or cell not available
         try:
             self.reader, self.writer = await asyncio.wait_for(
-                future,
-                timeout=self.timeout
+                future, timeout=self.timeout
             )
         except asyncio.TimeoutError:
             log.debug("Timed out trying to connect to the cell.")
@@ -104,7 +104,7 @@ class Cell:
         if self.is_connected:
             log.debug(f"Sending message: {msg}")
             # the cell code predates UTF-8 by many years so encode to ascii to be safe
-            msg = msg.encode('ascii', 'ignore')
+            msg = msg.encode("ascii", "ignore")
             self.writer.write(msg)
             await self.writer.drain()
         else:
@@ -123,7 +123,7 @@ class Cell:
                 raise Exception("No data available from cell connection")
 
             response = await self.reader.read(self.read_width)
-            response = response.decode('ascii')
+            response = response.decode("ascii")
             log.debug(f"Received from cell: {response}")
         else:
             log.warning("Can't receive data, cell not connected")
@@ -152,7 +152,7 @@ class Cell:
         forcefile = Path(forcefile)
         if forcefile.exists() and self.is_connected:
             self.send(f"set_zinf_newtons {forcefile.name}\n")
-            with open(forcefile, 'r') as fp:
+            with open(forcefile, "r") as fp:
                 for line in fp.readlines():
                     if re.search("^#", line) or re.search(r"^\s*$", line):  # noqa
                         continue

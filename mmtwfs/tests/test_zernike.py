@@ -10,8 +10,17 @@ import numpy as np
 
 import astropy.units as u
 
-from mmtwfs.zernike import ZernikeVector, noll_normalization_vector, noll_coefficient, R_mn, norm_coefficient, zernike, \
-    dZ_dx, dZ_dy, noll_to_zernike
+from mmtwfs.zernike import (
+    ZernikeVector,
+    noll_normalization_vector,
+    noll_coefficient,
+    R_mn,
+    norm_coefficient,
+    zernike,
+    dZ_dx,
+    dZ_dy,
+    noll_to_zernike,
+)
 from mmtwfs.custom_exceptions import ZernikeException
 
 
@@ -28,7 +37,7 @@ def test_norm():
     for f in [zernike, dZ_dx, dZ_dy]:
         z1 = f(m, n, rho, phi, norm=False)
         z2 = f(m, n, rho, phi, norm=True)
-        assert np.isclose(z2/z1, nc)
+        assert np.isclose(z2 / z1, nc)
 
 
 def test_bogus_noll_to_zernike():
@@ -202,7 +211,7 @@ def test_repr():
     assert len(repr(zv)) > 0
     zv.normalize()
     assert len(repr(zv)) > 0
-    zv['Z99'] = 1.0
+    zv["Z99"] = 1.0
     assert len(repr(zv)) > 0
 
 
@@ -220,13 +229,13 @@ def test_pprint():
 def test_zernike_del():
     zv = ZernikeVector(Z04=1000, Z05=500, modestart=2)
     assert len(zv) == 4
-    del zv['Z05']
+    del zv["Z05"]
     assert len(zv) == 3
 
 
 def test_zernike_add():
-    z1 = ZernikeVector(Z04=1000, errorbars={'Z04': 10})
-    z2 = ZernikeVector(Z06=500, errorbars={'Z06': 10})
+    z1 = ZernikeVector(Z04=1000, errorbars={"Z04": 10})
+    z2 = ZernikeVector(Z06=500, errorbars={"Z06": 10})
     a1 = z1 + z2
     a2 = z2 + z1
     assert a1 == a2
@@ -234,7 +243,7 @@ def test_zernike_add():
 
 def test_zernike_add_scalar():
     z1 = ZernikeVector(Z04=1000)
-    z2 = 100.
+    z2 = 100.0
     a1 = z1 + z2
     a2 = z2 + z1
     assert a1 == a2
@@ -242,66 +251,66 @@ def test_zernike_add_scalar():
 
 def test_zernike_mult_scalar():
     z1 = ZernikeVector(Z04=1000)
-    z2 = 3.
+    z2 = 3.0
     a1 = z1 * z2
     a2 = z2 * z1
     assert a1 == a2
 
 
 def test_zernike_mult():
-    z1 = ZernikeVector(Z04=1000, errorbars={'Z04': 10})
-    z2 = ZernikeVector(Z06=100, errorbars={'Z06': 10})
+    z1 = ZernikeVector(Z04=1000, errorbars={"Z04": 10})
+    z2 = ZernikeVector(Z06=100, errorbars={"Z06": 10})
     a1 = z1 * z2
     a2 = z2 * z1
     assert a1 == a2
 
 
 def test_zernike_sub():
-    z1 = ZernikeVector(Z04=1000, errorbars={'Z04': 10})
-    z2 = ZernikeVector(Z06=500, errorbars={'Z06': 10})
+    z1 = ZernikeVector(Z04=1000, errorbars={"Z04": 10})
+    z2 = ZernikeVector(Z06=500, errorbars={"Z06": 10})
     a1 = z1 - z2
     a2 = z2 - z1
-    assert a1 == -1*a2
+    assert a1 == -1 * a2
     a2 = z1.__rsub__(z2)
-    assert a1 == -1*a2
+    assert a1 == -1 * a2
 
 
 def test_zernike_sub_scalar():
     z1 = ZernikeVector(Z04=1000)
-    z2 = 500.
+    z2 = 500.0
     a1 = z1 - z2
     a2 = z2 - z1
-    assert a1 == -1*a2
+    assert a1 == -1 * a2
 
 
 def test_zernike_div_scalar():
     z1 = ZernikeVector(Z04=1000)
-    z2 = 500.
+    z2 = 500.0
     a1 = z1 / z2
     a2 = z2 / z1
-    assert a1 == 1. / a2
+    assert a1 == 1.0 / a2
     # test python2.x methods
     a1 = z1.__div__(z2)
     a2 = z1.__rdiv__(z2)
-    assert a1 == 1. / a2
+    assert a1 == 1.0 / a2
 
 
 def test_zernike_div():
-    z1 = ZernikeVector(Z04=1000, errorbars={'Z04': 10})
-    z2 = ZernikeVector(Z04=100, errorbars={'Z04': 10})
-    z3 = ZernikeVector(Z04=100, errorbars={'Z06': 10})
+    z1 = ZernikeVector(Z04=1000, errorbars={"Z04": 10})
+    z2 = ZernikeVector(Z04=100, errorbars={"Z04": 10})
+    z3 = ZernikeVector(Z04=100, errorbars={"Z06": 10})
     a1 = z1 / z2
     a2 = z2 / z1
     a3 = z1 / z3
     a4 = z3 / z1
-    assert a1 == 1. / a2
-    assert a3 == 1. / a4
+    assert a1 == 1.0 / a2
+    assert a3 == 1.0 / a4
     a2 = z1.__rtruediv__(z2)
     a3 = z1.__rtruediv__(z3)
     a4 = z3.__rtruediv__(z1)
-    assert a1 == 1. / a2
-    assert a1['Z04'] == 1. / a3['Z04']
-    assert a4['Z04'] == 1. / a3['Z04']
+    assert a1 == 1.0 / a2
+    assert a1["Z04"] == 1.0 / a3["Z04"]
+    assert a4["Z04"] == 1.0 / a3["Z04"]
 
 
 def test_zernike_div_nan():
@@ -309,14 +318,14 @@ def test_zernike_div_nan():
     z2 = ZernikeVector(Z06=100)
     a1 = z1 / z2
     a2 = z2 / z1
-    assert a1 == 1. / a2
+    assert a1 == 1.0 / a2
 
 
 def test_zernike_pow():
     amp = 1000
-    z1 = ZernikeVector(Z04=amp, errorbars={'Z04': 10})
-    z2 = z1 ** 2
-    assert amp**2 == z2['Z04'].value
+    z1 = ZernikeVector(Z04=amp, errorbars={"Z04": 10})
+    z2 = z1**2
+    assert amp**2 == z2["Z04"].value
 
 
 def test_p2v():
@@ -334,10 +343,10 @@ def test_rms():
 def test_from_array():
     zv = ZernikeVector(coeffs=[0, 0, 1000], modestart=2)
     assert len(zv) == 3
-    assert zv['Z04'].value == 1000.0
-    zv2 = ZernikeVector(coeffs=[500., 500.], zmap={'Z05': 0, 'Z06': 1}, modestart=5)
+    assert zv["Z04"].value == 1000.0
+    zv2 = ZernikeVector(coeffs=[500.0, 500.0], zmap={"Z05": 0, "Z06": 1}, modestart=5)
     assert len(zv2) == 2
-    assert zv2['Z06'].value == 500.0
+    assert zv2["Z06"].value == 500.0
 
 
 def test_noll_vector():
@@ -348,21 +357,21 @@ def test_noll_vector():
 def test_ignore():
     zv = ZernikeVector(Z04=1000, Z05=500, modestart=2)
     assert len(zv) == 4
-    zv.ignore('Z05')
-    assert zv['Z05'].value == 0.0
-    zv.restore('Z05')
+    zv.ignore("Z05")
+    assert zv["Z05"].value == 0.0
+    zv.restore("Z05")
     assert len(zv) == 4
-    assert zv['Z05'].value == 500.0
+    assert zv["Z05"].value == 500.0
 
 
 def test_rotate():
     zv = ZernikeVector(Z05=500)
-    a = zv['Z05'].value
-    zv.rotate(angle=180*u.deg)
-    b = zv['Z05'].value
+    a = zv["Z05"].value
+    zv.rotate(angle=180 * u.deg)
+    b = zv["Z05"].value
     assert a == b
-    zv.rotate(angle=90*u.deg)
-    c = zv['Z05'].value
+    zv.rotate(angle=90 * u.deg)
+    c = zv["Z05"].value
     assert a == -c
 
 
@@ -386,18 +395,18 @@ def test_loadsave():
 
 def test_labels():
     zv = ZernikeVector(Z04=100, Z05=200, Z06=-500)
-    long = zv.label('Z04')
-    ls = zv.shortlabel('Z04')
+    long = zv.label("Z04")
+    ls = zv.shortlabel("Z04")
     assert len(long) > len(ls)
-    ll = zv.label('Z80')
-    lls = zv.shortlabel('Z80')
+    ll = zv.label("Z80")
+    lls = zv.shortlabel("Z80")
     assert len(ll) == len(lls)
 
 
 @pytest.mark.filterwarnings("ignore:The input coordinates to pcolormesh")
 def test_plots():
     zv = ZernikeVector(Z04=100, Z05=200, Z06=-500)
-    f1 = zv.bar_chart(title="bar chart", residual=100.)
+    f1 = zv.bar_chart(title="bar chart", residual=100.0)
     assert f1 is not None
     f2 = zv.plot_map()
     assert f2 is not None
@@ -406,7 +415,7 @@ def test_plots():
     f4 = zv.fringe_bar_chart(title="fringe bar chart")
     assert f4 is not None
     zv.normalize()
-    zv['Z99'] = 100.0 * u.nm
+    zv["Z99"] = 100.0 * u.nm
     f1 = zv.bar_chart()
     assert f1 is not None
     f2 = zv.plot_map()
@@ -415,4 +424,4 @@ def test_plots():
     assert f3 is not None
     f4 = zv.fringe_bar_chart()
     assert f4 is not None
-    plt.close('all')
+    plt.close("all")

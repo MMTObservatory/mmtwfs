@@ -15,13 +15,14 @@ log = logging.getLogger("F/9 TopBox")
 log.setLevel(logging.INFO)
 
 
-__all__ = ['CompMirror']
+__all__ = ["CompMirror"]
 
 
 class CompMirror(object):
     """
     Defines how to query and command the comparison mirror within the F/9 topbox
     """
+
     def __init__(self, host=None, port=None):
         # use this boolean to determine if commands are actually to be sent
         self.connected = False
@@ -61,7 +62,9 @@ class CompMirror(object):
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.connect(topbox_server)
         except Exception as e:
-            log.error(f"Error connecting to topbox server. Remaining disconnected...: {e}")
+            log.error(
+                f"Error connecting to topbox server. Remaining disconnected...: {e}"
+            )
             return None
         return sock
 
@@ -73,7 +76,7 @@ class CompMirror(object):
         if self.connected:
             sock = self.netsock()
             sock.sendall(b"get_mirror\n")
-            result = sock.recv(4096).decode('utf8')
+            result = sock.recv(4096).decode("utf8")
             sock.shutdown(socket.SHUT_RDWR)
             sock.close()
             if "OUT" in result:
@@ -101,7 +104,7 @@ class CompMirror(object):
                 sock = self.netsock()
                 netcmd = f"set_mirror_exclusive {cmd}\n"
                 sock.sendall(netcmd.encode("utf8"))
-                result = sock.recv(4096).decode('utf8')
+                result = sock.recv(4096).decode("utf8")
                 sock.shutdown(socket.SHUT_RDWR)
                 sock.close()
                 if "X" in result:
@@ -114,7 +117,9 @@ class CompMirror(object):
             else:
                 log.warning("Topbox not connected. Can't send motion command.")
         else:
-            log.error(f"Invalid comparison mirror command, {cmd}, send to topbox. Must be 'in' or 'out'")
+            log.error(
+                f"Invalid comparison mirror command, {cmd}, send to topbox. Must be 'in' or 'out'"
+            )
         return state
 
     def mirror_in(self):
