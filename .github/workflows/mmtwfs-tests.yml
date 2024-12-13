@@ -31,6 +31,9 @@ jobs:
         - linux: py312-numpydev
           name: py312-numpy-latest
           continue-on-error: true
+        - linux: py313-alldeps
+          name: py313
+          continue-on-error: true
         - linux: build_docs
         - linux: linkcheck
       coverage: 'codecov'
