@@ -33,7 +33,6 @@ jobs:
           continue-on-error: true
         - linux: py313-alldeps
           name: py313
-          continue-on-error: true
         - linux: build_docs
         - linux: linkcheck
       coverage: 'codecov'
