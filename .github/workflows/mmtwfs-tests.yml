@@ -21,18 +21,18 @@ jobs:
       envs: |
         - linux: codestyle
           pytest: false
-        - linux: py312-alldeps-cov
-          name: py312
-        - macos: py312
-          name: py312-macos
-        - linux: py312-astropydev
-          name: py312-astropy-latest
-          continue-on-error: true
-        - linux: py312-numpydev
-          name: py312-numpy-latest
-          continue-on-error: true
-        - linux: py313-alldeps
+        - linux: py313-alldeps-cov
           name: py313
+        - macos: py313
+          name: py313-macos
+        - linux: py312
+          name: py312
+        - linux: py313-astropydev
+          name: py313-astropy-latest
+          continue-on-error: true
+        - linux: py313-numpydev
+          name: py313-numpy-latest
+          continue-on-error: true
         - linux: build_docs
         - linux: linkcheck
       coverage: 'codecov'
