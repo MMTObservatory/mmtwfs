@@ -14,7 +14,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 
-from skimage import feature
+from skimage import feature, restoration
 from scipy import ndimage, optimize
 from scipy.ndimage import rotate
 from scipy.spatial import cKDTree
@@ -27,6 +27,8 @@ from astropy.io import ascii
 from astropy import stats, visualization, timeseries
 from astropy.modeling.models import Gaussian2D
 from astropy.modeling.fitting import DogBoxLSQFitter
+from astropy.modeling import custom_model
+from astropy.convolution import Gaussian2DKernel
 from astropy.table import conf as table_conf
 from astroscrappy import detect_cosmics
 
@@ -34,6 +36,7 @@ from photutils.detection import DAOStarFinder, find_peaks
 from photutils.aperture import CircularAperture
 from photutils.centroids import centroid_com
 from photutils.background import Background2D, ModeEstimatorBackground
+from photutils.profiles import RadialProfile
 
 from ccdproc.utils.slices import slice_from_string
 
@@ -81,6 +84,14 @@ __all__ = [
     "slope_diff",
     "mk_wfs_mask",
 ]
+
+
+@custom_model
+def spot_profile(r, amplitude=1, a=1):
+    """
+    Model for long-exposure spot PSFs in Shack-Hartmann images.
+    """
+    return amplitude * np.exp(-a * r ** (5/3))
 
 
 def wfs_norm(
@@ -378,7 +389,7 @@ def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True, cen=None):
             snrs.append(snr)
 
         snrs = np.array(snrs)
-        # calculate background from edges of the spot image
+        # calculate background from edges of the spot image and subtract it
         back = np.mean(
             [
                 spot[:2, :].mean(),
@@ -389,7 +400,7 @@ def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True, cen=None):
         )
         spot -= back
 
-        # set up 2D gaussian model plus constant background to fit to the coadded spot
+        # set up 2D gaussian model to fit to the coadded, background-subtracted spot
         with warnings.catch_warnings():
             # ignore astropy warnings about issues with the fit...
             warnings.simplefilter("ignore")
@@ -402,7 +413,7 @@ def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True, cen=None):
 
             sigma = 0.5 * (fit.x_stddev.value + fit.y_stddev.value)
 
-    return srcs, masks, snrs, sigma, wfsfind_fig
+    return srcs, masks, snrs, sigma, spot, wfsfind_fig
 
 
 def match_apertures(refx, refy, spotx, spoty, max_dist=25.0):
@@ -567,7 +578,7 @@ def get_slopes(
     ref_spacing = np.mean([ref.xspacing, ref.yspacing])
     apsize = ref_spacing
 
-    srcs, masks, snrs, sigma, wfsfind_fig = get_apertures(
+    srcs, masks, snrs, sigma, coadded_spot, wfsfind_fig = get_apertures(
         data, apsize, fwhm=fwhm, thresh=thresh, cen=(xcen, ycen)
     )
 
@@ -692,6 +703,7 @@ def get_slopes(
     figures = {}
     figures["pupil_center"] = pupcen_fig
     figures["slopes"] = aps_fig
+    figures["wfsfind"] = wfsfind_fig
     results = {
         "slopes": np.ma.masked_invalid(slopes),
         "pup_coords": pup_coords.transpose(),
@@ -702,6 +714,7 @@ def get_slopes(
         "ref_mask": ref_mask,
         "src_mask": src_mask,
         "spot_sigma": sigma,
+        "coadded_spot": coadded_spot,
         "figures": figures,
         "grid_fit": fit_results,
     }
@@ -945,6 +958,69 @@ class WFS(object):
         y = ref.ycen
         return x, y
 
+    def vlt_seeing(self, spot, airmass=None):
+        """
+        Calculate the seeing using a method derived from the one used at the VLT that is
+        described by Martinez, et al. in https://academic.oup.com/mnras/article/421/4/3019/1088309#m9.
+        They show that straightforward atmospheric turbulence models create long-exposure PSFs of the form:
+        T(f) = T_0(f) x exp[-3.44(lambda*f/r0)^5/3]    (equation 2 in the linked paper)
+        The T_0(f) term is due to diffraction from the WFS aperture and can be safely ignored due to the large
+        aperture sizes (>40-45 cm) of our WFS's. The diffraction term that is significant, however, is the diffraction
+        PSF of the Shack-Hartmann lenslets. Rather than approximate the spot PSF model as a Gaussian and subtract the
+        lenslet PSF width in quadrature, we use Richardson-Lucy deconvolution to mitigate the effect of the lenslet
+        PSF and use the deconvolved spot image to calculate the seeing.
+        """
+        # the effective wavelength of the WFS imagers is about 600-700 nm. mmirs and the oldf9 system use blue-blocking filters
+        wave = self.eff_wave
+        # r_0 equation expects meters so convert
+        wave = wave.to(u.m).value
+
+        # standard wavelength that seeing values are referenced to
+        refwave = 500 * u.nm
+        refwave = refwave.to(u.m).value
+
+        # create deconvolution kernel from the lenslet width
+        lenslet_spot_psf = Gaussian2DKernel(
+            self.ref_spot_fwhm() * stats.gaussian_fwhm_to_sigma
+        )
+
+        # deconvolve the spot image with the lenslet PSF using Richardson-Lucy deconvolution
+        # via skimage. num_iter is set to 5 to minimize deconvolution artifacts.
+        spot_deconvolved = restoration.richardson_lucy(
+            spot / spot.max(),
+            lenslet_spot_psf.array / lenslet_spot_psf.array.max(),
+            num_iter=5,
+        )
+
+        # create radial profile of the deconvolved spot image
+        xycen = (spot_deconvolved.shape[1] / 2, spot_deconvolved.shape[0] / 2)
+        edge_radii = np.arange(np.max(xycen))
+        rp = RadialProfile(spot_deconvolved, xycen, edge_radii)
+        rp.normalize()
+        prof_model = spot_profile(amplitude=1, a=1)
+        rad_ang = rp.radius * self.pix_size.value
+
+        fitter = DogBoxLSQFitter()
+        prof_fit = fitter(prof_model, rad_ang, rp.profile)
+
+        # solve for r0 from the fitted profile where the spatial frequency is 1/arcsec
+        r0 = wave / (3.44 / prof_fit.a) ** 0.6
+
+        # calculate large telescope seeing FWHM from r0 using the standard equation
+        raw_seeing = (0.976 * wave / r0) * u.arcsec
+
+        # seeing scales as lambda^-1/5 so calculate factor to scale to reference lambda
+        wave_corr = refwave**-0.2 / wave**-0.2
+        raw_seeing *= wave_corr
+
+        # correct seeing to zenith if airmass is provided
+        if airmass is not None:
+            seeing = raw_seeing / airmass**0.6
+        else:
+            seeing = raw_seeing
+
+        return seeing, raw_seeing
+
     def seeing(self, mode, sigma, airmass=None):
         """
         Given a sigma derived from a gaussian fit to a WFS spot, deconvolve the systematic width from the reference image
@@ -982,7 +1058,7 @@ class WFS(object):
         r_0 = (0.179 * (wave**2) * (d ** (-1 / 3)) / corr_sigma**2) ** 0.6
 
         # this equation relates the turbulence scale size to an expected image FWHM at the given wavelength.
-        raw_seeing = u.Quantity(u.rad * 0.98 * wave / r_0, u.arcsec)
+        raw_seeing = u.Quantity(u.rad * 0.976 * wave / r_0, u.arcsec)
 
         # seeing scales as lambda^-1/5 so calculate factor to scale to reference lambda
         wave_corr = refwave**-0.2 / wave**-0.2
@@ -1163,8 +1239,13 @@ class WFS(object):
             airmass = hdr["AIRMASS"]
         else:
             airmass = None
+
         seeing, raw_seeing = self.seeing(
             mode=mode, sigma=slope_results["spot_sigma"], airmass=airmass
+        )
+
+        vlt_seeing, raw_vlt_seeing = self.vlt_seeing(
+            slope_results["coadded_spot"], airmass=airmass
         )
 
         if plot:
@@ -1198,12 +1279,16 @@ class WFS(object):
                 verticalalignment="center",
             )
             ax.set_title(
-                'Seeing: %.2f" (%.2f" @ zenith)' % (raw_seeing.value, seeing.value)
+                'Seeing: %.2f" (%.2f" @ zenith)'
+                % (raw_vlt_seeing.value, vlt_seeing.value)
             )
 
         results = {}
         results["seeing"] = seeing
         results["raw_seeing"] = raw_seeing
+        results["vlt_seeing"] = vlt_seeing
+        results["raw_vlt_seeing"] = raw_vlt_seeing
+        results["coadded_spot"] = slope_results["coadded_spot"]
         results["slopes"] = slopes
         results["ref_slopes"] = ref_slopes
         results["ref_zv"] = ref_zv
