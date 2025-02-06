@@ -214,7 +214,7 @@ def process_image(f, force=False):
     appropriate WFS instance. Return results in a comma-separated line that will be collected
     and saved in a CSV file.
     """
-    if "Ref" in str(f) or "sog" in str(f):
+    if "Ref" in str(f) or "sog" in str(f) or "coadded" in str(f):
         return None
 
     outfile = f.parent / (f.stem + ".output")
@@ -274,7 +274,7 @@ def process_image(f, force=False):
                 f"{chamt},{tiltx},{tilty},{transx},{transy},{focus},{focerr.value},{cc_x_err.value}," \
                 f"{cc_y_err.value},{results['xcen']},{results['ycen']},{results['seeing'].value}," \
                 f"{results['raw_seeing'].value},{results["vlt_seeing"].value},{results["raw_vlt_seeing"].value},"\
-                f"{results['fwhm']},{zresults['zernike_rms'].value}," \
+                f"{results['ellipticity']},{results['fwhm']},{zresults['zernike_rms'].value}," \
                 f"{zresults['residual_rms'].value}\n"
             zfile = f.parent / (f.stem + ".reanalyze.zernike")
             zresults['zernike'].save(filename=zfile)
@@ -341,7 +341,7 @@ def main():
     dirs = sorted(list(args.dirs))  # pathlib, where have you been all my life!
     csv_header = "time,wfs,file,exptime,airmass,az,el,osst,outt,chamt,tiltx,tilty,"\
         "transx,transy,focus,focerr,cc_x_err,cc_y_err,xcen,ycen,seeing,raw_seeing,"\
-        "vlt_seeing,raw_vlt_seeing,fwhm,wavefront_rms,residual_rms\n"
+        "vlt_seeing,raw_vlt_seeing,ellipticity,fwhm,wavefront_rms,residual_rms\n"
 
     log.info(f"Found {len(dirs)} directories to process...")
 
