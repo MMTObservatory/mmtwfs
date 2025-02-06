@@ -36,7 +36,7 @@ from photutils.detection import DAOStarFinder, find_peaks
 from photutils.aperture import CircularAperture
 from photutils.centroids import centroid_com
 from photutils.background import Background2D, ModeEstimatorBackground
-from photutils.profiles import RadialProfile
+from photutils.isophote import EllipseGeometry, Ellipse
 
 from ccdproc.utils.slices import slice_from_string
 
@@ -369,19 +369,20 @@ def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True, cen=None):
     # rectangular apertures produced masks that were sqrt(2) too large.
     # see https://github.com/astropy/photutils/issues/499 for details.
     apers = CircularAperture(
-        list(zip(srcs["xcentroid"], srcs["ycentroid"])), r=apsize / 2.0
+        list(zip(srcs["xcentroid"], srcs["ycentroid"])), r=np.ceil(apsize/2.0)
     )
+
     masks = apers.to_mask(method="subpixel")
     sigma = 0.0
     snrs = []
+    spot = np.zeros(masks[0].shape)
     if len(masks) >= 1:
-        spot = np.zeros(masks[0].shape)
         for m in masks:
             subim = m.cutout(data)
 
             # make co-added spot image for use in calculating the seeing
-            if subim.shape == spot.shape:
-                spot += subim
+            # if subim.shape == spot.shape:
+            spot += subim
 
             signal = subim.sum()
             noise = np.sqrt(stddev**2 * subim.shape[0] * subim.shape[1])
@@ -389,13 +390,14 @@ def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True, cen=None):
             snrs.append(snr)
 
         snrs = np.array(snrs)
+
         # calculate background from edges of the spot image and subtract it
         back = np.mean(
             [
-                spot[:2, :].mean(),
-                spot[-2:, :].mean(),
-                spot[:, :2].mean(),
-                spot[:, -2:].mean(),
+                spot[:1, :].mean(),
+                spot[-1:, :].mean(),
+                spot[:, :1].mean(),
+                spot[:, -1:].mean(),
             ]
         )
         spot -= back
@@ -411,9 +413,10 @@ def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True, cen=None):
             y, x = np.mgrid[: spot.shape[0], : spot.shape[1]]
             fit = fitter(model, x, y, spot)
 
-            sigma = 0.5 * (fit.x_stddev.value + fit.y_stddev.value)
+            sigma = min(fit.x_stddev.value, fit.y_stddev.value)
+            ellipticity = 1 - sigma / max(fit.x_stddev.value, fit.y_stddev.value)
 
-    return srcs, masks, snrs, sigma, spot, wfsfind_fig
+    return srcs, masks, snrs, sigma, ellipticity, spot, wfsfind_fig
 
 
 def match_apertures(refx, refy, spotx, spoty, max_dist=25.0):
@@ -578,7 +581,7 @@ def get_slopes(
     ref_spacing = np.mean([ref.xspacing, ref.yspacing])
     apsize = ref_spacing
 
-    srcs, masks, snrs, sigma, coadded_spot, wfsfind_fig = get_apertures(
+    srcs, masks, snrs, sigma, ellipticity, coadded_spot, wfsfind_fig = get_apertures(
         data, apsize, fwhm=fwhm, thresh=thresh, cen=(xcen, ycen)
     )
 
@@ -714,6 +717,7 @@ def get_slopes(
         "ref_mask": ref_mask,
         "src_mask": src_mask,
         "spot_sigma": sigma,
+        "ellipticity": ellipticity,
         "coadded_spot": coadded_spot,
         "figures": figures,
         "grid_fit": fit_results,
@@ -906,7 +910,6 @@ class WFS(object):
         self.secondary = self.telescope.secondary
         self.plot = plot
         self.connected = False
-        self.ref_fwhm = self.ref_spot_fwhm()
 
         # this factor calibrates spot motion in pixels to nm of wavefront error
         self.tiltfactor = self.telescope.nmperasec * (self.pix_size.to(u.arcsec).value)
@@ -928,13 +931,30 @@ class WFS(object):
             else:
                 self.modes[mode]["reference"] = reference
 
-    def ref_spot_fwhm(self):
+    def ref_spot_fwhm(self, mode):
         """
-        Calculate the Airy FWHM in pixels of a perfect WFS spot from the optical prescription and detector pixel size
+        Calculate the Airy FWHM in pixels of a perfect WFS spot from the optical prescriptions and detector pixel size.
+        There is diffraction from both the lenslet optics and projected physical size of the WFS aperture.
         """
-        theta_fwhm = 1.028 * self.eff_wave / self.lenslet_pitch
-        det_fwhm = np.arctan(theta_fwhm).value * self.lenslet_fl
-        det_fwhm_pix = det_fwhm.to(u.um).value / self.pix_um.to(u.um).value
+        # For square WFS apertures the resulting PSF core is not quite azimuthally symmetric, but has a
+        # mean FWHM of 0.894*lambda/d. In the case of F/9 the apertures are hexagonal so the PSF is more complex,
+        # but this is still a good enough approximation of its core PSF size.
+        theta_fwhm = 0.894 * self.eff_wave / self.lenslet_pitch
+        lens_fwhm = np.arctan(theta_fwhm).value * self.lenslet_fl
+        lens_fwhm_pix = lens_fwhm.to(u.um).value / self.pix_um.to(u.um).value
+
+        # calculate the physical size of each aperture.
+        ref = self.modes[mode]["reference"]
+        apsize_pix = np.max((ref.xspacing, ref.yspacing))
+        d = self.telescope.diameter * apsize_pix / self.pup_size
+        d = d.to(u.m).value
+
+        # calculate the diffraction FWHM of the WFS aperture using PSF for square aperture.
+        ap_fwhm = 0.894 * self.eff_wave.to(u.m).value / d
+        ap_fwhm_pix = 206265 * ap_fwhm / self.pix_size.value
+
+        det_fwhm_pix = np.sqrt(lens_fwhm_pix ** 2 + ap_fwhm_pix ** 2)
+
         return det_fwhm_pix
 
     def get_flipud(self, mode=None):
@@ -958,7 +978,7 @@ class WFS(object):
         y = ref.ycen
         return x, y
 
-    def vlt_seeing(self, spot, airmass=None):
+    def vlt_seeing(self, spot, mode, airmass=None):
         """
         Calculate the seeing using a method derived from the one used at the VLT that is
         described by Martinez, et al. in https://academic.oup.com/mnras/article/421/4/3019/1088309#m9.
@@ -981,7 +1001,7 @@ class WFS(object):
 
         # create deconvolution kernel from the lenslet width
         lenslet_spot_psf = Gaussian2DKernel(
-            self.ref_spot_fwhm() * stats.gaussian_fwhm_to_sigma
+            self.ref_spot_fwhm(mode) * stats.gaussian_fwhm_to_sigma
         )
 
         # deconvolve the spot image with the lenslet PSF using Richardson-Lucy deconvolution
@@ -989,19 +1009,29 @@ class WFS(object):
         spot_deconvolved = restoration.richardson_lucy(
             spot / spot.max(),
             lenslet_spot_psf.array / lenslet_spot_psf.array.max(),
-            num_iter=5,
+            num_iter=10,
+            filter_epsilon=1e-2,
         )
 
-        # create radial profile of the deconvolved spot image
+        # create elliptical isophote model of the deconvolved spot image. want to use semi-minor
+        # axis to calculate radial profile to minimize effect of tracking errors/oscillations which
+        # are usually along one axis (ususally elevation).
         xycen = (spot_deconvolved.shape[1] / 2, spot_deconvolved.shape[0] / 2)
-        edge_radii = np.arange(np.max(xycen))
-        rp = RadialProfile(spot_deconvolved, xycen, edge_radii)
-        rp.normalize()
+        for ang in [0, 45, 90, 135, 180]:
+            try:
+                ellipses = Ellipse(spot_deconvolved, geometry=EllipseGeometry(x0=xycen[0], y0=xycen[1], sma=5, eps=0.0, pa=ang))
+                isolist = ellipses.fit_image(minsma=1.5, step=0.2)
+                break
+            except Exception as _:
+                continue
+
+        smi = isolist.sma * (1 - isolist.eps)
+
         prof_model = spot_profile(amplitude=1, a=1)
-        rad_ang = rp.radius * self.pix_size.value
+        rad_ang = smi * self.pix_size.value
 
         fitter = DogBoxLSQFitter()
-        prof_fit = fitter(prof_model, rad_ang, rp.profile)
+        prof_fit = fitter(prof_model, rad_ang, isolist.intens)
 
         # solve for r0 from the fitted profile where the spatial frequency is 1/arcsec
         r0 = wave / (3.44 / prof_fit.a) ** 0.6
@@ -1044,7 +1074,7 @@ class WFS(object):
 
         # we need to deconvolve the instrumental spot width from the measured one to get the portion of the width that
         # is due to spot motion
-        ref_sigma = stats.funcs.gaussian_fwhm_to_sigma * self.ref_fwhm
+        ref_sigma = stats.funcs.gaussian_fwhm_to_sigma * self.ref_spot_fwhm(mode)
         if sigma > ref_sigma:
             corr_sigma = np.sqrt(sigma**2 - ref_sigma**2)
         else:
@@ -1241,11 +1271,15 @@ class WFS(object):
             airmass = None
 
         seeing, raw_seeing = self.seeing(
-            mode=mode, sigma=slope_results["spot_sigma"], airmass=airmass
+            mode=mode,
+            sigma=slope_results["spot_sigma"],
+            airmass=airmass
         )
 
         vlt_seeing, raw_vlt_seeing = self.vlt_seeing(
-            slope_results["coadded_spot"], airmass=airmass
+            slope_results["coadded_spot"],
+            mode=mode,
+            airmass=airmass
         )
 
         if plot:
@@ -1289,6 +1323,7 @@ class WFS(object):
         results["vlt_seeing"] = vlt_seeing
         results["raw_vlt_seeing"] = raw_vlt_seeing
         results["coadded_spot"] = slope_results["coadded_spot"]
+        results["ellipticity"] = slope_results["ellipticity"]
         results["slopes"] = slopes
         results["ref_slopes"] = ref_slopes
         results["ref_zv"] = ref_zv
