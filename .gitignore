@@ -98,4 +98,4 @@ ENV/
 # Rope project settings
 .ropeproject
 .tmp
-notebooks/spot.fits
+notebooks/*.fits
