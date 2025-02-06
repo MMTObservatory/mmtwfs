@@ -395,7 +395,7 @@ mmtwfs_config = {
             "secondary": "f5",
             "default_mode": None,
             # effective wavelength of the thruput response of the system
-            "eff_wave": 750 * u.nm,
+            "eff_wave": 762 * u.nm,
             "cor_coords": [245.0, 253.0],
             "find_fwhm": 8.0,
             "find_thresh": 4.0,
@@ -450,7 +450,7 @@ mmtwfs_config = {
             "secondary": "f5",
             "default_mode": "binospec",
             # effective wavelength of the thruput response of the system
-            "eff_wave": 600 * u.nm,
+            "eff_wave": 670 * u.nm,
             "cor_coords": [269.0, 252.0],
             "find_fwhm": 7.0,
             "find_thresh": 5.0,
