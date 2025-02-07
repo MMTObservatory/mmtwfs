@@ -91,7 +91,7 @@ def spot_profile(r, amplitude=1, a=1):
     """
     Model for long-exposure spot PSFs in Shack-Hartmann images.
     """
-    return amplitude * np.exp(-a * r ** (5/3))
+    return amplitude * np.exp(-a * r ** (5 / 3))
 
 
 def wfs_norm(
@@ -369,7 +369,7 @@ def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True, cen=None):
     # rectangular apertures produced masks that were sqrt(2) too large.
     # see https://github.com/astropy/photutils/issues/499 for details.
     apers = CircularAperture(
-        list(zip(srcs["xcentroid"], srcs["ycentroid"])), r=np.ceil(apsize/2.0)
+        list(zip(srcs["xcentroid"], srcs["ycentroid"])), r=np.ceil(apsize / 2.0)
     )
 
     masks = apers.to_mask(method="subpixel")
@@ -953,7 +953,7 @@ class WFS(object):
         ap_fwhm = 0.894 * self.eff_wave.to(u.m).value / d
         ap_fwhm_pix = 206265 * ap_fwhm / self.pix_size.value
 
-        det_fwhm_pix = np.sqrt(lens_fwhm_pix ** 2 + ap_fwhm_pix ** 2)
+        det_fwhm_pix = np.sqrt(lens_fwhm_pix**2 + ap_fwhm_pix**2)
 
         return det_fwhm_pix
 
@@ -1019,7 +1019,12 @@ class WFS(object):
         xycen = (spot_deconvolved.shape[1] / 2, spot_deconvolved.shape[0] / 2)
         for ang in [0, 45, 90, 135, 180]:
             try:
-                ellipses = Ellipse(spot_deconvolved, geometry=EllipseGeometry(x0=xycen[0], y0=xycen[1], sma=5, eps=0.0, pa=ang))
+                ellipses = Ellipse(
+                    spot_deconvolved,
+                    geometry=EllipseGeometry(
+                        x0=xycen[0], y0=xycen[1], sma=5, eps=0.0, pa=ang
+                    ),
+                )
                 isolist = ellipses.fit_image(minsma=1.5, step=0.2)
                 break
             except Exception as _:
@@ -1271,15 +1276,11 @@ class WFS(object):
             airmass = None
 
         seeing, raw_seeing = self.seeing(
-            mode=mode,
-            sigma=slope_results["spot_sigma"],
-            airmass=airmass
+            mode=mode, sigma=slope_results["spot_sigma"], airmass=airmass
         )
 
         vlt_seeing, raw_vlt_seeing = self.vlt_seeing(
-            slope_results["coadded_spot"],
-            mode=mode,
-            airmass=airmass
+            slope_results["coadded_spot"], mode=mode, airmass=airmass
         )
 
         if plot:
