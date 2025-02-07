@@ -37,6 +37,7 @@ from photutils.aperture import CircularAperture
 from photutils.centroids import centroid_com
 from photutils.background import Background2D, ModeEstimatorBackground
 from photutils.isophote import EllipseGeometry, Ellipse
+from photutils.profiles import RadialProfile
 
 from ccdproc.utils.slices import slice_from_string
 
@@ -411,10 +412,15 @@ def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True, cen=None):
             )
             fitter = DogBoxLSQFitter()
             y, x = np.mgrid[: spot.shape[0], : spot.shape[1]]
-            fit = fitter(model, x, y, spot)
+            try:
+                fit = fitter(model, x, y, spot)
 
-            sigma = min(fit.x_stddev.value, fit.y_stddev.value)
-            ellipticity = 1 - sigma / max(fit.x_stddev.value, fit.y_stddev.value)
+                sigma = min(fit.x_stddev.value, fit.y_stddev.value)
+                ellipticity = 1 - sigma / max(fit.x_stddev.value, fit.y_stddev.value)
+            except Exception as e:
+                log.warning(f"Gaussian fit to coadded spot failed: {e}")
+                sigma = 0.0
+                ellipticity = 0.0
 
     return srcs, masks, snrs, sigma, ellipticity, spot, wfsfind_fig
 
@@ -1017,6 +1023,8 @@ class WFS(object):
         # axis to calculate radial profile to minimize effect of tracking errors/oscillations which
         # are usually along one axis (ususally elevation).
         xycen = (spot_deconvolved.shape[1] / 2, spot_deconvolved.shape[0] / 2)
+
+        # the initial angle seems to matter for getting successful fits so try a set
         for ang in [0, 45, 90, 135, 180]:
             try:
                 ellipses = Ellipse(
@@ -1027,16 +1035,24 @@ class WFS(object):
                 )
                 isolist = ellipses.fit_image(minsma=1.5, step=0.2)
                 break
-            except Exception as _:
+            except Exception:
                 continue
 
-        smi = isolist.sma * (1 - isolist.eps)
+        # if isolist is empty, fall back to just doing a radial profile
+        if len(isolist) > 0:
+            smi = isolist.sma * (1 - isolist.eps)
+            rad_ang = smi * self.pix_size.value
+            flux = isolist.intens
+        else:
+            edge_radii = np.arange(np.max(xycen))
+            rp = RadialProfile(spot_deconvolved, xycen, edge_radii)
+            rp.normalize()
+            rad_ang = rp.radius * 0.153
+            flux = rp.profile
 
         prof_model = spot_profile(amplitude=1, a=1)
-        rad_ang = smi * self.pix_size.value
-
         fitter = DogBoxLSQFitter()
-        prof_fit = fitter(prof_model, rad_ang, isolist.intens)
+        prof_fit = fitter(prof_model, rad_ang, flux)
 
         # solve for r0 from the fitted profile where the spatial frequency is 1/arcsec
         r0 = wave / (3.44 / prof_fit.a) ** 0.6
