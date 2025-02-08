@@ -34,7 +34,6 @@ jobs:
           name: py313-numpy-latest
           continue-on-error: true
         - linux: build_docs
-        - linux: linkcheck
       coverage: 'codecov'
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV }}
