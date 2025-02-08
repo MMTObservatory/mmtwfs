@@ -990,11 +990,11 @@ class WFS(object):
         described by Martinez, et al. in https://academic.oup.com/mnras/article/421/4/3019/1088309#m9.
         They show that straightforward atmospheric turbulence models create long-exposure PSFs of the form:
         T(f) = T_0(f) x exp[-3.44(lambda*f/r0)^5/3]    (equation 2 in the linked paper)
-        The T_0(f) term is due to diffraction from the WFS aperture and can be safely ignored due to the large
-        aperture sizes (>40-45 cm) of our WFS's. The diffraction term that is significant, however, is the diffraction
-        PSF of the Shack-Hartmann lenslets. Rather than approximate the spot PSF model as a Gaussian and subtract the
-        lenslet PSF width in quadrature, we use Richardson-Lucy deconvolution to mitigate the effect of the lenslet
-        PSF and use the deconvolved spot image to calculate the seeing.
+        where f is the spatial frequency (e.g. 1/radians). The T_0(f) term is due to diffraction from the WFS aperture.
+        Another significant diffraction term is the diffraction PSF of the Shack-Hartmann lenslets themselves. The
+        unaberrated spot PSF is the convolution of these two diffraction terms. Rather than approximate the
+        spot PSF model as a Gaussian and subtract the unaberrated PSF width in quadrature, we use Richardson-Lucy
+        deconvolution to mitigate the effect of the unaberrated PSF and use the deconvolved spot image to calculate the seeing.
         """
         # the effective wavelength of the WFS imagers is about 600-700 nm. mmirs and the oldf9 system use blue-blocking filters
         wave = self.eff_wave
@@ -1011,7 +1011,7 @@ class WFS(object):
         )
 
         # deconvolve the spot image with the lenslet PSF using Richardson-Lucy deconvolution
-        # via skimage. num_iter is set to 5 to minimize deconvolution artifacts.
+        # via skimage. num_iter is set to 10 with a filter_epsilon set to minimize deconvolution artifacts.
         spot_deconvolved = restoration.richardson_lucy(
             spot / spot.max(),
             lenslet_spot_psf.array / lenslet_spot_psf.array.max(),
@@ -1020,23 +1020,26 @@ class WFS(object):
         )
 
         # create elliptical isophote model of the deconvolved spot image. want to use semi-minor
-        # axis to calculate radial profile to minimize effect of tracking errors/oscillations which
-        # are usually along one axis (ususally elevation).
+        # axes to calculate radial profile to minimize effect of tracking errors/oscillations which
+        # are usually along one axis (usually elevation).
         xycen = (spot_deconvolved.shape[1] / 2, spot_deconvolved.shape[0] / 2)
 
         # the initial angle seems to matter for getting successful fits so try a set
-        for ang in [0, 45, 90, 135, 180]:
-            try:
-                ellipses = Ellipse(
-                    spot_deconvolved,
-                    geometry=EllipseGeometry(
-                        x0=xycen[0], y0=xycen[1], sma=5, eps=0.0, pa=ang
-                    ),
-                )
-                isolist = ellipses.fit_image(minsma=1.5, step=0.2)
-                break
-            except Exception:
-                continue
+        with warnings.catch_warnings():
+            # ignore astropy warnings about issues with the fit...
+            warnings.simplefilter("ignore")
+            for ang in [0, 45, 90, 135, 180]:
+                try:
+                    ellipses = Ellipse(
+                        spot_deconvolved,
+                        geometry=EllipseGeometry(
+                            x0=xycen[0], y0=xycen[1], sma=5, eps=0.0, pa=ang
+                        ),
+                    )
+                    isolist = ellipses.fit_image(minsma=1.5, step=0.2)
+                    break
+                except Exception:
+                    continue
 
         # if isolist is empty, fall back to just doing a radial profile
         if len(isolist) > 0:
@@ -1044,10 +1047,11 @@ class WFS(object):
             rad_ang = smi * self.pix_size.value
             flux = isolist.intens
         else:
+            log.warning("Ellipse fitting to spot failed. Using average radial profile.")
             edge_radii = np.arange(np.max(xycen))
             rp = RadialProfile(spot_deconvolved, xycen, edge_radii)
             rp.normalize()
-            rad_ang = rp.radius * 0.153
+            rad_ang = rp.radius * self.pix_size.value
             flux = rp.profile
 
         prof_model = spot_profile(amplitude=1, a=1)
