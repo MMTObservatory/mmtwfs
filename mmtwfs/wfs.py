@@ -987,7 +987,7 @@ class WFS(object):
     def vlt_seeing(self, spot, mode, airmass=None):
         """
         Calculate the seeing using a method derived from the one used at the VLT that is
-        described by Martinez, et al. in https://academic.oup.com/mnras/article/421/4/3019/1088309#m9.
+        described by Martinez, et al. in https://ui.adsabs.harvard.edu/abs/2012MNRAS.421.3019M/abstract.
         They show that straightforward atmospheric turbulence models create long-exposure PSFs of the form:
         T(f) = T_0(f) x exp[-3.44(lambda*f/r0)^5/3]    (equation 2 in the linked paper)
         where f is the spatial frequency (e.g. 1/radians). The T_0(f) term is due to diffraction from the WFS aperture.
@@ -1024,10 +1024,10 @@ class WFS(object):
         # are usually along one axis (usually elevation).
         xycen = (spot_deconvolved.shape[1] / 2, spot_deconvolved.shape[0] / 2)
 
-        # the initial angle seems to matter for getting successful fits so try a set
         with warnings.catch_warnings():
-            # ignore astropy warnings about issues with the fit...
+            # ignore astropy warnings about issues with the fitting process...
             warnings.simplefilter("ignore")
+            # the initial angle seems to matter for getting successful fits so try a set
             for ang in [0, 45, 90, 135, 180]:
                 try:
                     ellipses = Ellipse(
@@ -1047,7 +1047,7 @@ class WFS(object):
             rad_ang = smi * self.pix_size.value
             flux = isolist.intens
         else:
-            log.warning("Ellipse fitting to spot failed. Using average radial profile.")
+            log.warning("Ellipse fitting to spot failed. Using average radial profile to calculate seeing.")
             edge_radii = np.arange(np.max(xycen))
             rp = RadialProfile(spot_deconvolved, xycen, edge_radii)
             rp.normalize()

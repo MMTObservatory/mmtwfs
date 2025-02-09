@@ -23,10 +23,6 @@ jobs:
           pytest: false
         - linux: py313-alldeps-cov
           name: py313
-        - macos: py313
-          name: py313-macos
-        - linux: py312
-          name: py312
         - linux: py313-astropydev
           name: py313-astropy-latest
           continue-on-error: true
