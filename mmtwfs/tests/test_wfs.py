@@ -68,14 +68,6 @@ def test_bogus_wfs():
         assert False
 
 
-def test_connect():
-    wfs = WFSFactory(wfs="f5")
-    wfs.connect()
-    wfs.disconnect()
-    assert not wfs.connected  # can't always access systems...
-    plt.close("all")
-
-
 def test_make_mask():
     test_file = WFS_DATA_DIR / "test_data" / "test_newf9.fits"
     mask = mk_wfs_mask(test_file, thresh_factor=4.0, outfile=None)
