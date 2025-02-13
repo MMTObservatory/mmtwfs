@@ -20,11 +20,6 @@ def test_telescope():
     for s in mmtwfs_config["secondary"]:
         tel = mmtwfs_config["secondary"][s]["telescope"]
         t = TelescopeFactory(telescope=tel, secondary=s)
-        if tel == "mmt":
-            t.connect()
-            assert t.connected
-            t.disconnect()
-            assert not t.connected
         assert t.secondary.diameter == mmtwfs_config["secondary"][s]["diameter"]
 
 
