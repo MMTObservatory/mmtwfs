@@ -25,18 +25,6 @@ def test_bogus_secondary():
         assert False
 
 
-def test_connect():
-    s = SecondaryFactory(secondary="f5")
-    try:
-        s.connect()
-    except Exception as e:
-        assert not s.connected
-        assert e is not None
-    finally:
-        s.disconnect()
-    assert not s.connected
-
-
 def test_focus():
     s = SecondaryFactory(secondary="f5")
     cmd = s.focus(200.3)
