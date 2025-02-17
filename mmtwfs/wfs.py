@@ -128,7 +128,7 @@ def check_wfsdata(data, header=False):
         # we're a fits file (hopefully)
         try:
             with fits.open(data, ignore_missing_simple=True) as h:
-                h.verify("fix")
+                h.verify("silentfix")
                 # binospec images put the image data into separate extension so always grab last available.
                 data = h[-1].data
                 if header:
