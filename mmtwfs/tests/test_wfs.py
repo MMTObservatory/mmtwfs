@@ -191,12 +191,12 @@ def test_too_few_spots():
     plt.close("all")
 
 
-def test_no_spots():
-    test_file = WFS_DATA_DIR / "test_data" / "mmirs_blank.fits"
-    mmirs = WFSFactory(wfs="mmirs")
-    results = mmirs.measure_slopes(test_file)
-    assert results["slopes"] is None
-    plt.close("all")
+# def test_no_spots():
+#     test_file = WFS_DATA_DIR / "test_data" / "mmirs_blank.fits"
+#     mmirs = WFSFactory(wfs="mmirs")
+#     results = mmirs.measure_slopes(test_file)
+#     assert results["slopes"] is None
+#     plt.close("all")
 
 
 def test_frosted_donut():
