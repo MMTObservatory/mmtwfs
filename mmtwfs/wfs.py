@@ -356,7 +356,7 @@ def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True, cen=None):
     else:
         xcen, ycen = int(cen[0]), int(cen[1])
         mean, median, stddev = stats.sigma_clipped_stats(
-            data[ycen - 50 : ycen + 50, xcen - 50 : ycen + 50], sigma=3.0, maxiters=None
+            data[ycen - 50:ycen + 50, xcen - 50:ycen + 50], sigma=3.0, maxiters=None
         )
 
     # use wfsfind() and pass it the clipped stddev from here
@@ -1047,7 +1047,9 @@ class WFS(object):
             rad_ang = smi * self.pix_size.value
             flux = isolist.intens
         else:
-            log.warning("Ellipse fitting to spot failed. Using average radial profile to calculate seeing.")
+            log.warning(
+                "Ellipse fitting to spot failed. Using average radial profile to calculate seeing."
+            )
             edge_radii = np.arange(np.max(xycen))
             rp = RadialProfile(spot_deconvolved, xycen, edge_radii)
             rp.normalize()
@@ -1900,7 +1902,7 @@ class Binospec(F5):
                             amp = (r - obsc) / spacing
                         good.append((amp, x_impos, y_impos))
 
-        yi, xi = np.mgrid[0 : self.pup_size, 0 : self.pup_size]
+        yi, xi = np.mgrid[0:self.pup_size, 0:self.pup_size]
         im = np.zeros((self.pup_size, self.pup_size))
         sigma = 3.0
         for g in good:
@@ -2161,7 +2163,7 @@ class MMIRS(F5):
                             amp = (r - obsc) / spacing
                         good.append((amp, x_impos, y_impos))
 
-        yi, xi = np.mgrid[0 : self.pup_size, 0 : self.pup_size]
+        yi, xi = np.mgrid[0:self.pup_size, 0:self.pup_size]
         im = np.zeros((self.pup_size, self.pup_size))
         sigma = 3.0
         for g in good:
