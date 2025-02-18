@@ -48,11 +48,16 @@ def main():
     timedict = {}
     for f in files:
         with fits.open(f) as hdulist:
+            hdulist.verify('fix')
             hdr = hdulist[-1].header
             if 'DATE-OBS' in hdr:
                 timedict[str(f)] = hdr['DATE-OBS']
             elif 'DATE' in hdr:
                 timedict[str(f)] = hdr['DATE']
+            elif 'DATEOBS' in hdr:
+                time_string = f"{hdr['DATEOBS']} {hdr['UT']}"
+                time_format = "%a %b %d %Y %H:%M:%S"
+                timedict[str(f)] = datetime.strptime(time_string, time_format).strftime("%Y-%m-%dT%H:%M:%S")
             else:
                 log.error(f"No valid time information in {str(f)}")
                 return
@@ -79,6 +84,7 @@ def main():
 
         f = files[i]
         with fits.open(f) as hdulist:
+            hdulist.verify('fix')
             changed = False
             for h in hdulist:
                 if 'EXPTIME' in h.header:
@@ -91,6 +97,13 @@ def main():
                         changed = True
                     else:
                         log.info(f"EXPTIME already set to {h.header['EXPTIME']} for {str(f)}")
+                if 'CAMERA' not in h.header:
+                    log.info(f"Adding CAMERA keyword to header for {str(f)}")
+                    if h.header['WFSNAME'] == 'mmirs1':
+                        h.header['CAMERA'] = 1
+                    else:
+                        h.header['CAMERA'] = 2
+                    changed = True
             if changed and not args.dryrun:
                 hdulist.writeto(f, overwrite=True, output_verify="silentfix")
 

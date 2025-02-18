@@ -57,7 +57,8 @@ wfs_systems['f5'].cen_tol = 75.
 
 def check_image(f, wfskey=None):
     hdr = {}
-    with fits.open(f, output_verify="ignore", ignore_missing_simple=True) as hdulist:
+    with fits.open(f, ignore_missing_simple=True) as hdulist:
+        hdulist.verify('silentfix')
         for h in hdulist:
             hdr.update(h.header)
         data = hdulist[-1].data
@@ -73,6 +74,13 @@ def check_image(f, wfskey=None):
                 wfskey = 'mmirs'
         if 'mmirs' in f.name:
             wfskey = 'mmirs'
+
+        if wfskey == 'mmirs':
+            if 'CAMERA' not in hdr:
+                if hdr['WFSNAME'] == 'mmirs1':
+                    hdr['CAMERA'] = 1
+                else:
+                    hdr['CAMERA'] = 2
 
         # check for binospec
         if 'bino' in f.name or 'wfs_ff_cal_img' in f.name:
@@ -206,7 +214,7 @@ def process_image(f, force=False):
     appropriate WFS instance. Return results in a comma-separated line that will be collected
     and saved in a CSV file.
     """
-    if "Ref" in str(f) or "sog" in str(f):
+    if "Ref" in str(f) or "sog" in str(f) or "coadded" in str(f):
         return None
 
     outfile = f.parent / (f.stem + ".output")
@@ -265,12 +273,14 @@ def process_image(f, force=False):
             line = f"{obstime},{wfskey},{f.name},{exptime},{airmass},{az},{el},{osst},{outt}," \
                 f"{chamt},{tiltx},{tilty},{transx},{transy},{focus},{focerr.value},{cc_x_err.value}," \
                 f"{cc_y_err.value},{results['xcen']},{results['ycen']},{results['seeing'].value}," \
-                f"{results['raw_seeing'].value},{results['fwhm']},{zresults['zernike_rms'].value}," \
+                f"{results['raw_seeing'].value},{results["vlt_seeing"].value},{results["raw_vlt_seeing"].value},"\
+                f"{results['ellipticity']},{results['fwhm']},{zresults['zernike_rms'].value}," \
                 f"{zresults['residual_rms'].value}\n"
             zfile = f.parent / (f.stem + ".reanalyze.zernike")
             zresults['zernike'].save(filename=zfile)
             spotfile = f.parent / (f.stem + ".spots.csv")
             results['spots'].write(spotfile, overwrite=True)
+            fits.writeto(f.parent / (f.stem + ".coadded_spot.fits"), results["coadded_spot"], overwrite=True)
             with open(outfile, 'w') as fp:
                 fp.write(line)
             return line
@@ -330,7 +340,8 @@ def main():
 
     dirs = sorted(list(args.dirs))  # pathlib, where have you been all my life!
     csv_header = "time,wfs,file,exptime,airmass,az,el,osst,outt,chamt,tiltx,tilty,"\
-        "transx,transy,focus,focerr,cc_x_err,cc_y_err,xcen,ycen,seeing,raw_seeing,fwhm,wavefront_rms,residual_rms\n"
+        "transx,transy,focus,focerr,cc_x_err,cc_y_err,xcen,ycen,seeing,raw_seeing,"\
+        "vlt_seeing,raw_vlt_seeing,ellipticity,fwhm,wavefront_rms,residual_rms\n"
 
     log.info(f"Found {len(dirs)} directories to process...")
 
@@ -350,7 +361,8 @@ def main():
                         process = partial(process_image, force=args.force)
                         plines = pool.map(process, fitsfiles)  # plines comes out in same order as fitslines!
 
-                    plines = list(filter(None.__ne__, plines))  # trim out any None entries
+                    plines = [line for line in plines if line is not None]  # trim out any None entries
+
                     if len(plines) > 0:
                         lines.extend(plines)
                         with open(d / "reanalyze_results.csv", "w") as f:

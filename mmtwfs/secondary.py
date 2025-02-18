@@ -8,17 +8,18 @@ import socket
 
 import astropy.units as u
 
-from .utils import srvlookup
-from .config import recursive_subclasses, merge_config, mmtwfs_config
-from .custom_exceptions import WFSConfigException, WFSCommandException
+from mmtwfs.utils import srvlookup
+from mmtwfs.config import recursive_subclasses, merge_config, mmtwfs_config
+from mmtwfs.custom_exceptions import WFSConfigException, WFSCommandException
 
 import logging
 import logging.handlers
+
 log = logging.getLogger("Secondary")
 log.setLevel(logging.INFO)
 
 
-__all__ = ['F9', 'F5', 'FLWO12', 'SecondaryFactory']
+__all__ = ["F9", "F5", "FLWO12", "SecondaryFactory"]
 
 
 def SecondaryFactory(secondary="f5", config={}, **kwargs):
@@ -33,7 +34,9 @@ def SecondaryFactory(secondary="f5", config={}, **kwargs):
     sec_map = dict(list(zip(secondaries, types)))
 
     if secondary not in secondaries:
-        raise WFSConfigException(value=f"Specified secondary, {secondary}, not valid or not implemented.")
+        raise WFSConfigException(
+            value=f"Specified secondary, {secondary}, not valid or not implemented."
+        )
 
     sec_cls = sec_map[secondary](config=config)
     return sec_cls
@@ -43,15 +46,17 @@ class Secondary(object):
     """
     Defines configuration pattern and methods common to all secondary mirror systems
     """
+
     def __init__(self, config={}):
         key = self.__class__.__name__.lower()
-        self.__dict__.update(merge_config(mmtwfs_config['secondary'][key], config))
+        self.__dict__.update(merge_config(mmtwfs_config["secondary"][key], config))
 
 
 class FLWO12(Secondary):
     """
     Secondary mirror configuration for the FLWO 1.2-meter
     """
+
     pass
 
 
@@ -59,6 +64,7 @@ class FLWO15(Secondary):
     """
     Secondary mirror configuration for the FLWO 1.5-meter
     """
+
     pass
 
 
@@ -66,6 +72,7 @@ class MMTSecondary(object):
     """
     Mixin class that defines methods specific to MMT secondary mirror systems
     """
+
     def __init__(self, config={}):
         super(MMTSecondary, self).__init__(config=config)
 
@@ -113,7 +120,9 @@ class MMTSecondary(object):
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.connect(hex_server)
         except Exception as e:
-            log.error(f"Error connecting to hexapod server. Remaining disconnected...: {e}")
+            log.error(
+                f"Error connecting to hexapod server. Remaining disconnected...: {e}"
+            )
             return None
         return sock
 
@@ -138,7 +147,9 @@ class MMTSecondary(object):
         commands that help correct spherical aberration from normal focus commands.
         """
         foc_um = u.Quantity(foc, u.um).value  # focus command must be in microsn
-        log.info(f"Moving {self.__class__.__name__.lower()} hexapod {foc} in Z to correct spherical aberration...")
+        log.info(
+            f"Moving {self.__class__.__name__.lower()} hexapod {foc} in Z to correct spherical aberration..."
+        )
         cmd = self.inc_offset("m1spherical", "z", foc_um)
         return cmd
 
@@ -149,12 +160,14 @@ class MMTSecondary(object):
         """
         tilt = u.Quantity(tilt, u.arcsec).value
         axis = axis.lower()
-        if axis not in ['x', 'y']:
+        if axis not in ["x", "y"]:
             msg = f"Invalid axis {axis} send to hexapod. Only 'x' and 'y' are valid for center-of-curvature offsets."
             raise WFSCommandException(value=msg)
 
         hexname = self.__class__.__name__.lower()
-        log.info(f"Moving {hexname} hexapod {tilt} arcsec about the center of curvature along the {axis} axis...")
+        log.info(
+            f"Moving {hexname} hexapod {tilt} arcsec about the center of curvature along the {axis} axis..."
+        )
         cmd = f"offset_cc wfs t{axis} {tilt}\n"
         if self.connected:
             sock = self.hex_sock()
@@ -171,12 +184,14 @@ class MMTSecondary(object):
         """
         tilt = u.Quantity(tilt, u.arcsec).value
         axis = axis.lower()
-        if axis not in ['x', 'y']:
+        if axis not in ["x", "y"]:
             msg = f"Invalid axis {axis} send to hexapod. Only 'x' and 'y' are valid for zero-coma offsets."
             raise WFSCommandException(value=msg)
 
         hexname = self.__class__.__name__.lower()
-        log.info(f"Moving {hexname} hexapod {tilt} arcsec about the zero-coma point along the {axis} axis...")
+        log.info(
+            f"Moving {hexname} hexapod {tilt} arcsec about the zero-coma point along the {axis} axis..."
+        )
         cmd = f"offset_zc wfs t{axis} {tilt}\n"
         if self.connected:
             sock = self.hex_sock()
@@ -191,8 +206,8 @@ class MMTSecondary(object):
         Apply calculated tilts to correct coma
         """
         if self.connected:
-            self.cc('x', cc_x_corr)
-            self.cc('y', cc_y_corr)
+            self.cc("x", cc_x_corr)
+            self.cc("y", cc_y_corr)
         return cc_x_corr, cc_y_corr
 
     def recenter(self, az, el):
@@ -200,8 +215,8 @@ class MMTSecondary(object):
         Apply calculated az/el offsets using ZC tilts
         """
         if self.connected:
-            self.zc('x', el)
-            self.zc('y', az)
+            self.zc("x", el)
+            self.zc("y", az)
         return az, el
 
     def clear_m1spherical(self):
@@ -224,7 +239,7 @@ class MMTSecondary(object):
         Clear the 'wfs' offsets that get populated by WFS corrections.
         """
         log.info("Resetting hexapod's WFS offsets to 0...")
-        axes = ['tx', 'ty', 'x', 'y', 'z']
+        axes = ["tx", "ty", "x", "y", "z"]
         cmds = []
         if self.connected:
             sock = self.hex_sock()
@@ -242,6 +257,7 @@ class F5(MMTSecondary, Secondary):
     """
     Defines configuration and methods specific to the F/5 secondary system
     """
+
     pass
 
 
@@ -249,4 +265,5 @@ class F9(MMTSecondary, Secondary):
     """
     Defines configuration and methods specific to the F/9 secondary system
     """
+
     pass

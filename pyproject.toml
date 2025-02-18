@@ -1,7 +1,124 @@
-[build-system]
+[project]
+name = "mmtwfs"
+dynamic = ["version"]
+authors = [
+    { name = "T. E. Pickering", email = "te.pickering@gmail.com"}
+]
+license = {file = "LICENSE.rst"}
+readme = "README.rst"
+description = "Wavefront sensing and active optics management tools for the MMT Observatory"
+requires-python = ">=3.12"
+dependencies = [
+    "astropy",
+    "scipy",
+    "matplotlib",
+    "photutils",
+    "scikit-image",
+    "lmfit",
+    "ccdproc",
+    "astroscrappy",
+    "dnspython",
+    "parse",
+    "pytz",
+    "coloredlogs",
+    "poppy@git+https://github.com/spacetelescope/poppy",
+]
 
-requires = ["setuptools",
-            "setuptools_scm",
-            "wheel"]
+[project.optional-dependencies]
+test = [
+    "tox",
+    "coverage",
+    "pytest-astropy",
+    "black",
+    "flake8",
+    "coverage"
+]
+docs = [
+    "sphinx-astropy",
+]
+extra = [
+    "jupyter",
+    "ipympl",
+    "pandas",
+]
+
+[project.scripts]
+fix_mmtwfs_csvs = "mmtwfs.scripts.fix_csvs:main"
+fix_mmirs_exposure_time = "mmtwfs.scripts.fix_mmirs_exposure_time:main"
+rename_mmirs_files = "mmtwfs.scripts.rename_mmirs_files:main"
+reanalyze = "mmtwfs.scripts.reanalyze:main"
+
+[project.urls]
+Repository = "https://github.com/mmtobservatory/mmtwfs.git"
+Documentation = "https://mmtwfs.readthedocs.io/"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.package-data]
+"mmtwfs.data" = ["**"]
+
+[tool.setuptools.packages]
+find = {}
+
+[tool.setuptools_scm]
+version_file = "mmtwfs/version.py"
+
+[build-system]
+requires = [
+    "setuptools",
+    "setuptools_scm",
+]
 
 build-backend = 'setuptools.build_meta'
+
+[tool.pytest.ini_options]
+minversion = 7.0
+testpaths = [
+    "mmtwfs/tests",
+    "docs",
+]
+astropy_header = true
+doctest_plus = "enabled"
+text_file_format = "rst"
+addopts = [
+    "--color=yes",
+    "--doctest-rst",
+]
+xfail_strict = false
+filterwarnings = [
+    "error",
+    "ignore:numpy\\.ufunc size changed:RuntimeWarning",
+    "ignore:numpy\\.ndarray size changed:RuntimeWarning",
+    # numpy 2 deprecation warnings from astropy.units
+    "ignore:.*__array__ implementation doesn't accept a copy keyword:DeprecationWarning",
+]
+
+[tool.coverage]
+
+    [tool.coverage.run]
+        omit = [
+            "mmtwfs/conftest.py",
+            "mmtwfs/tests/*",
+            "mmtwfs/version*",
+            "*/mmtwfs/conftest.py",
+            "*/mmtwfs/tests/*",
+            "*/mmtwfs/version*",
+        ]
+
+    [tool.coverage.report]
+        exclude_lines = [
+            # Have to re-enable the standard pragma
+            "pragma: no cover",
+            # Don't complain about packages we have installed
+            "except ImportError",
+            # Don't complain if tests don't hit defensive assertion code:
+            "raise AssertionError",
+            "raise NotImplementedError",
+            # Don't complain about script hooks
+            "'def main(.*):'",
+            # Ignore branches that don't pertain to this version of Python
+            "pragma: py{ignore_python_version}",
+            # Don't complain about IPython completion helper
+            "def _ipython_key_completions_",
+        ]
