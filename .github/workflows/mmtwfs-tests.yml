@@ -23,11 +23,8 @@ jobs:
           pytest: false
         - linux: py313-alldeps-cov
           name: py313
-        - linux: py313-astropydev
-          name: py313-astropy-latest
-          continue-on-error: true
-        - linux: py313-numpydev
-          name: py313-numpy-latest
+        - linux: py313-devdeps
+          name: py313-devdeps
           continue-on-error: true
         - linux: build_docs
       coverage: 'codecov'

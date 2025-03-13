@@ -16,6 +16,13 @@ from mmtwfs.custom_exceptions import WFSConfigException, WFSCommandException
 WFS_DATA_DIR = importlib.resources.files("mmtwfs") / "data"
 
 
+def _analyze_image(wfs, test_file):
+    results = wfs.measure_slopes(test_file)
+    zresults = wfs.fit_wavefront(results)
+    plt.close("all")
+    return zresults
+
+
 def test_check_wfsdata():
     try:
         check_wfsdata("bogus.fits")
@@ -74,11 +81,10 @@ def test_make_mask():
     assert mask.min() == 0.0
 
 
-def test_mmirs_analysis():
+def test_mmirs_analysis(benchmark):
     test_file = WFS_DATA_DIR / "test_data" / "mmirs_wfs_0150.fits"
     mmirs = WFSFactory(wfs="mmirs")
-    results = mmirs.measure_slopes(test_file)
-    zresults = mmirs.fit_wavefront(results)
+    zresults = benchmark(_analyze_image, mmirs, test_file)
     testval = int(zresults["zernike"]["Z10"].value)
     assert (testval > 416) & (testval < 436)
     plt.close("all")
@@ -133,51 +139,46 @@ def test_mmirs_bogus_pupil_mask():
         assert False
 
 
-def test_f9_analysis():
+def test_f9_analysis(benchmark):
     test_file = WFS_DATA_DIR / "test_data" / "TREX_p500_0000.fits"
     f9 = WFSFactory(wfs="f9")
-    results = f9.measure_slopes(test_file)
-    zresults = f9.fit_wavefront(results)
+    zresults = benchmark(_analyze_image, f9, test_file)
     testval = int(zresults["zernike"]["Z09"].value)
     assert (testval > 440) & (testval < 450)
     plt.close("all")
 
 
-def test_newf9_analysis():
+def test_newf9_analysis(benchmark):
     test_file = WFS_DATA_DIR / "test_data" / "test_newf9.fits"
     f9 = WFSFactory(wfs="newf9")
-    results = f9.measure_slopes(test_file)
-    zresults = f9.fit_wavefront(results)
+    zresults = benchmark(_analyze_image, f9, test_file)
     testval = int(zresults["zernike"]["Z09"].value)
     assert (testval > 109) & (testval < 129)
     plt.close("all")
 
 
-def test_f5_analysis():
+def test_f5_analysis(benchmark):
     test_file = WFS_DATA_DIR / "test_data" / "auto_wfs_0037_ave.fits"
     f5 = WFSFactory(wfs="f5")
-    results = f5.measure_slopes(test_file)
-    zresults = f5.fit_wavefront(results)
+    zresults = benchmark(_analyze_image, f5, test_file)
     testval = int(zresults["zernike"]["Z10"].value)
     assert (testval > 76) & (testval < 96)
     plt.close("all")
 
 
-def test_bino_analysis():
+def test_bino_analysis(benchmark):
     test_file = WFS_DATA_DIR / "test_data" / "wfs_ff_cal_img_2017.1113.111402.fits"
     wfs = WFSFactory(wfs="binospec")
-    results = wfs.measure_slopes(test_file, mode="binospec")
-    zresults = wfs.fit_wavefront(results)
+    zresults = benchmark(_analyze_image, wfs, test_file)
     testval = int(zresults["zernike"]["Z10"].value)
     assert (testval > 163) & (testval < 183)
     plt.close("all")
 
 
-def test_flwo_analysis():
+def test_flwo_analysis(benchmark):
     test_file = WFS_DATA_DIR / "test_data" / "1195.star.p2m18.fits"
     wfs = WFSFactory(wfs="flwo15")
-    results = wfs.measure_slopes(test_file)
-    zresults = wfs.fit_wavefront(results)
+    zresults = benchmark(_analyze_image, wfs, test_file)
     testval = int(zresults["zernike"]["Z06"].value)
     assert (testval > 700) & (testval < 1000)
     plt.close("all")
