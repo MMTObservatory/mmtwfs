@@ -31,7 +31,8 @@ test = [
     "pytest-astropy",
     "black",
     "flake8",
-    "coverage"
+    "coverage",
+    "pytest-benchmark",
 ]
 docs = [
     "sphinx-astropy",
@@ -78,7 +79,7 @@ testpaths = [
     "mmtwfs/tests",
     "docs",
 ]
-astropy_header = true
+astropy_header = false
 doctest_plus = "enabled"
 text_file_format = "rst"
 addopts = [
