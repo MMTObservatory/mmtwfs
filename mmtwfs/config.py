@@ -340,7 +340,7 @@ mmtwfs_config = {
             "secondary": "f9",
             "default_mode": "blue",
             # effective wavelength of the thruput response of the system
-            "eff_wave": 600 * u.nm,
+            "eff_wave": 760 * u.nm,
             "lampsrv": "_lampbox._tcp.mmto.arizona.edu",
             "cor_coords": [376.0, 434.0],
             "find_fwhm": 12.0,
