@@ -12,7 +12,7 @@ import astropy.units as u
 
 from mmtwfs.config import mmtwfs_config
 from mmtwfs.telescope import TelescopeFactory, MMT
-from mmtwfs.zernike import ZernikeVector
+from mmtwfs.zernike_vector import ZernikeVector
 from mmtwfs.custom_exceptions import WFSConfigException
 
 

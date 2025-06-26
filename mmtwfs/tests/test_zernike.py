@@ -10,8 +10,8 @@ import numpy as np
 
 import astropy.units as u
 
+from mmtwfs.zernike_vector import ZernikeVector
 from mmtwfs.zernike import (
-    ZernikeVector,
     noll_normalization_vector,
     noll_coefficient,
     R_mn,

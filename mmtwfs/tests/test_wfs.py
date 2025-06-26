@@ -7,7 +7,7 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 
-from mmtwfs.zernike import ZernikeVector
+from mmtwfs.zernike_vector import ZernikeVector
 from mmtwfs.config import mmtwfs_config
 from mmtwfs.wfs import WFSFactory, check_wfsdata, mk_wfs_mask
 from mmtwfs.custom_exceptions import WFSConfigException, WFSCommandException

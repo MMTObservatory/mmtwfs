@@ -19,7 +19,7 @@ import matplotlib.colors as col
 from mmtwfs.config import recursive_subclasses, merge_config, mmtwfs_config
 from mmtwfs.custom_exceptions import WFSConfigException
 from mmtwfs.secondary import SecondaryFactory
-from mmtwfs.zernike import ZernikeVector
+from mmtwfs.zernike_vector import ZernikeVector
 
 import logging
 import logging.handlers

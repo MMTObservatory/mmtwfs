@@ -44,7 +44,8 @@ from ccdproc.utils.slices import slice_from_string
 from mmtwfs.config import recursive_subclasses, merge_config, mmtwfs_config
 from mmtwfs.telescope import TelescopeFactory
 from mmtwfs.f9topbox import CompMirror
-from mmtwfs.zernike import ZernikeVector, zernike_slopes, cart2pol, pol2cart
+from mmtwfs.zernike import zernike_slopes, cart2pol, pol2cart
+from mmtwfs.zernike_vector import ZernikeVector
 from mmtwfs.photometry import make_spot_mask
 from mmtwfs.custom_exceptions import (
     WFSConfigException,
