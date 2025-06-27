@@ -3,12 +3,16 @@
 
 """
 A collection of functions and classes for performing wavefront analysis using Zernike polynomials.
-Several of these routines were adapted from https://github.com/tvwerkhoven/libtim-py. They have been updated to make them
-more applicable for MMTO usage and comments added to clarify what they do and how.
+Several of these routines were adapted from https://github.com/tvwerkhoven/libtim-py.
+They have been updated to make them more applicable for MMTO usage and comments added to
+clarify what they do and how.
 
 Expressions for cartesian derivatives of the Zernike polynomials were adapted from:
         http://adsabs.harvard.edu/abs/2014OptLE..52....7N
 """
+
+from typing import Any
+from collections.abc import MutableMapping
 
 import numpy as np
 from math import factorial as fac
@@ -36,7 +40,7 @@ __all__ = [
 ]
 
 
-def cart2pol(arr):
+def cart2pol(arr: np.ndarray) -> np.ndarray:
     """
     Convert array of [x, y] vectors to [rho, theta]
 
@@ -58,7 +62,7 @@ def cart2pol(arr):
     return polarr
 
 
-def pol2cart(polarr):
+def pol2cart(polarr: np.ndarray) -> np.ndarray:
     """
     Convert array of [rho, theta] vectors to [x, y]
 
@@ -80,7 +84,12 @@ def pol2cart(polarr):
     return arr
 
 
-def R_mn(m, n, rho, cache=None):
+def R_mn(
+        m: int,
+        n: int,
+        rho: np.ndarray,
+        cache: dict[Any, Any] | None = None,
+    ) -> float | np.ndarray:
     """
     Make radial Zernike polynomial on coordinate grid **rho**.
 
@@ -125,7 +134,12 @@ def R_mn(m, n, rho, cache=None):
     return wf
 
 
-def dR_drho(m, n, rho, cache=None):
+def dR_drho(
+        m: int,
+        n: int,
+        rho: np.ndarray,
+        cache: dict[Any, Any] | None = None
+    ) -> np.ndarray:
     """
     First derivative of Zernike radial polynomial, R(m, n, rho) calculated on coordinate grid **rho**.
 
@@ -161,7 +175,10 @@ def dR_drho(m, n, rho, cache=None):
     return dR_mn
 
 
-def theta_m(m, phi):
+def theta_m(
+        m: int,
+        phi: np.ndarray
+    ) -> np.ndarray:
     """
     Calculate angular Zernike mode on coordinate grid **phi**
 
@@ -185,7 +202,10 @@ def theta_m(m, phi):
     return theta
 
 
-def dtheta_dphi(m, phi):
+def dtheta_dphi(
+        m: int,
+        phi: np.ndarray
+    ) -> np.ndarray:
     """
     Calculate the first derivative of the m-th Zernike angular mode on coordinate grid **phi**
 
@@ -209,7 +229,14 @@ def dtheta_dphi(m, phi):
     return dtheta
 
 
-def zernike(m, n, rho, phi, norm=False, cache=None):
+def zernike(
+        m: int,
+        n: int,
+        rho: np.ndarray,
+        phi: np.ndarray,
+        norm: bool = False,
+        cache: dict[Any, Any] | None = None
+    ) -> np.ndarray:
     """
     Calculate Zernike mode (m, n) on grid **rho** and **phi**.
     **rho** and **phi** must be radial and azimuthal coordinate grids of identical shape, respectively.
@@ -245,7 +272,14 @@ def zernike(m, n, rho, phi, norm=False, cache=None):
     return wf
 
 
-def dZ_dx(m, n, rho, phi, norm=False, cache=None):
+def dZ_dx(
+        m: int,
+        n: int,
+        rho: np.ndarray,
+        phi: np.ndarray,
+        norm: bool = False,
+        cache: dict[Any, Any] | None = None
+    ) -> np.ndarray:
     """
     Calculate the X slopes of Zernike mode (m, n) on grid **rho** and **phi**.
 
@@ -292,7 +326,14 @@ def dZ_dx(m, n, rho, phi, norm=False, cache=None):
     return dwf
 
 
-def dZ_dy(m, n, rho, phi, norm=False, cache=None):
+def dZ_dy(
+        m: int,
+        n: int,
+        rho: np.ndarray,
+        phi: np.ndarray,
+        norm: bool = False,
+        cache: dict[Any, Any] | None = None
+    ) -> np.ndarray:
     """
     Calculate the Y slopes of Zernike mode (m, n) on grid **rho** and **phi**.
 
@@ -339,7 +380,7 @@ def dZ_dy(m, n, rho, phi, norm=False, cache=None):
     return dwf
 
 
-def noll_to_zernike(j):
+def noll_to_zernike(j: int) -> tuple[int, int]:
     """
     Convert linear Noll index to tuple of Zernike indices.
     j is the linear Noll coordinate, n is the radial Zernike index, and m is the azimuthal Zernike index.
@@ -371,7 +412,13 @@ def noll_to_zernike(j):
     return (n, m)
 
 
-def zernike_noll(j, rho, phi, norm=False, cache=None):
+def zernike_noll(
+        j: int,
+        rho: np.ndarray,
+        phi: np.ndarray,
+        norm: bool = False,
+        cache: dict[Any, Any] | None = None
+    ) -> np.ndarray:
     """
     Calculate Noll Zernike mode **j** on grid **rho** and **phi**.
     **rho** and **phi** must be radial and azimuthal coordinate grids of identical shape, respectively.
@@ -397,7 +444,13 @@ def zernike_noll(j, rho, phi, norm=False, cache=None):
     return wf
 
 
-def zernike_slope_noll(j, rho, phi, norm=False, cache=None):
+def zernike_slope_noll(
+        j: int,
+        rho: np.ndarray,
+        phi: np.ndarray,
+        norm: bool = False,
+        cache: dict[Any, Any] | None = None
+    ) -> tuple[np.ndarray, np.ndarray]:
     """
     Calculate X/Y slopes for Noll Zernike mode **j** on grid **rho** and **phi**.
     **rho** and **phi** must be radial and azimuthal coordinate grids of identical shape, respectively.
@@ -424,7 +477,13 @@ def zernike_slope_noll(j, rho, phi, norm=False, cache=None):
     return dwx, dwy
 
 
-def zernike_slopes(zv, rho, phi, norm=False):
+def zernike_slopes(
+        zv: MutableMapping,
+        rho: np.ndarray,
+        phi: np.ndarray,
+        norm: bool = False,
+        cache: dict[Any, Any] | None = None
+    ) -> tuple[float | np.ndarray, float | np.ndarray]:
     """
     Calculate total slope of a set of Zernike modes on a polar coordinate grid, (rho, phi).
 
@@ -452,10 +511,10 @@ def zernike_slopes(zv, rho, phi, norm=False):
         dwx, dwy = zernike_slope_noll(mode, rho, phi, norm=norm, cache=cache)
         xslope += v * dwx
         yslope += v * dwy
-    return xslope, yslope
+    return (xslope, yslope)
 
 
-def noll_normalization_vector(nmodes=30):
+def noll_normalization_vector(nmodes: int = 30) -> np.ndarray:
     """
     Calculate Noll normalization vector.
     This function calculates a **nmodes** element vector with Noll (i.e. unit variance)
@@ -475,7 +534,7 @@ def noll_normalization_vector(nmodes=30):
     return norms
 
 
-def norm_coefficient(m, n):
+def norm_coefficient(m: int , n: int) -> float:
     """
     Calculate the normalization coefficient for the (m, n) Zernike mode.
 
@@ -495,7 +554,7 @@ def norm_coefficient(m, n):
     return norm_coeff
 
 
-def noll_coefficient(ll):
+def noll_coefficient(ll: int) -> float:
     """
     Calculate the Noll coefficent to normalize mode **l** to unit variance.
 
