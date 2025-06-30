@@ -15,6 +15,7 @@ from typing import Any
 from collections.abc import MutableMapping
 
 import numpy as np
+
 from math import factorial as fac
 
 from mmtwfs.custom_exceptions import ZernikeException
@@ -118,8 +119,8 @@ def R_mn(
     if np.mod(n - m, 2) == 1:
         return 0.0
 
-    m = np.abs(m)
-    wf = 0.0
+    m = abs(m)
+    wf = np.zeros_like(rho, dtype=np.float64)
     for k in range(int((n - m) / 2) + 1):
         wf += (
             rho ** (n - 2 * k)
@@ -482,7 +483,7 @@ def zernike_slopes(
         rho: np.ndarray,
         phi: np.ndarray,
         norm: bool = False,
-        cache: dict[Any, Any] | None = None
+        use_cache: bool = True,
     ) -> tuple[float | np.ndarray, float | np.ndarray]:
     """
     Calculate total slope of a set of Zernike modes on a polar coordinate grid, (rho, phi).
@@ -503,9 +504,11 @@ def zernike_slopes(
     xslope, yslope: `~numpy.ndarray`, `~numpy.ndarray`
         Total X and Y slopes of zv at each (rho, phi) point. Same shapes as **rho** and **phi**.
     """
-    xslope = 0.0
-    yslope = 0.0
-    cache = {}
+    cache: dict[Any, Any] | None = None
+    xslope = np.zeros_like(rho, dtype=np.float64)
+    yslope = np.zeros_like(rho, dtype=np.float64)
+    if use_cache:
+        cache = {}
     for k, v in zv.items():
         mode = int(k.replace("Z", ""))
         dwx, dwy = zernike_slope_noll(mode, rho, phi, norm=norm, cache=cache)
@@ -529,7 +532,7 @@ def noll_normalization_vector(nmodes: int = 30) -> np.ndarray:
     -------
     norms : 1D `~numpy.ndarray` of length nmodes
     """
-    nolls = (noll_to_zernike(j + 1) for j in range(nmodes))
+    nolls = [noll_to_zernike(j + 1) for j in range(nmodes)]
     norms = np.asanyarray([norm_coefficient(m, n) for n, m in nolls])
     return norms
 
