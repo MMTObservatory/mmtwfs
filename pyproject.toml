@@ -4,7 +4,7 @@ dynamic = ["version"]
 authors = [
     { name = "T. E. Pickering", email = "te.pickering@gmail.com"}
 ]
-license = {file = "LICENSE.rst"}
+license-files = ["LICENSE.rst"]
 readme = "README.rst"
 description = "Wavefront sensing and active optics management tools for the MMT Observatory"
 requires-python = ">=3.12"
@@ -74,7 +74,7 @@ requires = [
 build-backend = 'setuptools.build_meta'
 
 [tool.pytest.ini_options]
-minversion = 7.0
+minversion = "7.0"
 testpaths = [
     "mmtwfs/tests",
     "docs",
@@ -94,6 +94,9 @@ filterwarnings = [
     # numpy 2 deprecation warnings from astropy.units
     "ignore:.*__array__ implementation doesn't accept a copy keyword:DeprecationWarning",
 ]
+
+[tool.mypy]
+    plugins = ["numpy.typing.mypy_plugin"]
 
 [tool.coverage]
 
