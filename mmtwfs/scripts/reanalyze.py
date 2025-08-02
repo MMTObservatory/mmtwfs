@@ -219,6 +219,7 @@ def process_image(f, force=False):
         return None
 
     outfile = f.parent / (f.stem + ".output")
+    failed = f.parent / (f.stem + ".failed")
     if not force and Path.exists(outfile):
         log.info(f"Already processed {f.name}, loading previous data...")
         with open(outfile, 'r') as fp:
@@ -227,10 +228,15 @@ def process_image(f, force=False):
         if len(lines) > 0:
             return lines[0]
 
+    if not force and Path.exists(failed):
+        log.info(f"Already failed processing {f.name}, skipping...")
+        return None
+
     try:
         data, hdr = check_image(f)
     except Exception as e:
         log.error(f"Problem checking {f}: {e}")
+        failed.touch()  # mark this file as failed
         return None
 
     log.info(f"Processing {f.name}...")
@@ -263,6 +269,7 @@ def process_image(f, force=False):
         results = wfs_systems[wfskey].measure_slopes(str(f), plot=False)
     except Exception as e:
         log.error(f"Problem analyzing {f.name}: {e}")
+        failed.touch()
         results = {}
         results['slopes'] = None
 
@@ -288,8 +295,10 @@ def process_image(f, force=False):
             return line
         except Exception as e:
             log.error(f"Problem fitting wavefront for {f.name}: {e}")
+            failed.touch()
             return None
     else:
+        failed.touch()  # mark this file as failed
         return None
 
 
