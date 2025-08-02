@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 from datetime import datetime
+import concurrent.futures
 import multiprocessing
-from multiprocessing import Pool, Process, Queue
 from functools import partial
 import pytz
 from pathlib import Path
@@ -33,38 +33,6 @@ log = logging.getLogger('WFS Reanalyze')
 coloredlogs.install(level='INFO', logger=log)
 
 tz = pytz.timezone("America/Phoenix")
-
-
-def timeout(seconds, action=None):
-    """
-    Calls any function with timeout after 'seconds'.
-    If a timeout occurs, 'action' will be returned or called if
-    it is a function-like object.
-    """
-    def handler(queue, func, args, kwargs):
-        queue.put(func(*args, **kwargs))
-
-    def decorator(func):
-
-        def wraps(*args, **kwargs):
-            q = Queue()
-            p = Process(target=handler, args=(q, func, args, kwargs))
-            p.start()
-            p.join(timeout=seconds)
-            if p.is_alive():
-                log.error(f"Timeout after {seconds} on file {args[0]}.")
-                p.terminate()
-                p.join()
-                if hasattr(action, '__call__'):
-                    return action()
-                else:
-                    return action
-            else:
-                return q.get()
-
-        return wraps
-
-    return decorator
 
 
 # instantiate all of the WFS systems...
@@ -240,7 +208,7 @@ def check_image(f, wfskey=None):
     hdr['OBS-TIME'] = obstime
     return data, hdr
 
-@timeout(300)
+
 def process_image(f, force=False):
     """
     Process FITS file, f, to get info we want from the header and then analyse it with the
@@ -391,9 +359,9 @@ def main():
                     _ = int(d.name)  # valid WFS directories are ints of the form YYYYMMDD. if not this form, int barfs
                     fitsfiles = sorted(list(d.glob("*.fits")))
                     log.info(f"Processing {len(fitsfiles)} images in {d}...")
-                    with Pool(processes=args.nproc) as pool:
+                    with concurrent.futures.ProcessPoolExecutor(max_workers=args.nproc) as pool:
                         process = partial(process_image, force=args.force)
-                        plines = pool.map(process, fitsfiles)  # plines comes out in same order as fitslines!
+                        plines = pool.map(process, fitsfiles, timeout=300)  # plines comes out in same order as fitslines!
 
                     plines = [line for line in plines if line is not None]  # trim out any None entries
 
