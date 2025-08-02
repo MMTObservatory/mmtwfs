@@ -232,6 +232,7 @@ def process_image(f, force=False):
         log.error(f"Problem checking {f}: {e}")
         return None
 
+    log.info(f"Processing {f.name}...")
     wfskey = hdr['WFSKEY']
     obstime = hdr['OBS-TIME']
     airmass = hdr['AIRMASS']
