@@ -2,7 +2,7 @@
 
 from datetime import datetime
 import multiprocessing
-from multiprocessing import Pool
+from multiprocessing import Pool, Process, Queue
 from functools import partial
 import pytz
 from pathlib import Path
@@ -33,6 +33,39 @@ log = logging.getLogger('WFS Reanalyze')
 coloredlogs.install(level='INFO', logger=log)
 
 tz = pytz.timezone("America/Phoenix")
+
+
+def timeout(seconds, action=None):
+    """
+    Calls any function with timeout after 'seconds'.
+    If a timeout occurs, 'action' will be returned or called if
+    it is a function-like object.
+    """
+    def handler(queue, func, args, kwargs):
+        queue.put(func(*args, **kwargs))
+
+    def decorator(func):
+
+        def wraps(*args, **kwargs):
+            q = Queue()
+            p = Process(target=handler, args=(q, func, args, kwargs))
+            p.start()
+            p.join(timeout=seconds)
+            if p.is_alive():
+                log.error(f"Timeout after {seconds} on file {args[0]}.")
+                p.terminate()
+                p.join()
+                if hasattr(action, '__call__'):
+                    return action()
+                else:
+                    return action
+            else:
+                return q.get()
+
+        return wraps
+
+    return decorator
+
 
 # instantiate all of the WFS systems...
 wfs_keys = ['f9', 'newf9', 'f5', 'mmirs', 'binospec']
@@ -207,7 +240,7 @@ def check_image(f, wfskey=None):
     hdr['OBS-TIME'] = obstime
     return data, hdr
 
-
+@timeout(300)
 def process_image(f, force=False):
     """
     Process FITS file, f, to get info we want from the header and then analyse it with the
