@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 from datetime import datetime
+import concurrent.futures
 import multiprocessing
-from multiprocessing import Pool
 from functools import partial
 import pytz
 from pathlib import Path
@@ -33,6 +33,7 @@ log = logging.getLogger('WFS Reanalyze')
 coloredlogs.install(level='INFO', logger=log)
 
 tz = pytz.timezone("America/Phoenix")
+
 
 # instantiate all of the WFS systems...
 wfs_keys = ['f9', 'newf9', 'f5', 'mmirs', 'binospec']
@@ -218,6 +219,7 @@ def process_image(f, force=False):
         return None
 
     outfile = f.parent / (f.stem + ".output")
+    failed = f.parent / (f.stem + ".failed")
     if not force and Path.exists(outfile):
         log.info(f"Already processed {f.name}, loading previous data...")
         with open(outfile, 'r') as fp:
@@ -226,12 +228,18 @@ def process_image(f, force=False):
         if len(lines) > 0:
             return lines[0]
 
+    if not force and Path.exists(failed):
+        log.info(f"Already failed processing {f.name}, skipping...")
+        return None
+
     try:
         data, hdr = check_image(f)
     except Exception as e:
         log.error(f"Problem checking {f}: {e}")
+        failed.touch()  # mark this file as failed
         return None
 
+    log.info(f"Processing {f.name}...")
     wfskey = hdr['WFSKEY']
     obstime = hdr['OBS-TIME']
     airmass = hdr['AIRMASS']
@@ -261,6 +269,7 @@ def process_image(f, force=False):
         results = wfs_systems[wfskey].measure_slopes(str(f), plot=False)
     except Exception as e:
         log.error(f"Problem analyzing {f.name}: {e}")
+        failed.touch()
         results = {}
         results['slopes'] = None
 
@@ -286,8 +295,10 @@ def process_image(f, force=False):
             return line
         except Exception as e:
             log.error(f"Problem fitting wavefront for {f.name}: {e}")
+            failed.touch()
             return None
     else:
+        failed.touch()  # mark this file as failed
         return None
 
 
@@ -357,9 +368,9 @@ def main():
                     _ = int(d.name)  # valid WFS directories are ints of the form YYYYMMDD. if not this form, int barfs
                     fitsfiles = sorted(list(d.glob("*.fits")))
                     log.info(f"Processing {len(fitsfiles)} images in {d}...")
-                    with Pool(processes=args.nproc) as pool:
+                    with concurrent.futures.ProcessPoolExecutor(max_workers=args.nproc) as pool:
                         process = partial(process_image, force=args.force)
-                        plines = pool.map(process, fitsfiles)  # plines comes out in same order as fitslines!
+                        plines = pool.map(process, fitsfiles, timeout=300)  # plines comes out in same order as fitslines!
 
                     plines = [line for line in plines if line is not None]  # trim out any None entries
 

@@ -207,14 +207,14 @@ def wfsfind(data, fwhm=7.0, threshold=5.0, plot=True, ap_radius=5.0, std=None):
         msg = "WFS spot detection failed or no spots detected."
         raise WFSAnalysisFailed(value=msg)
 
-    # this may be redundant given the above check...
-    nsrcs = len(sources)
-    if nsrcs == 0:
-        msg = "No WFS spots detected."
-        raise WFSAnalysisFailed(value=msg)
-
     # only keep spots more than 1/4 as bright as the max. need this for f/9 especially.
     sources = sources[sources["flux"] > sources["flux"].max() / 4.0]
+
+    # if only a handful of spots, then effectively none are detected.
+    nsrcs = len(sources)
+    if nsrcs < 5:
+        msg = "No WFS spots detected."
+        raise WFSAnalysisFailed(value=msg)
 
     fig = None
     if plot:
