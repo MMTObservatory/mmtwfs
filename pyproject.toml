@@ -7,7 +7,7 @@ authors = [
 license = {file = "LICENSE.rst"}
 readme = "README.rst"
 description = "Wavefront sensing and active optics management tools for the MMT Observatory"
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 dependencies = [
     "astropy",
     "scipy",
@@ -21,7 +21,7 @@ dependencies = [
     "parse",
     "pytz",
     "coloredlogs",
-    "poppy@git+https://github.com/spacetelescope/poppy",
+    "poppy",
 ]
 
 [project.optional-dependencies]
