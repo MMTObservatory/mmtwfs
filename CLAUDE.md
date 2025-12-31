@@ -147,7 +147,7 @@ Located in `mmtwfs/data/`:
 
 ## Python Requirements
 
-- Minimum Python version: 3.12 (specified in `pyproject.toml`)
+- Minimum Python version: 3.13 (specified in `pyproject.toml`)
 - Uses `setuptools_scm` for version management (version written to `mmtwfs/version.py`)
 
 ## Important Notes
