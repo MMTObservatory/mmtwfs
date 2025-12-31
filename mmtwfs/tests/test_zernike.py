@@ -425,3 +425,96 @@ def test_plots():
     f4 = zv.fringe_bar_chart()
     assert f4 is not None
     plt.close("all")
+
+
+def test_dZ_dx_with_cache():
+    """Test dZ_dx with cache to exercise cache hit path"""
+    rho = np.array([[0.5, 0.6], [0.7, 0.8]])
+    phi = np.array([[0.1, 0.2], [0.3, 0.4]])
+    m, n = 2, 2
+    cache = {}
+
+    # First call populates cache
+    result1 = dZ_dx(m, n, rho, phi, cache=cache)
+    assert ("dZ_dx", n, m) in cache
+
+    # Second call should hit cache
+    result2 = dZ_dx(m, n, rho, phi, cache=cache)
+    assert np.allclose(result1, result2)
+
+
+def test_dZ_dy_with_cache():
+    """Test dZ_dy with cache to exercise cache hit path"""
+    rho = np.array([[0.5, 0.6], [0.7, 0.8]])
+    phi = np.array([[0.1, 0.2], [0.3, 0.4]])
+    m, n = 2, 2
+    cache = {}
+
+    # First call populates cache
+    result1 = dZ_dy(m, n, rho, phi, cache=cache)
+    assert ("dZ_dy", n, m) in cache
+
+    # Second call should hit cache
+    result2 = dZ_dy(m, n, rho, phi, cache=cache)
+    assert np.allclose(result1, result2)
+
+
+def test_zernike_vector_iteration():
+    """Test ZernikeVector iteration and contains"""
+    zv = ZernikeVector(Z04=1000, Z05=500)
+    keys = list(zv)
+    assert "Z04" in keys
+    assert "Z05" in keys
+    assert "Z04" in zv
+    assert "Z99" not in zv
+
+
+def test_zernike_vector_length():
+    """Test ZernikeVector length"""
+    zv = ZernikeVector(Z04=1000, Z05=500, Z06=250)
+    assert len(zv) == 5  # modestart=2 by default, so Z02, Z03, Z04, Z05, Z06
+
+
+def test_zernike_copy():
+    """Test ZernikeVector copy"""
+    zv = ZernikeVector(Z04=1000, Z05=500)
+    zv_copy = zv.copy()
+    assert zv_copy["Z04"] == zv["Z04"]
+    zv_copy["Z04"] = 0.0
+    assert zv["Z04"].value == 1000.0  # Original unchanged
+
+
+def test_zernike_eq():
+    """Test ZernikeVector equality"""
+    zv1 = ZernikeVector(Z04=1000)
+    zv2 = ZernikeVector(Z04=1000)
+    zv3 = ZernikeVector(Z04=500)
+    assert zv1 == zv2
+    assert not (zv1 == zv3)
+
+
+def test_zernike_ne():
+    """Test ZernikeVector inequality"""
+    zv1 = ZernikeVector(Z04=1000)
+    zv2 = ZernikeVector(Z04=500)
+    assert zv1 != zv2
+
+
+def test_zernike_total_phase():
+    """Test ZernikeVector total_phase method"""
+    zv = ZernikeVector(Z04=1000)
+    rho = np.array([0.5])
+    phi = np.array([0.0])
+    phase = zv.total_phase(rho, phi)
+    assert phase is not None
+
+
+def test_zernike_slopes():
+    """Test ZernikeVector slopes method"""
+    from mmtwfs.zernike import zernike_slopes
+    zv = ZernikeVector(Z04=1000)
+    rho = np.array([0.5])
+    phi = np.array([0.0])
+    dx, dy = zernike_slopes(zv, rho, phi)
+    assert dx is not None
+    assert dy is not None
