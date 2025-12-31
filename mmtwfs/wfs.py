@@ -1027,6 +1027,7 @@ class WFS(object):
         with warnings.catch_warnings():
             # ignore astropy warnings about issues with the fitting process...
             warnings.simplefilter("ignore")
+            isolist = []
             # the initial angle seems to matter for getting successful fits so try a set
             for ang in [0, 45, 90, 135, 180]:
                 try:

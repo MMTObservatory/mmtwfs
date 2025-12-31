@@ -1,0 +1,29 @@
+name: mmtwfs
+channels:
+  - conda-forge
+dependencies:
+  - python=3.13
+  - astropy
+  - astroscrappy
+  - ccdproc
+  - coloredlogs
+  - dnspython
+  - lmfit
+  - matplotlib
+  - parse
+  - photutils
+  - poppy
+  - pytz
+  - scikit-image
+  - scipy
+  - tox
+  - coverage
+  - pytest-astropy
+  - coverage
+  - black
+  - flake8
+  - pytest-benchmark
+  - sphinx-astropy
+  - jupyter
+  - ipympl
+  - pandas
