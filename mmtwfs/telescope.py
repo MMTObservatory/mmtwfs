@@ -15,6 +15,7 @@ from astropy import visualization
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import matplotlib.colors as col
+import matplotlib.tri as tri
 
 from mmtwfs.config import recursive_subclasses, merge_config, mmtwfs_config
 from mmtwfs.custom_exceptions import WFSConfigException
@@ -230,6 +231,10 @@ class MMT(Telescope):
         # load actuator influence matrix that provides the surface displacement caused by 1 N of force by
         # each actuator at each of self.node finite element node positions.
         self.surf2act = self.load_influence_matrix()
+
+        # the actuator-to-surface influence matrix is large and only needed for diagnostic plots, so it is
+        # loaded lazily and cached by self.load_act2surf().
+        self._act2surf = None
 
         # use this boolean to determine if corrections are actually to be sent
         self.connected = False
@@ -480,6 +485,17 @@ class MMT(Telescope):
         )
         return surf2act
 
+    def load_act2surf(self):
+        """
+        Load and cache the actuator-to-surface influence matrix. This matrix maps a vector of
+        actuator forces (in Newtons) to the resulting surface displacement (in nm) at each of the
+        BCV finite element nodes. It is the counterpart to self.surf2act and is stored as an ASCII
+        table, so it is loaded lazily the first time it is needed.
+        """
+        if self._act2surf is None:
+            self._act2surf = np.loadtxt(self.act2surf_file).transpose()
+        return self._act2surf
+
     def load_actuator_coordinates(self):
         """
         The actuator IDs and X/Y positions in mm are stored in a simple ASCII table.  Load it using
@@ -544,4 +560,64 @@ class MMT(Telescope):
         ax.set_axis_off()
         cb = fig.colorbar(cmap, ax=ax)
         cb.set_label("Actuator Force (N)")
+        return fig
+
+    def plot_force_influence(self, t, inf_matrix=None):
+        """
+        Plot the M1 surface displacement produced by a set of actuator forces.
+
+        Parameters
+        ----------
+        t : `astropy.table.Table`
+            Force table as output by self.bending_forces() with "actuator" and "force" columns.
+        inf_matrix : `numpy.ndarray`, optional
+            Actuator-to-surface influence matrix mapping a force vector (N) to surface displacement
+            (nm) at each BCV node. If not provided, it is loaded (and cached) via self.load_act2surf().
+        """
+        if inf_matrix is None:
+            inf_matrix = self.load_act2surf()
+
+        forces = np.asarray(t["force"])
+        act_ids = t["actuator"]
+
+        fig, ax = plt.subplots()
+        max_i = act_ids[forces.argmax()]
+        min_i = act_ids[forces.argmin()]
+        fig.set_label(
+            f"Forces: Max={np.max(forces):.1f} N (Actuator {max_i}), "
+            f"Min={np.min(forces):.1f} N (Actuator {min_i}), RMS={np.std(forces):.1f} N"
+        )
+
+        # surface displacement (nm) at each BCV node produced by the force vector
+        ph = forces @ inf_matrix
+
+        X, Y = self.nodecoor["bcv_x"].value, self.nodecoor["bcv_y"].value
+        triang = tri.Triangulation(X, Y)
+        # mask off the hole in the center of the mirror
+        triang.set_mask(
+            np.hypot(
+                X[triang.triangles].mean(axis=1),
+                Y[triang.triangles].mean(axis=1),
+            )
+            < np.min(self.nodecoor["bcv_rho"])
+        )
+        ax.set_aspect("equal")
+        tcf = ax.tricontourf(triang, ph, cmap=cm.RdBu, alpha=0.5)
+        ax.set_axis_off()
+        fig.colorbar(tcf, ax=ax, label="Surface Displacement (nm)")
+        ax.tricontour(triang, ph, colors="k", alpha=0.2)
+
+        xcor = self.actcoor["act_x"]
+        ycor = self.actcoor["act_y"]
+        ax.scatter(xcor, ycor, marker=".", color="black")
+        for i, (x, y) in enumerate(zip(xcor, ycor)):
+            ax.text(
+                x,
+                y + 0.02,
+                self.actcoor["act_id"][i],
+                horizontalalignment="center",
+                verticalalignment="bottom",
+                size="xx-small",
+                color="black",
+            )
         return fig

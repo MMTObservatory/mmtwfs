@@ -29,7 +29,7 @@ from astropy.modeling.models import Gaussian2D
 from astropy.modeling.fitting import DogBoxLSQFitter
 from astropy.modeling import custom_model
 from astropy.convolution import Gaussian2DKernel
-from astropy.table import conf as table_conf
+from astropy.table import QTable, conf as table_conf
 from astroscrappy import detect_cosmics
 
 from photutils.detection import DAOStarFinder, find_peaks
@@ -200,12 +200,20 @@ def wfsfind(data, fwhm=7.0, threshold=5.0, plot=True, ap_radius=5.0, std=None):
     data = check_wfsdata(data)
     if std is None:
         mean, median, std = stats.sigma_clipped_stats(data, sigma=3.0, maxiters=5)
-    daofind = DAOStarFinder(fwhm=fwhm, threshold=threshold * std, sharphi=0.95)
+    daofind = DAOStarFinder(fwhm=fwhm, threshold=threshold * std, sharpness_range=(0.2, 0.95))
     sources = daofind(data)
 
     if sources is None:
         msg = "WFS spot detection failed or no spots detected."
         raise WFSAnalysisFailed(value=msg)
+
+    # photutils 3.0 renamed the centroid columns to 'x_centroid'/'y_centroid' and returns a
+    # DeprecatedColumnQTable that raises an AstropyDeprecationWarning whenever the old names are
+    # accessed. Cast to a plain QTable to drop that translation layer, then rename the columns to
+    # the 'xcentroid'/'ycentroid' names used throughout the rest of this module.
+    sources = QTable(sources)
+    sources.rename_column("x_centroid", "xcentroid")
+    sources.rename_column("y_centroid", "ycentroid")
 
     # only keep spots more than 1/4 as bright as the max. need this for f/9 especially.
     sources = sources[sources["flux"] > sources["flux"].max() / 4.0]
