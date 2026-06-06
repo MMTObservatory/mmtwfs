@@ -108,6 +108,39 @@ def test_plots_with_m1focus():
     plt.close("all")
 
 
+def test_load_act2surf():
+    """Test lazy loading and caching of the actuator-to-surface influence matrix"""
+    t = MMT()
+    assert t._act2surf is None
+    inf_matrix = t.load_act2surf()
+    # the matrix maps a force vector (one entry per actuator) to surface displacement at each BCV node
+    assert inf_matrix.shape[0] == t.n_act
+    assert inf_matrix.shape[1] == len(t.nodecoor)
+    # a second call should return the cached array rather than reloading it
+    assert t.load_act2surf() is inf_matrix
+
+
+def test_plot_force_influence():
+    """Test plot_force_influence with the influence matrix loaded on demand"""
+    t = MMT()
+    zv = ZernikeVector(Z05=1000, Z11=250)
+    f_table = t.bending_forces(zv=zv)
+    fig = t.plot_force_influence(f_table)
+    assert fig is not None
+    plt.close("all")
+
+
+def test_plot_force_influence_with_matrix():
+    """Test plot_force_influence with an explicitly supplied influence matrix"""
+    t = MMT()
+    zv = ZernikeVector(Z05=1000, Z11=250)
+    f_table = t.bending_forces(zv=zv)
+    inf_matrix = t.load_act2surf()
+    fig = t.plot_force_influence(f_table, inf_matrix=inf_matrix)
+    assert fig is not None
+    plt.close("all")
+
+
 def test_bogus_telescope():
     """Test TelescopeFactory with invalid telescope"""
     try:
@@ -247,7 +280,7 @@ def test_bend_mirror_timeout():
             (b"Able to Apply", b"")
         ]
         mock_popen.return_value = mock_proc
-        frac = t.bend_mirror("testfile")
+        t.bend_mirror("testfile")
         mock_proc.kill.assert_called_once()
 
 
@@ -281,7 +314,7 @@ def test_undo_last_connected():
     with patch.object(t, "to_rcell") as mock_to_rcell:
         with patch.object(t, "bend_mirror") as mock_bend:
             mock_bend.return_value = 1.0
-            with patch.object(t.secondary, "m1spherical") as mock_m1sph:
+            with patch.object(t.secondary, "m1spherical"):
                 uforce, ufocus = t.undo_last()
                 mock_to_rcell.assert_called_once()
                 mock_bend.assert_called_once()
@@ -289,7 +322,6 @@ def test_undo_last_connected():
 
 def test_clear_forces_connected():
     """Test clear_forces when connected"""
-    import subprocess
     t = MMT()
     t.connected = True
 
@@ -304,12 +336,11 @@ def test_clear_forces_connected():
 
 def test_clear_forces_connected_with_stderr():
     """Test clear_forces when connected with stderr output"""
-    import subprocess
     import warnings
     t = MMT()
     t.connected = True
 
-    with patch.object(t.secondary, "clear_m1spherical") as mock_clear:
+    with patch.object(t.secondary, "clear_m1spherical"):
         with patch("subprocess.Popen") as mock_popen:
             mock_proc = MagicMock()
             mock_proc.communicate.return_value = (b"Forces cleared", b"warning message")
@@ -325,7 +356,7 @@ def test_clear_forces_connected_timeout():
     t = MMT()
     t.connected = True
 
-    with patch.object(t.secondary, "clear_m1spherical") as mock_clear:
+    with patch.object(t.secondary, "clear_m1spherical"):
         with patch("subprocess.Popen") as mock_popen:
             mock_proc = MagicMock()
             mock_proc.communicate.side_effect = [

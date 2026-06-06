@@ -2,7 +2,7 @@
 # coding=utf-8
 
 import asyncio
-from unittest.mock import patch, MagicMock, AsyncMock, PropertyMock
+from unittest.mock import patch, MagicMock, AsyncMock
 from pathlib import Path
 import tempfile
 
@@ -202,4 +202,3 @@ class TestCell:
             assert result == "response data"
 
         asyncio.run(run_test())
-

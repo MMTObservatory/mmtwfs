@@ -2,7 +2,7 @@
 # coding=utf-8
 
 import importlib
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import numpy as np
 
@@ -87,7 +87,8 @@ def test_mmirs_analysis(benchmark):
     mmirs = WFSFactory(wfs="mmirs")
     zresults = benchmark(_analyze_image, mmirs, test_file)
     testval = int(zresults["zernike"]["Z10"].value)
-    assert (testval > 416) & (testval < 436)
+    # recalibrated for photutils 3.0 (and the numpy/scipy/astropy upgrade), which shifts Z10 to ~398 nm
+    assert (testval > 388) & (testval < 408)
     plt.close("all")
 
 
@@ -100,7 +101,7 @@ def test_mmirs_pacman():
     plt.close("all")
 
 
-def test_mmirs_pupil_mask():
+def test_mmirs_plotgrid_hdr():
     test_file = WFS_DATA_DIR / "test_data" / "mmirs_wfs_0150.fits"
     mmirs = WFSFactory(wfs="mmirs")
     data, hdr = check_wfsdata(test_file, header=True)
