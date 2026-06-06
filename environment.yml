@@ -2,12 +2,13 @@ name: mmtwfs
 channels:
   - conda-forge
 dependencies:
-  - python=3.13
+  - python
   - astropy
   - astroscrappy
   - ccdproc
   - coloredlogs
   - dnspython
+  - httpx<1.0
   - lmfit
   - matplotlib
   - parse

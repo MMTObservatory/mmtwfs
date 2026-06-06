@@ -9,18 +9,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Common Commands
 
 ### Testing
+# tox envlist defines py313 and py314 (requires-python is >=3.13);
+# there is no py312 environment. Default to py314; use py313 if needed.
 ```bash
 # Run all tests (uses pytest)
-tox -e py312
+tox -e py314
 
 # Run tests with all optional dependencies
-tox -e py312-alldeps
+tox -e py314-alldeps
 
-# Run tests with development dependencies
-tox -e py312-devdeps
+# Run tests with development dependencies (nightly wheels of core deps)
+tox -e py314-devdeps
 
 # Run tests with coverage
-tox -e py312-cov
+tox -e py314-cov
 
 # Run specific test file
 pytest mmtwfs/tests/test_wfs.py
@@ -107,6 +109,17 @@ The package uses a factory pattern to instantiate telescope-specific and WFS-spe
 
 7. **F/9 Topbox Control** (`mmtwfs/f9topbox.py`): F/9 instrument support
    - `CompMirror`: Controls the F/9 comparison mirror (in/out)
+
+8. **Supporting modules**
+   - `mmtwfs/photometry.py`: Spot photometry helpers for SH images (e.g. `make_spot_mask()`)
+   - `mmtwfs/utils.py`: `srvlookup()` for DNS SRV resolution of hardware hostnames/ports
+   - `mmtwfs/custom_exceptions.py`: Package-specific exception types
+
+### Console Scripts
+
+Entry points defined in `pyproject.toml` (`[project.scripts]`), installed on `pip install`:
+- `reanalyze`: Batch re-analysis of WFS data (`mmtwfs/scripts/reanalyze.py`)
+- `fix_mmtwfs_csvs`, `fix_mmirs_exposure_time`, `rename_mmirs_files`: Data-file maintenance utilities
 
 ### Data Flow
 

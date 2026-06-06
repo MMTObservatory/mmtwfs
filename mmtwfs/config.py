@@ -103,6 +103,8 @@ mmtwfs_config = {
             "psf_fov": 1.0,
             # influence matrix to map actuator forces to surface displacement
             "surf2act_file": WFS_DATA_DIR / "Surf2ActTEL_32.bin",
+            # influence matrix to map actuator forces (N) to surface displacement (nm) at each BCV node
+            "act2surf_file": WFS_DATA_DIR / "Act2SurfTEL",
             # coordinates of finite element nodes used in surf2act
             "nodecoor_file": WFS_DATA_DIR / "bcv_node_coordinates.dat",
             # coordinates of the force actuators
