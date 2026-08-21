@@ -102,3 +102,5 @@ notebooks/*.fits
 
 # Test artifacts
 zfile
+
+.codegraph/

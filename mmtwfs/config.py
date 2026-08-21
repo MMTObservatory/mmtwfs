@@ -386,7 +386,7 @@ mmtwfs_config = {
                 },
                 "spol": {
                     "label": "SPOL",
-                    "ref_zern": {"Z04": -308.0 * u.nm},
+                    "ref_zern": {"Z04": 648.0 * u.nm},
                 },
             },
         },
