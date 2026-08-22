@@ -30,6 +30,7 @@ jobs:
         - linux: py314-devdeps-cov
           name: py314-devdeps
         - linux: build_docs
+          pytest: false
       coverage: 'codecov'
       # codestyle and build_docs have no python version in their env names. The
       # runner default is older than this package supports, so pin it.
