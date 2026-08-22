@@ -380,13 +380,9 @@ mmtwfs_config = {
                     "label": "Blue Channel",
                     "ref_zern": {"Z04": 8282.0 * u.nm},
                 },
-                "red": {
-                    "label": "Red Channel",
-                    "ref_zern": {"Z04": 8282.0 * u.nm},
-                },
                 "spol": {
                     "label": "SPOL",
-                    "ref_zern": {"Z04": -308.0 * u.nm},
+                    "ref_zern": {"Z04": 648.0 * u.nm},
                 },
             },
         },
