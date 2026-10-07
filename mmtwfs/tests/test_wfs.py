@@ -228,6 +228,10 @@ def test_frosted_donut():
     assert results["method"] == "periodicity"
     assert abs(results["grid"]["scale"] - 0.899) < 5e-3
     assert -40.0 < results["pending_focus"].to_value(u.um) < -24.0
+    # the Z04 error carried through the same gains as the correction
+    z04_err = results["zernike"].errorbars["Z04"]
+    expected = wfs.m2_gain_periodicity * wfs.m2_gain * z04_err / wfs.secondary.focus_trans
+    assert results["focus_err"].to_value(u.um) == pytest.approx(expected.to_value(u.um), abs=0.01)
     plt.close("all")
 
 
