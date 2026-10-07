@@ -416,3 +416,40 @@ def test_get_apertures_background_region():
         with pytest.raises(RuntimeError):
             get_apertures(data, 20.0, cen=(100, 400))
     assert captured["std"] < 2.0
+
+
+def test_wfs_poor_seeing_defaults():
+    for s in mmtwfs_config["wfs"]:
+        wfs = WFSFactory(wfs=s)
+        assert wfs.bkg_method == "background2d"
+        assert wfs.periodicity_fallback
+        assert wfs.m2_gain_periodicity == 0.5
+    plt.close("all")
+
+
+def test_reference_image_center_is_fixed():
+    mmirs = WFSFactory(wfs="mmirs")
+    ref = mmirs.modes["mmirs2"]["reference"]
+    x0, y0 = ref.img_xcen, ref.img_ycen
+    ref.adjust_center(x0 + 10.0, y0 - 5.0)
+    assert (ref.img_xcen, ref.img_ycen) == (x0, y0)
+    assert ref.xcen == x0 + 10.0
+
+
+def test_find_pupil_center_falls_back():
+    mmirs = WFSFactory(wfs="mmirs")
+    test_file = WFS_DATA_DIR / "test_data" / "mmirs_wfs_0150.fits"
+    data, hdr = mmirs.process_image(test_file)
+    xc, yc = mmirs.find_pupil_center(data, mmirs.pupil_mask(hdr=hdr))
+    assert np.hypot(xc - mmirs.cor_coords[0], yc - mmirs.cor_coords[1]) < mmirs.cen_tol
+    xc, yc = mmirs.find_pupil_center(np.zeros((10, 10)), mmirs.pupil_mask(hdr=hdr))
+    assert (xc, yc) == tuple(mmirs.cor_coords)
+
+
+def test_mmirs_analysis_pupil_background():
+    test_file = WFS_DATA_DIR / "test_data" / "mmirs_wfs_0150.fits"
+    mmirs = WFSFactory(wfs="mmirs", config={"bkg_method": "pupil"})
+    zresults = _analyze_image(mmirs, test_file)
+    testval = int(zresults["zernike"]["Z10"].value)
+    # same window as test_mmirs_analysis: the new background must not change a good frame's wavefront
+    assert (testval > 388) & (testval < 408)

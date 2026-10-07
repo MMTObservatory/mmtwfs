@@ -46,6 +46,7 @@ from mmtwfs.telescope import TelescopeFactory
 from mmtwfs.f9topbox import CompMirror
 from mmtwfs.zernike import ZernikeVector, zernike_slopes, cart2pol, pol2cart
 from mmtwfs.photometry import make_spot_mask
+from mmtwfs.background import pupil_footprint, pupil_background, pedestal
 from mmtwfs.custom_exceptions import (
     WFSConfigException,
     WFSAnalysisFailed,
@@ -93,6 +94,17 @@ def spot_profile(r, amplitude=1, a=1):
     Model for long-exposure spot PSFs in Shack-Hartmann images.
     """
     return amplitude * np.exp(-a * r ** (5 / 3))
+
+
+def subtract_background2d(data, box_size, filter_size, npixels=5, dilate_size=11):
+    """
+    Small-box mode-estimator background with WFS spots masked out. This is the original background
+    method; it works well when spots are well separated.
+    """
+    bkg_estimator = ModeEstimatorBackground()
+    mask = make_spot_mask(data, nsigma=2, npixels=npixels, dilate_size=dilate_size)
+    bkg = Background2D(data, box_size, filter_size=filter_size, bkg_estimator=bkg_estimator, mask=mask)
+    return data - bkg.background
 
 
 def wfs_norm(
@@ -819,6 +831,12 @@ class SH_Reference(object):
 
         self.xcen = self.apertures["xcentroid"].mean()
         self.ycen = self.apertures["ycentroid"].mean()
+        # pupil center in the reference image's own pixels. adjust_center() moves xcen/ycen to wherever the pupil
+        # is on the science frame, but measuring the reference grid needs to know where it is in self.data.
+        self.img_xcen = self.xcen
+        self.img_ycen = self.ycen
+        # grid frequencies measured from self.data; filled in by WFS.reference_grid()
+        self.grid = None
         self.xspacing, self.yspacing = grid_spacing(data, self.apertures)
 
         # make masks for each reference spot and fit a 2D gaussian to get its FWHM. the reference FWHM is subtracted in
@@ -914,6 +932,19 @@ class WFS(object):
     """
     Defines configuration pattern and methods common to all WFS systems
     """
+
+    # defaults for poor-seeing handling. these are class attributes so that config blocks (including the frozen
+    # legacy f9 one) don't need to define them; any config can override them.
+    bkg_method = "background2d"  # or "pupil"
+    bkg_box = 16  # block size in pixels for the pupil background fit
+    bkg_order = 4  # polynomial order of the pupil background fit
+    pedestal = True  # with bkg_method = "pupil", also remove the floor between spots
+    periodicity_fallback = True  # focus-only correction from the grid period when spot analysis fails
+    period_snr_thresh = 20.0
+    period_err_factor = 1.0  # calibration of the propagated grid-scale error
+    period_err_floor = 0.0  # systematic grid-scale error added in quadrature
+    m2_gain_periodicity = 0.5  # extra gain on fallback focus corrections
+    periodicity_focus_max = 300.0 * u.um
 
     def __init__(self, config={}, plot=True, **kwargs):
         key = self.__class__.__name__.lower()
@@ -1160,6 +1191,47 @@ class WFS(object):
         mode = self.default_mode
         return mode
 
+    def prepare_reference(self, mode, hdr=None):
+        """
+        Center the mode's reference apertures on the expected pupil position and apply the pupil mask.
+        """
+        ref = self.modes[mode]["reference"]
+        xcen, ycen = self.ref_pupil_location(mode, hdr=hdr)
+        ref.adjust_center(xcen, ycen)
+        ref.apply_pupil(self.pup_inner, self.pup_size / 2.0)
+        return ref
+
+    def find_pupil_center(self, data, pup_mask):
+        """
+        Locate the pupil with center_pupil(). Never raises: falls back to the nominal center (cor_coords) if
+        centering fails or lands more than cen_tol away from it.
+        """
+        try:
+            xcen, ycen, _ = center_pupil(
+                data, pup_mask, threshold=self.cen_thresh, sigma=self.cen_sigma, plot=False
+            )
+        except Exception as e:
+            log.warning(f"Pupil centering failed, using nominal center: {e}")
+            return tuple(self.cor_coords)
+        if np.hypot(xcen - self.cor_coords[0], ycen - self.cor_coords[1]) > self.cen_tol:
+            return tuple(self.cor_coords)
+        return xcen, ycen
+
+    def subtract_pupil_background(self, data, mode, center):
+        """
+        Remove the scattered-light halo using pixels outside the pupil and, optionally, the diffuse floor
+        between spots. See `mmtwfs.background`.
+        """
+        ref = self.modes[mode]["reference"]
+        pitch = np.mean([ref.xspacing, ref.yspacing])
+        footprint = pupil_footprint(
+            data.shape, center, self.pup_size / 2.0, inner=self.pup_inner, margin=pitch
+        )
+        data = data - pupil_background(data, footprint, box=self.bkg_box, order=self.bkg_order)
+        if self.pedestal:
+            data = data - pedestal(data, pitch)
+        return data
+
     def process_image(self, fitsfile):
         """
         Process the image to make it suitable for accurate wavefront analysis.  Steps include nuking cosmic rays,
@@ -1174,13 +1246,10 @@ class WFS(object):
             trimdata, sigclip=5.0, niter=5, cleantype="medmask", psffwhm=5.0
         )
 
-        # calculate the background and subtract it
-        bkg_estimator = ModeEstimatorBackground()
-        mask = make_spot_mask(data, nsigma=2, npixels=5, dilate_size=11)
-        bkg = Background2D(
-            data, (10, 10), filter_size=(5, 5), bkg_estimator=bkg_estimator, mask=mask
-        )
-        data -= bkg.background
+        # calculate the background and subtract it. with bkg_method = "pupil" this is done later in
+        # measure_slopes() once the pupil center is known.
+        if self.bkg_method == "background2d":
+            data = subtract_background2d(data, (10, 10), (5, 5))
 
         return data, hdr
 
@@ -1240,12 +1309,13 @@ class WFS(object):
         # make mask for finding wfs spot pattern
         pup_mask = self.pupil_mask(hdr=hdr)
 
-        # get adjusted reference center position and update the reference
-        xcen, ycen = self.ref_pupil_location(mode, hdr=hdr)
-        self.modes[mode]["reference"].adjust_center(xcen, ycen)
+        self.prepare_reference(mode, hdr=hdr)
 
-        # apply pupil to the reference
-        self.modes[mode]["reference"].apply_pupil(self.pup_inner, self.pup_size / 2.0)
+        # pupil center for the pupil background and the periodicity fallback; only computed when needed
+        center = None
+        if self.bkg_method == "pupil":
+            center = self.find_pupil_center(data, pup_mask)
+            data = self.subtract_pupil_background(data, mode, center)
 
         ref_zv = self.reference_aberrations(mode, hdr=hdr)
 
@@ -1673,13 +1743,10 @@ class NewF9(F9):
             rawdata, sigclip=15.0, niter=5, cleantype="medmask", psffwhm=10.0
         )
 
-        # calculate the background and subtract it
-        bkg_estimator = ModeEstimatorBackground()
-        mask = make_spot_mask(data, nsigma=2, npixels=7, dilate_size=13)
-        bkg = Background2D(
-            data, (50, 50), filter_size=(15, 15), bkg_estimator=bkg_estimator, mask=mask
-        )
-        data -= bkg.background
+        # calculate the background and subtract it. with bkg_method = "pupil" this is done later in
+        # measure_slopes() once the pupil center is known.
+        if self.bkg_method == "background2d":
+            data = subtract_background2d(data, (50, 50), (15, 15), npixels=7, dilate_size=13)
 
         return data, hdr
 
@@ -1711,13 +1778,10 @@ class F5(WFS):
             trimdata, sigclip=15.0, niter=5, cleantype="medmask", psffwhm=10.0
         )
 
-        # calculate the background and subtract it
-        bkg_estimator = ModeEstimatorBackground()
-        mask = make_spot_mask(data, nsigma=2, npixels=5, dilate_size=11)
-        bkg = Background2D(
-            data, (20, 20), filter_size=(11, 11), bkg_estimator=bkg_estimator, mask=mask
-        )
-        data -= bkg.background
+        # calculate the background and subtract it. with bkg_method = "pupil" this is done later in
+        # measure_slopes() once the pupil center is known.
+        if self.bkg_method == "background2d":
+            data = subtract_background2d(data, (20, 20), (11, 11))
 
         return data, hdr
 
@@ -2215,13 +2279,10 @@ class MMIRS(F5):
             trimdata, sigclip=5.0, niter=5, cleantype="medmask", psffwhm=5.0
         )
 
-        # calculate the background and subtract it
-        bkg_estimator = ModeEstimatorBackground()
-        mask = make_spot_mask(data, nsigma=2, npixels=5, dilate_size=11)
-        bkg = Background2D(
-            data, (20, 20), filter_size=(7, 7), bkg_estimator=bkg_estimator, mask=mask
-        )
-        data -= bkg.background
+        # calculate the background and subtract it. with bkg_method = "pupil" this is done later in
+        # measure_slopes() once the pupil center is known.
+        if self.bkg_method == "background2d":
+            data = subtract_background2d(data, (20, 20), (7, 7))
 
         return data, hdr
 
