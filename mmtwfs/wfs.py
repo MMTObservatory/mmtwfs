@@ -1296,7 +1296,8 @@ class WFS(object):
         zv : ZernikeVector
             Rotated, reference-subtracted wavefront with Z04 error bar
         focus : `~astropy.units.Quantity`
-            M2 focus correction after m2_gain_periodicity and periodicity_focus_max clipping
+            M2 focus correction after m2_gain_periodicity, with the change relative to the reference focus offset
+            clipped to periodicity_focus_max
         """
         ref = self.modes[mode]["reference"]
         x = np.asarray(ref.masked_apertures["xcentroid"])
@@ -1316,11 +1317,15 @@ class WFS(object):
         )
 
         raw.rotate(angle=-(self.rotation - rotator))
-        zv = raw - self.reference_aberrations(mode, hdr=hdr)
+        ref_zv = self.reference_aberrations(mode, hdr=hdr)
+        zv = raw - ref_zv
 
-        focus = self.m2_gain_periodicity * self.calculate_focus(zv.copy())
+        focus = self.m2_gain_periodicity * self.calculate_focus(zv.copy()).to_value(u.um)
+        # clip the measured change around the correction the reference aberrations alone imply (grid scale 1),
+        # so a large reference focus term (e.g. F/9 blue, ~240 um) doesn't use up the range in one direction
+        ref_focus = self.m2_gain_periodicity * self.calculate_focus(ZernikeVector(Z04=0.0) - ref_zv).to_value(u.um)
         fmax = self.periodicity_focus_max.to_value(u.um)
-        focus = np.clip(focus.to_value(u.um), -fmax, fmax) * u.um
+        focus = (ref_focus + np.clip(focus - ref_focus, -fmax, fmax)) * u.um
         return zv, focus
 
     def periodicity_focus(self, data, mode, center, rotator, hdr=None, plot=True):

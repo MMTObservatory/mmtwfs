@@ -538,10 +538,28 @@ def test_focus_from_scale_large_error_is_zero():
     assert focus.value == 0.0
 
 
+def _reference_focus(wfs, mode, hdr=None):
+    # the M2 correction implied by the reference aberrations alone, i.e. at grid scale 1
+    return wfs.calculate_focus(ZernikeVector(Z04=0.0) - wfs.reference_aberrations(mode, hdr=hdr)).to_value(u.um)
+
+
 def test_focus_from_scale_clipped():
     mmirs, mode, hdr = _mmirs_ready({"m2_gain_periodicity": 1.0})
     zv, focus = mmirs.focus_from_scale(0.8, 1e-5, mode, 0.0 * u.deg, hdr=hdr)
-    assert abs(focus.to_value(u.um)) == 300.0
+    assert np.isclose(abs(focus.to_value(u.um) - _reference_focus(mmirs, mode, hdr)), 300.0, atol=0.02)
+
+
+@pytest.mark.parametrize("scale", [0.8, 1.2])
+def test_focus_from_scale_clip_centered_on_reference(scale):
+    # F/9 blue's reference carries ~240 um of focus. the clip limits the measured change around that offset, so
+    # it doesn't eat most of the +/-300 um range in one direction and allow only ~60 um in the other.
+    wfs = WFSFactory(wfs="newf9", config={"m2_gain_periodicity": 1.0})
+    mode = "blue"
+    wfs.prepare_reference(mode)
+    ref_focus = _reference_focus(wfs, mode)
+    assert ref_focus > 200.0
+    zv, focus = wfs.focus_from_scale(scale, 1e-5, mode, 0.0 * u.deg)
+    assert np.isclose(abs(focus.to_value(u.um) - ref_focus), 300.0, atol=0.02)
 
 
 def test_reference_grid_cached():
