@@ -602,3 +602,13 @@ def test_periodicity_hex_reference_spacing():
     fb = wfs.periodicity_focus(zoomed, mode, (ref.img_xcen, ref.img_ycen), 0.0 * u.deg, plot=False)
     assert fb is not None
     assert abs(fb["grid"]["scale"] - scale) < 3e-3
+
+
+def test_pupil_background_failure_is_contained():
+    # a pupil background that can't be fit (e.g. too few blocks outside the pupil) must not escape measure_slopes;
+    # the analysis carries on with a constant background
+    test_file = WFS_DATA_DIR / "test_data" / "mmirs_wfs_0150.fits"
+    mmirs = WFSFactory(wfs="mmirs", config={"bkg_method": "pupil"})
+    with patch("mmtwfs.wfs.pupil_background", side_effect=ValueError("too few background blocks")):
+        results = mmirs.measure_slopes(test_file, plot=False)
+    assert results["slopes"] is not None or results.get("focus_only", False)

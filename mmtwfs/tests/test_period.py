@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 import matplotlib.pyplot as plt
+from scipy import ndimage
 
 from mmtwfs.period import measure_grid_period, grid_scale, plot_periodicity
 from mmtwfs.tests.synthetic import make_sh_image, gaussian_halo
@@ -89,3 +90,18 @@ def test_plot_periodicity():
     fig = plot_periodicity(m)
     assert fig.get_label() == "Grid Periodicity"
     plt.close("all")
+
+
+@pytest.mark.parametrize("hexgrid", [False, True])
+@pytest.mark.parametrize("a", [0.01, -0.01])
+def test_measure_grid_period_astigmatism(hexgrid, a):
+    # astigmatism stretches the grid along one axis and squeezes it along the other. that is a traceless
+    # distortion with no defocus, so the scale must stay at 1. on a hex grid the mean length of two fundamentals
+    # doesn't cancel it; the area of the frequency cell does.
+    rng = np.random.default_rng(10)
+    img, _ = make_sh_image(sigma=3.0, hexgrid=hexgrid)
+    c = np.array([CENTER[1], CENTER[0]])
+    m = np.diag([1.0 / (1.0 - a), 1.0 / (1.0 + a)])  # output -> input (y, x): x stretched by 1 + a
+    img = ndimage.affine_transform(img, m, offset=c - m @ c, order=1) + rng.normal(0.0, 5.0, img.shape)
+    g = _scale(img, hexgrid=hexgrid)
+    assert abs(g["scale"] - 1.0) < 5e-4

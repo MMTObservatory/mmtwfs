@@ -171,9 +171,14 @@ def measure_grid_period(
 
 def grid_scale(meas, ref):
     """
-    Compare measured grid frequencies with the reference grid's. Each measured vector is matched to the reference
-    vector closest in angle. Scale is measured spacing / reference spacing, the same convention as the grid fit in
-    `~mmtwfs.wfs.get_slopes`.
+    Compare measured grid frequencies with the reference grid's. Scale is measured spacing / reference spacing, the
+    same convention as the grid fit in `~mmtwfs.wfs.get_slopes`. It comes from the ratio of the areas of the
+    frequency cells spanned by the two vectors, which is unchanged to first order by astigmatism (a traceless
+    stretch) on any grid; the mean of the two vector lengths is not on a hexagonal grid. Any two of a hex grid's
+    three fundamentals span the same area, so it also doesn't matter which pair each image picked.
+
+    The per-vector scales and the rotation come from matching each measured vector to the reference vector closest
+    in angle and are diagnostics only.
 
     Returns
     -------
@@ -185,24 +190,28 @@ def grid_scale(meas, ref):
     # and drops out of the length cut below.
     f1, f2 = ref["freqs"]
     rfreqs = np.array([f1, f2, f1 - f2, f1 + f2])
-    rerrs = np.append(ref["freq_errs"], [np.hypot(*ref["freq_errs"])] * 2)
     fr = np.hypot(rfreqs[:, 0], rfreqs[:, 1])
     rangle = np.degrees(np.arctan2(rfreqs[:, 1], rfreqs[:, 0])) % 180.0
     fundamental = fr < 1.2 * fr[:2].max()
-    scales, errs, rots = [], [], []
+    scales, rots = [], []
     for i in range(len(fm)):
         d = np.abs(rangle - meas["angle"][i])
         d = np.where(fundamental, np.minimum(d, 180.0 - d), np.inf)
         j = int(np.argmin(d))
         s = fr[j] / fm[i]
         scales.append(s)
-        errs.append(s * np.hypot(meas["freq_errs"][i] / fm[i], rerrs[j] / fr[j]))
         rots.append((meas["angle"][i] - rangle[j] + 90.0) % 180.0 - 90.0)
     scales = np.array(scales)
-    errs = np.array(errs)
+
+    area_ref = np.abs(np.linalg.det(ref["freqs"]))
+    area_meas = np.abs(np.linalg.det(meas["freqs"]))
+    scale = np.sqrt(area_ref / area_meas)
+    # the cell area is the product of the vector lengths times the sine of the angle between them; only the radial
+    # errors are propagated, so this is the same error as the mean of the per-vector scales
+    rel = np.concatenate([meas["freq_errs"] / fm, ref["freq_errs"] / fr[:2]])
     return {
-        "scale": float(scales.mean()),
-        "scale_err_fit": float(np.sqrt(np.sum(errs**2)) / len(errs)),
+        "scale": float(scale),
+        "scale_err_fit": float(0.5 * scale * np.sqrt(np.sum(rel**2))),
         "scales": scales,
         "rotation": float(np.mean(rots)),
     }

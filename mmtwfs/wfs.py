@@ -1410,7 +1410,12 @@ class WFS(object):
         center = None
         if self.bkg_method == "pupil":
             center = self.find_pupil_center(data, pup_mask)
-            data = self.subtract_pupil_background(data, mode, center)
+            try:
+                data = self.subtract_pupil_background(data, mode, center)
+            except Exception as e:
+                # process_image() skipped Background2D for this method, so remove at least a constant level
+                log.warning(f"Pupil background failed, subtracting the median instead: {e}")
+                data = data - np.median(data)
 
         ref_zv = self.reference_aberrations(mode, hdr=hdr)
 
