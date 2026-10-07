@@ -5,6 +5,7 @@ import importlib
 from unittest.mock import patch
 
 import numpy as np
+import astropy.units as u
 import pytest
 
 import matplotlib.pyplot as plt
@@ -453,3 +454,50 @@ def test_mmirs_analysis_pupil_background():
     testval = int(zresults["zernike"]["Z10"].value)
     # same window as test_mmirs_analysis: the new background must not change a good frame's wavefront
     assert (testval > 388) & (testval < 408)
+
+
+def _mmirs_ready(config={}):
+    mmirs = WFSFactory(wfs="mmirs", config=config)
+    test_file = WFS_DATA_DIR / "test_data" / "mmirs_wfs_0150.fits"
+    data, hdr = check_wfsdata(test_file, header=True)
+    mode = mmirs.get_mode(hdr)
+    mmirs.prepare_reference(mode, hdr=hdr)
+    return mmirs, mode, hdr
+
+
+def test_focus_from_scale_matches_analytic():
+    # pure defocus: slope = (s - 1) * r, and d(fringe Z04)/dr = 4 Z04 r, so Z04 = -tiltfactor * (s - 1) * R / 4
+    mmirs, mode, hdr = _mmirs_ready()
+    zref = mmirs.reference_aberrations(mode, hdr=hdr)
+    k = -mmirs.tiltfactor * (mmirs.pup_size / 2.0) / 4.0
+    zv, focus = mmirs.focus_from_scale(1.01, 1e-4, mode, 0.0 * u.deg, hdr=hdr)
+    expected = k * 0.01 - zref["Z04"].value
+    assert np.isclose(zv["Z04"].value, expected, rtol=0.02)
+    assert np.isclose(zv.errorbars["Z04"].value, abs(k) * 1e-4, rtol=0.02)
+
+
+def test_focus_from_scale_gain():
+    mmirs, mode, hdr = _mmirs_ready()
+    zv, focus = mmirs.focus_from_scale(0.99, 1e-5, mode, 0.0 * u.deg, hdr=hdr)
+    assert np.isclose(focus.value, 0.5 * mmirs.calculate_focus(zv.copy()).value, atol=0.02)
+
+
+def test_focus_from_scale_large_error_is_zero():
+    mmirs, mode, hdr = _mmirs_ready()
+    zv, focus = mmirs.focus_from_scale(0.99, 1.0, mode, 0.0 * u.deg, hdr=hdr)
+    assert focus.value == 0.0
+
+
+def test_focus_from_scale_clipped():
+    mmirs, mode, hdr = _mmirs_ready({"m2_gain_periodicity": 1.0})
+    zv, focus = mmirs.focus_from_scale(0.8, 1e-5, mode, 0.0 * u.deg, hdr=hdr)
+    assert abs(focus.to_value(u.um)) == 300.0
+
+
+def test_reference_grid_cached():
+    mmirs, mode, hdr = _mmirs_ready()
+    g = mmirs.reference_grid(mode)
+    assert g is not None
+    ref = mmirs.modes[mode]["reference"]
+    assert np.allclose(g["spacing"], np.mean([ref.xspacing, ref.yspacing]), rtol=0.02)
+    assert mmirs.reference_grid(mode) is g

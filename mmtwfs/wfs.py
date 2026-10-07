@@ -47,6 +47,7 @@ from mmtwfs.f9topbox import CompMirror
 from mmtwfs.zernike import ZernikeVector, zernike_slopes, cart2pol, pol2cart
 from mmtwfs.photometry import make_spot_mask
 from mmtwfs.background import pupil_footprint, pupil_background, pedestal
+from mmtwfs.period import measure_grid_period, grid_scale, plot_periodicity
 from mmtwfs.custom_exceptions import (
     WFSConfigException,
     WFSAnalysisFailed,
@@ -1231,6 +1232,66 @@ class WFS(object):
         if self.pedestal:
             data = data - pedestal(data, pitch)
         return data
+
+    def reference_grid(self, mode):
+        """
+        Measure, once per reference, the grid frequencies of the mode's reference image with the same method used
+        on science frames, so window and sampling effects cancel in the ratio.
+        """
+        ref = self.modes[mode]["reference"]
+        if ref.grid is None:
+            ref.grid = measure_grid_period(
+                ref.data - np.median(ref.data),
+                (ref.img_xcen, ref.img_ycen),
+                self.pup_size / 2.0,
+                np.mean([ref.xspacing, ref.yspacing]),
+                inner=self.pup_inner,
+                snr_thresh=0.0,
+            )
+        return ref.grid
+
+    def focus_from_scale(self, scale, scale_err, mode, rotator, hdr=None):
+        """
+        Convert a grid scale (measured spacing / reference spacing) into a focus-only wavefront and M2 focus
+        correction. The slope field of a pure scale change is synthesized at the reference aperture positions and
+        fit with the same machinery as fit_wavefront(), so reference aberrations, rotation, and sign conventions
+        match the full analysis. Requires prepare_reference(mode, hdr) to have been called.
+
+        The fit of noiseless synthetic slopes has ~zero formal error, so the Z04 error bar is set from scale_err
+        instead. calculate_focus() scales corrections by (1 - frac_error), so poorly measured scales are
+        automatically down-weighted.
+
+        Returns
+        -------
+        zv : ZernikeVector
+            Rotated, reference-subtracted wavefront with Z04 error bar
+        focus : `~astropy.units.Quantity`
+            M2 focus correction after m2_gain_periodicity and periodicity_focus_max clipping
+        """
+        ref = self.modes[mode]["reference"]
+        x = np.asarray(ref.masked_apertures["xcentroid"])
+        y = np.asarray(ref.masked_apertures["ycentroid"])
+        coords = ref.pup_coords(self.pup_size / 2.0)
+
+        # the fit is linear in the slopes, so fit a unit scale change once and scale the coefficients
+        unit_slopes = -self.tiltfactor * np.array([x, y])
+        params = make_init_pars(nmodes=3, modestart=2)
+        unit = ZernikeVector(coeffs=lmfit.minimize(slope_diff, params, args=(coords, unit_slopes)))
+        ds = scale - 1.0
+        raw = ZernikeVector(
+            Z02=unit["Z02"].value * ds,
+            Z03=unit["Z03"].value * ds,
+            Z04=unit["Z04"].value * ds,
+            errorbars={"Z04": np.abs(unit["Z04"].value) * scale_err},
+        )
+
+        raw.rotate(angle=-(self.rotation - rotator))
+        zv = raw - self.reference_aberrations(mode, hdr=hdr)
+
+        focus = self.m2_gain_periodicity * self.calculate_focus(zv.copy())
+        fmax = self.periodicity_focus_max.to_value(u.um)
+        focus = np.clip(focus.to_value(u.um), -fmax, fmax) * u.um
+        return zv, focus
 
     def process_image(self, fitsfile):
         """
