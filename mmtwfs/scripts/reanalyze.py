@@ -319,17 +319,26 @@ def process_image(f, force=False, retry_failed=False):
             failed.touch()
             return None
     elif results.get('focus_only', False):
-        nan = np.nan
-        # the M2 focus error before the fallback's extra gain and clipping, comparable to full-analysis rows
-        focerr = wfs_systems[wfskey].calculate_focus(results['zernike'].copy())
-        xcen, ycen = results['grid']['center']
-        line = f"{obstime},{wfskey},{f.name},{exptime},{airmass},{az},{el},{osst},{outt}," \
-            f"{chamt},{tiltx},{tilty},{transx},{transy},{focus},{focerr.value},{nan},{nan}," \
-            f"{xcen},{ycen},{nan},{nan},{nan},{nan},{nan},{nan},{nan},{nan},periodicity\n"
-        results['zernike'].save(filename=f.parent / (f.stem + ".periodicity.zernike"))
-        with open(outfile, 'w') as fp:
-            fp.write(line)
-        return line
+        try:
+            nan = np.nan
+            # the M2 focus error before the fallback's extra gain and clipping, comparable to full-analysis rows
+            focerr = wfs_systems[wfskey].calculate_focus(results['zernike'].copy())
+            # only record the pupil center if it was measured rather than the nominal fallback
+            if results['grid'].get('center_measured', True):
+                xcen, ycen = results['grid']['center']
+            else:
+                xcen, ycen = nan, nan
+            line = f"{obstime},{wfskey},{f.name},{exptime},{airmass},{az},{el},{osst},{outt}," \
+                f"{chamt},{tiltx},{tilty},{transx},{transy},{focus},{focerr.value},{nan},{nan}," \
+                f"{xcen},{ycen},{nan},{nan},{nan},{nan},{nan},{nan},{nan},{nan},periodicity\n"
+            results['zernike'].save(filename=f.parent / (f.stem + ".periodicity.zernike"))
+            with open(outfile, 'w') as fp:
+                fp.write(line)
+            return line
+        except Exception as e:
+            log.error(f"Problem saving focus-only results for {f.name}: {e}")
+            failed.touch()
+            return None
     else:
         failed.touch()  # mark this file as failed
         return None

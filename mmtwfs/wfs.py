@@ -1213,19 +1213,29 @@ class WFS(object):
 
     def find_pupil_center(self, data, pup_mask):
         """
-        Locate the pupil with center_pupil(). Never raises: falls back to the nominal center (cor_coords) if
-        centering fails or lands more than cen_tol away from it.
+        Locate the pupil with center_pupil(). Never raises: falls back to the nominal center (cor_coords, the same
+        position get_slopes() checks against) if centering fails or lands more than cen_tol away from it.
+
+        Returns
+        -------
+        xcen, ycen : float
+        measured : bool
+            False if the nominal center was used
         """
         try:
             xcen, ycen, _ = center_pupil(
                 data, pup_mask, threshold=self.cen_thresh, sigma=self.cen_sigma, plot=False
             )
         except Exception as e:
-            log.warning(f"Pupil centering failed, using nominal center: {e}")
-            return tuple(self.cor_coords)
+            log.warning(f"Pupil centering failed, using nominal center {self.cor_coords}: {e}")
+            return self.cor_coords[0], self.cor_coords[1], False
         if np.hypot(xcen - self.cor_coords[0], ycen - self.cor_coords[1]) > self.cen_tol:
-            return tuple(self.cor_coords)
-        return xcen, ycen
+            log.warning(
+                f"Measured pupil center [{xcen:.1f}, {ycen:.1f}] more than {self.cen_tol} pixels from "
+                f"{self.cor_coords}; using nominal center."
+            )
+            return self.cor_coords[0], self.cor_coords[1], False
+        return xcen, ycen, True
 
     def subtract_pupil_background(self, data, mode, center):
         """
@@ -1423,8 +1433,9 @@ class WFS(object):
 
         # pupil center for the pupil background and the periodicity fallback; only computed when needed
         center = None
+        center_measured = False
         if self.bkg_method == "pupil":
-            center = self.find_pupil_center(data, pup_mask)
+            *center, center_measured = self.find_pupil_center(data, pup_mask)
             try:
                 data = self.subtract_pupil_background(data, mode, center)
             except Exception as e:
@@ -1485,8 +1496,10 @@ class WFS(object):
                 # this must never turn an analysis failure into an exception
                 try:
                     if center is None:
-                        center = self.find_pupil_center(data, pup_mask)
+                        *center, center_measured = self.find_pupil_center(data, pup_mask)
                     fallback = self.periodicity_focus(data, mode, center, rotator, hdr=hdr, plot=plot)
+                    if fallback is not None:
+                        fallback["grid"]["center_measured"] = center_measured
                 except Exception as fe:
                     log.warning(f"Periodicity fallback failed: {fe}")
                     fallback = None

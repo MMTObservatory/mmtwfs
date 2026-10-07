@@ -489,9 +489,11 @@ def test_find_pupil_center_falls_back():
     mmirs = WFSFactory(wfs="mmirs")
     test_file = WFS_DATA_DIR / "test_data" / "mmirs_wfs_0150.fits"
     data, hdr = mmirs.process_image(test_file)
-    xc, yc = mmirs.find_pupil_center(data, mmirs.pupil_mask(hdr=hdr))
+    xc, yc, measured = mmirs.find_pupil_center(data, mmirs.pupil_mask(hdr=hdr))
+    assert measured
     assert np.hypot(xc - mmirs.cor_coords[0], yc - mmirs.cor_coords[1]) < mmirs.cen_tol
-    xc, yc = mmirs.find_pupil_center(np.zeros((10, 10)), mmirs.pupil_mask(hdr=hdr))
+    xc, yc, measured = mmirs.find_pupil_center(np.zeros((10, 10)), mmirs.pupil_mask(hdr=hdr))
+    assert not measured
     assert (xc, yc) == tuple(mmirs.cor_coords)
 
 
@@ -574,6 +576,7 @@ def test_periodicity_fallback(tmp_path):
     # full analysis of the unblurred frame gives about -45 um; the fallback on this blur gave -43.5 um in a prototype
     assert -60.0 < results["pending_focus"].to_value(u.um) < -30.0
     assert results["grid"]["scale_err"] > 0.0
+    assert results["grid"]["center_measured"]
     assert results["figures"]["periodicity"].get_label() == "Grid Periodicity"
     plt.close("all")
 
