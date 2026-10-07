@@ -1237,6 +1237,10 @@ class WFS(object):
         """
         Measure, once per reference, the grid frequencies of the mode's reference image with the same method used
         on science frames, so window and sampling effects cancel in the ratio.
+
+        The search is wide because the mean of xspacing and yspacing is only the grid period for square grids. On
+        hexagonal grids (newf9) yspacing is half the row offset. The sharp reference spots make the fundamentals
+        the strongest peaks, and science frames are then searched around the measured reference period.
         """
         ref = self.modes[mode]["reference"]
         if ref.grid is None:
@@ -1246,6 +1250,7 @@ class WFS(object):
                 self.pup_size / 2.0,
                 np.mean([ref.xspacing, ref.yspacing]),
                 inner=self.pup_inner,
+                search=0.6,
                 snr_thresh=0.0,
             )
         return ref.grid
@@ -1292,6 +1297,35 @@ class WFS(object):
         fmax = self.periodicity_focus_max.to_value(u.um)
         focus = np.clip(focus.to_value(u.um), -fmax, fmax) * u.um
         return zv, focus
+
+    def periodicity_focus(self, data, mode, center, rotator, hdr=None, plot=True):
+        """
+        Focus-only fallback for frames whose spots are visible but too blurred to centroid: measure the grid
+        period from the power spectrum, compare with the reference grid, and convert the scale change into a
+        focus correction. Requires prepare_reference(mode, hdr). Returns None if the grid isn't detected.
+        """
+        ref_grid = self.reference_grid(mode)
+        if ref_grid is None:
+            return None
+        meas = measure_grid_period(
+            data,
+            center,
+            self.pup_size / 2.0,
+            np.mean(ref_grid["spacing"]),
+            inner=self.pup_inner,
+            snr_thresh=self.period_snr_thresh,
+        )
+        if meas is None:
+            return None
+
+        grid = grid_scale(meas, ref_grid)
+        grid["scale_err"] = float(np.hypot(self.period_err_factor * grid["scale_err_fit"], self.period_err_floor))
+        grid["snr"] = meas["snr"]
+        grid["center"] = tuple(center)
+
+        zv, focus = self.focus_from_scale(grid["scale"], grid["scale_err"], mode, rotator, hdr=hdr)
+        fig = plot_periodicity(meas) if plot else None
+        return {"grid": grid, "zernike": zv, "pending_focus": focus, "figure": fig}
 
     def process_image(self, fitsfile):
         """
@@ -1427,6 +1461,27 @@ class WFS(object):
             results["figures"] = {}
             results["mode"] = mode
             results["figures"]["slopes"] = slope_fig
+            if self.periodicity_fallback:
+                # this must never turn an analysis failure into an exception
+                try:
+                    if center is None:
+                        center = self.find_pupil_center(data, pup_mask)
+                    fallback = self.periodicity_focus(data, mode, center, rotator, hdr=hdr, plot=plot)
+                except Exception as fe:
+                    log.warning(f"Periodicity fallback failed: {fe}")
+                    fallback = None
+                if fallback is not None:
+                    grid = fallback["grid"]
+                    log.warning(
+                        f"Using focus-only periodicity fallback: scale = {grid['scale']:.5f} +/- "
+                        f"{grid['scale_err']:.5f}, SNR = {grid['snr'].min():.0f}, focus = {fallback['pending_focus']}"
+                    )
+                    results["focus_only"] = True
+                    results["method"] = "periodicity"
+                    results["grid"] = grid
+                    results["zernike"] = fallback["zernike"]
+                    results["pending_focus"] = fallback["pending_focus"]
+                    results["figures"]["periodicity"] = fallback["figure"]
             return results
         except Exception as e:
             raise WFSAnalysisFailed(value=str(e))

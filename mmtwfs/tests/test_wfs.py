@@ -9,6 +9,8 @@ import astropy.units as u
 import pytest
 
 import matplotlib.pyplot as plt
+from scipy import ndimage
+from astropy.io import fits
 
 from mmtwfs.zernike import ZernikeVector
 from mmtwfs.config import mmtwfs_config
@@ -501,3 +503,92 @@ def test_reference_grid_cached():
     ref = mmirs.modes[mode]["reference"]
     assert np.allclose(g["spacing"], np.mean([ref.xspacing, ref.yspacing]), rtol=0.02)
     assert mmirs.reference_grid(mode) is g
+
+
+def _blurred_mmirs(tmp_path, sigma):
+    # gaussian blur of a good MMIRS frame: sigma >= 5 makes the spot analysis fail but leaves the grid visible
+    test_file = WFS_DATA_DIR / "test_data" / "mmirs_wfs_0150.fits"
+    with fits.open(test_file) as hdul:
+        data = hdul[0].data.astype(float)
+        hdr = hdul[0].header.copy()
+    out = tmp_path / f"mmirs_blur{sigma}.fits"
+    # the original header has lower-case keywords (ActualX) that need fixing to write
+    fits.writeto(out, ndimage.gaussian_filter(data, sigma).astype(np.float32), hdr, output_verify="silentfix")
+    return out
+
+
+def test_periodicity_fallback(tmp_path):
+    mmirs = WFSFactory(wfs="mmirs", config={"m2_gain_periodicity": 1.0})
+    results = mmirs.measure_slopes(_blurred_mmirs(tmp_path, 6), plot=True)
+    assert results["slopes"] is None
+    assert results["focus_only"]
+    assert results["method"] == "periodicity"
+    # full analysis of the unblurred frame gives about -45 um; the fallback on this blur gave -43.5 um in a prototype
+    assert -60.0 < results["pending_focus"].to_value(u.um) < -30.0
+    assert results["grid"]["scale_err"] > 0.0
+    assert results["figures"]["periodicity"].get_label() == "Grid Periodicity"
+    plt.close("all")
+
+
+def test_periodicity_matches_full_fit(tmp_path):
+    # sigma = 3 blur still passes the spot analysis, so both answers are available on the same frame
+    mmirs = WFSFactory(wfs="mmirs", config={"m2_gain_periodicity": 1.0})
+    results = mmirs.measure_slopes(_blurred_mmirs(tmp_path, 3), plot=False)
+    assert results["slopes"] is not None
+    full = mmirs.calculate_focus(mmirs.fit_wavefront(results, plot=False)["zernike"])
+    fb = mmirs.periodicity_focus(
+        results["data"], results["mode"], (results["xcen"], results["ycen"]), results["rotator"],
+        hdr=results["header"], plot=False,
+    )
+    assert abs(fb["pending_focus"].to_value(u.um) - full.to_value(u.um)) < 10.0
+    plt.close("all")
+
+
+def test_periodicity_fallback_disabled(tmp_path):
+    mmirs = WFSFactory(wfs="mmirs", config={"periodicity_fallback": False})
+    results = mmirs.measure_slopes(_blurred_mmirs(tmp_path, 6), plot=False)
+    assert results["slopes"] is None
+    assert "focus_only" not in results
+
+
+# make_spot_mask() warns on a blank frame; pytest's "error" filter would otherwise stop the analysis before
+# it reaches the fallback.
+@pytest.mark.filterwarnings("ignore::photutils.utils.exceptions.NoDetectionsWarning")
+def test_periodicity_no_grid(tmp_path):
+    test_file = WFS_DATA_DIR / "test_data" / "mmirs_wfs_0150.fits"
+    with fits.open(test_file) as hdul:
+        hdr = hdul[0].header.copy()
+        shape = hdul[0].data.shape
+    noise = np.random.default_rng(9).normal(1250.0, 5.0, shape).astype(np.float32)
+    out = tmp_path / "mmirs_noise.fits"
+    fits.writeto(out, noise, hdr, output_verify="silentfix")
+    mmirs = WFSFactory(wfs="mmirs")
+    try:
+        results = mmirs.measure_slopes(out, plot=False)
+    except WFSAnalysisFailed:
+        return  # also acceptable: no correction either way
+    assert results["slopes"] is None
+    assert not results.get("focus_only", False)
+
+
+def test_periodicity_fallback_swallows_errors(tmp_path):
+    mmirs = WFSFactory(wfs="mmirs")
+    with patch.object(mmirs, "periodicity_focus", side_effect=RuntimeError("boom")):
+        results = mmirs.measure_slopes(_blurred_mmirs(tmp_path, 6), plot=False)
+    assert results["slopes"] is None
+    assert "focus_only" not in results
+
+
+def test_periodicity_hex_reference_spacing():
+    # newf9 is a hex grid: xspacing (33.8 px) is the grid line spacing and yspacing (19.5 px) is half the row offset,
+    # so their mean is not the grid period. the search must be centered on the measured reference grid instead.
+    wfs = WFSFactory(wfs="newf9")
+    mode = "spol"
+    ref = wfs.prepare_reference(mode)
+    scale = 1.05
+    c = np.array([ref.img_ycen, ref.img_xcen])
+    data = ref.data - np.median(ref.data)
+    zoomed = ndimage.affine_transform(data, np.eye(2) / scale, offset=c - c / scale, order=1)
+    fb = wfs.periodicity_focus(zoomed, mode, (ref.img_xcen, ref.img_ycen), 0.0 * u.deg, plot=False)
+    assert fb is not None
+    assert abs(fb["grid"]["scale"] - scale) < 3e-3
