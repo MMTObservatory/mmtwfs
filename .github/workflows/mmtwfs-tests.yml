@@ -28,15 +28,13 @@ jobs:
         # coverage comes from this job only; the code has no version-specific paths
         - linux: py314-alldeps-cov
           name: py314
+          coverage: 'codecov'
         - linux: py314-devdeps
           name: py314-devdeps
-        # 3.15 is still a prerelease; -dev lets setup-python install it
         - linux: py315-devdeps
           name: py315-devdeps
-          python-version: '3.15-dev'
         - linux: build_docs
           pytest: false
-      coverage: 'codecov'
       # codestyle and build_docs have no python version in their env names. The
       # runner default is older than this package supports, so pin it.
       default_python: '3.13'
