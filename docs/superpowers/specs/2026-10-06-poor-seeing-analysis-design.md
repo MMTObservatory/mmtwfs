@@ -58,7 +58,7 @@ keep their trimming and cosmic-ray cleaning, then dispatch on configuration:
 |-------------|-----------------------------------------|-------------------------------------------------|
 | `bkg_method` | `"background2d"` (current) or `"pupil"` | which background model to use                   |
 | `bkg_box`    | int, px                                 | box size for the coarse background              |
-| `pedestal`   | bool                                    | subtract the inter-spot pedestal after the halo |
+| `bkg_pedestal` | bool                                  | subtract the inter-spot pedestal after the halo |
 
 The defaults keep `"background2d"` for every WFS except where validation shows no regression. The plan is to
 switch MMIRS first. The current per-class `Background2D` parameters move into config so the old path is preserved

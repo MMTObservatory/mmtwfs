@@ -944,7 +944,7 @@ class WFS(object):
     bkg_method = "background2d"  # or "pupil"
     bkg_box = 16  # block size in pixels for the pupil background fit
     bkg_order = 4  # polynomial order of the pupil background fit
-    pedestal = True  # with bkg_method = "pupil", also remove the floor between spots
+    bkg_pedestal = True  # with bkg_method = "pupil", also remove the floor between spots with pedestal()
     periodicity_fallback = True  # focus-only correction from the grid period when spot analysis fails
     period_snr_thresh = 250.0  # below ~300, fallback errors were underestimated on the Oct 2026 MMIRS run
     period_err_factor = 1.0  # calibration of the propagated grid-scale error
@@ -1248,7 +1248,7 @@ class WFS(object):
             data.shape, center, self.pup_size / 2.0, inner=self.pup_inner, margin=pitch
         )
         data = data - pupil_background(data, footprint, box=self.bkg_box, order=self.bkg_order)
-        if self.pedestal:
+        if self.bkg_pedestal:
             data = data - pedestal(data, pitch)
         return data
 

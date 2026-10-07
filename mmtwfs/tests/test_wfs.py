@@ -671,3 +671,16 @@ def test_periodicity_calibration():
     assert mmirs.period_snr_thresh == 250.0
     assert mmirs.period_err_factor == 1.48
     assert mmirs.bkg_method == "background2d"
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+def test_bkg_pedestal_option(enabled):
+    # the config switch is bkg_pedestal, alongside bkg_method/bkg_box/bkg_order; pedestal() is the model function
+    mmirs = WFSFactory(wfs="mmirs", config={"bkg_method": "pupil", "bkg_pedestal": enabled})
+    assert not hasattr(mmirs, "pedestal")
+    test_file = WFS_DATA_DIR / "test_data" / "mmirs_wfs_0150.fits"
+    data, hdr = mmirs.process_image(test_file)
+    mode = mmirs.get_mode(hdr)
+    with patch("mmtwfs.wfs.pedestal", return_value=np.zeros_like(data)) as ped:
+        mmirs.subtract_pupil_background(data, mode, mmirs.cor_coords)
+    assert ped.called == enabled
