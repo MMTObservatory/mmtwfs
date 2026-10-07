@@ -261,3 +261,15 @@ Where they conflict with the sections above, these take precedence.
   propagated errors are 1.5-2.4x too small. `period_snr_thresh` default is 250, which keeps the F/9 frosted-donut
   frame (SNR 262).
 - 1672 of the 1707 frames that failed on `main` now get a focus-only correction.
+
+## Validation on F/9, F/5 and Binospec (214, 370 and 2778 frames, 2022-2026)
+
+- Noise-box fix: no full fits lost on any WFS; F/9 +5, Binospec +24, F/5 unchanged. Zernikes unchanged on common
+  frames (MAD 0).
+- Fallback Z04 vs full-fit Z04 slope: F/9 0.997 (hex grid, -12000 to +4300 nm), F/5 0.983, Binospec 0.84 (small
+  focus range). Scatter about 215, 100 and 95 nm.
+- The fallback underestimates extreme defocus (F/9 scale 1.08: -17200 vs -28800 nm), well beyond the 300 um clip.
+- In-focus F/9 blue frames sit at grid scale ~0.93 because of the reference's ~8300 nm Z04. A clip centered on
+  the scale-1 reference offset was tried and reverted: it cut real -100 to -320 um corrections to -61 um. The clip
+  stays at +/-300 um around zero correction.
+- Newly recovered as focus-only: F/9 8, F/5 40, Binospec 6 frames.
