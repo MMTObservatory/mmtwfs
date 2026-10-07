@@ -21,17 +21,18 @@ jobs:
       envs: |
         - linux: codestyle
           pytest: false
-        - linux: py313-alldeps-cov
+        - linux: py313-alldeps
           name: py313
-        - linux: py313-devdeps-cov
-          name: py313-devdeps
+        # coverage comes from this job only; the code has no version-specific paths
         - linux: py314-alldeps-cov
           name: py314
-        - linux: py314-devdeps-cov
+          coverage: 'codecov'
+        - linux: py314-devdeps
           name: py314-devdeps
+        - linux: py315-devdeps
+          name: py315-devdeps
         - linux: build_docs
           pytest: false
-      coverage: 'codecov'
       # codestyle and build_docs have no python version in their env names. The
       # runner default is older than this package supports, so pin it.
       default_python: '3.13'

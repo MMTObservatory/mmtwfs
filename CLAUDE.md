@@ -9,8 +9,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Common Commands
 
 ### Testing
-# tox envlist defines py313 and py314 (requires-python is >=3.13);
-# there is no py312 environment. Default to py314; use py313 if needed.
+# tox envlist defines py313 and py314 (requires-python is >=3.13), plus
+# py315-devdeps ahead of the 3.15 release; there is no py312 environment.
+# Default to py314; use py313 if needed.
 ```bash
 # Run all tests (uses pytest)
 tox -e py314

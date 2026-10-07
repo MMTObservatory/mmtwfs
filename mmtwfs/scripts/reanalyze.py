@@ -36,6 +36,20 @@ tz = pytz.timezone("America/Phoenix")
 
 
 # instantiate all of the WFS systems...
+CSV_HEADER = "time,wfs,file,exptime,airmass,az,el,osst,outt,chamt,tiltx,tilty,"\
+    "transx,transy,focus,focerr,cc_x_err,cc_y_err,xcen,ycen,seeing,raw_seeing,"\
+    "vlt_seeing,raw_vlt_seeing,ellipticity,fwhm,wavefront_rms,residual_rms,method\n"
+
+
+def upgrade_cached_line(line):
+    """
+    .output files written before the method column existed are one field short; they were all full analyses.
+    """
+    if len(line.strip().split(",")) == len(CSV_HEADER.strip().split(",")) - 1:
+        return line.rstrip("\n") + ",full\n"
+    return line
+
+
 wfs_keys = ['f9', 'newf9', 'f5', 'mmirs', 'binospec']
 wfs_systems = {}
 wfs_names = {}
@@ -209,11 +223,15 @@ def check_image(f, wfskey=None):
     return data, hdr
 
 
-def process_image(f, force=False):
+def process_image(f, force=False, retry_failed=False):
     """
     Process FITS file, f, to get info we want from the header and then analyse it with the
     appropriate WFS instance. Return results in a comma-separated line that will be collected
     and saved in a CSV file.
+
+    With retry_failed, files marked as failed by an earlier run are analyzed again while cached
+    results for good files are reused. The failed marker is removed first and is recreated if
+    the file fails again.
     """
     if "Ref" in str(f) or "sog" in str(f) or "coadded" in str(f):
         return None
@@ -226,11 +244,14 @@ def process_image(f, force=False):
             lines = fp.readlines()
 
         if len(lines) > 0:
-            return lines[0]
+            return upgrade_cached_line(lines[0])
 
     if not force and Path.exists(failed):
-        log.info(f"Already failed processing {f.name}, skipping...")
-        return None
+        if not retry_failed:
+            log.info(f"Already failed processing {f.name}, skipping...")
+            return None
+        log.info(f"Retrying {f.name}, which failed previously...")
+        failed.unlink()
 
     try:
         data, hdr = check_image(f)
@@ -284,7 +305,7 @@ def process_image(f, force=False):
                 f"{cc_y_err.value},{results['xcen']},{results['ycen']},{results['seeing'].value}," \
                 f"{results['raw_seeing'].value},{results["vlt_seeing"].value},{results["raw_vlt_seeing"].value},"\
                 f"{results['ellipticity']},{results['fwhm']},{zresults['zernike_rms'].value}," \
-                f"{zresults['residual_rms'].value}\n"
+                f"{zresults['residual_rms'].value},full\n"
             zfile = f.parent / (f.stem + ".reanalyze.zernike")
             zresults['zernike'].save(filename=zfile)
             spotfile = f.parent / (f.stem + ".spots.csv")
@@ -295,6 +316,27 @@ def process_image(f, force=False):
             return line
         except Exception as e:
             log.error(f"Problem fitting wavefront for {f.name}: {e}")
+            failed.touch()
+            return None
+    elif results.get('focus_only', False):
+        try:
+            nan = np.nan
+            # the M2 focus error before the fallback's extra gain and clipping, comparable to full-analysis rows
+            focerr = wfs_systems[wfskey].calculate_focus(results['zernike'].copy())
+            # only record the pupil center if it was measured rather than the nominal fallback
+            if results['grid'].get('center_measured', True):
+                xcen, ycen = results['grid']['center']
+            else:
+                xcen, ycen = nan, nan
+            line = f"{obstime},{wfskey},{f.name},{exptime},{airmass},{az},{el},{osst},{outt}," \
+                f"{chamt},{tiltx},{tilty},{transx},{transy},{focus},{focerr.value},{nan},{nan}," \
+                f"{xcen},{ycen},{nan},{nan},{nan},{nan},{nan},{nan},{nan},{nan},periodicity\n"
+            results['zernike'].save(filename=f.parent / (f.stem + ".periodicity.zernike"))
+            with open(outfile, 'w') as fp:
+                fp.write(line)
+            return line
+        except Exception as e:
+            log.error(f"Problem saving focus-only results for {f.name}: {e}")
             failed.touch()
             return None
     else:
@@ -336,6 +378,13 @@ def main():
     )
 
     parser.add_argument(
+        '--retry-failed',
+        help="Reanalyze files that failed in earlier runs, reusing cached results for the rest. "
+             "Rebuilds the CSV for each directory.",
+        action="store_true"
+    )
+
+    parser.add_argument(
         '-n', '--nproc',
         metavar="<# processes>",
         help="Number of parallel processes. Defaults to half number of available cores.",
@@ -350,16 +399,14 @@ def main():
     log.info(f"Using {args.nproc} cores...")
 
     dirs = sorted(list(args.dirs))  # pathlib, where have you been all my life!
-    csv_header = "time,wfs,file,exptime,airmass,az,el,osst,outt,chamt,tiltx,tilty,"\
-        "transx,transy,focus,focerr,cc_x_err,cc_y_err,xcen,ycen,seeing,raw_seeing,"\
-        "vlt_seeing,raw_vlt_seeing,ellipticity,fwhm,wavefront_rms,residual_rms\n"
+    csv_header = CSV_HEADER
 
     log.info(f"Found {len(dirs)} directories to process...")
 
     for d in dirs:
         d = rootdir / d
         if d.is_dir():
-            if not args.forcedir and Path.exists(d / "reanalyze_results.csv"):
+            if not (args.forcedir or args.retry_failed) and Path.exists(d / "reanalyze_results.csv"):
                 log.info(f"Already processed {d.name}...")
             else:
                 try:
@@ -369,7 +416,7 @@ def main():
                     fitsfiles = sorted(list(d.glob("*.fits")))
                     log.info(f"Processing {len(fitsfiles)} images in {d}...")
                     with concurrent.futures.ProcessPoolExecutor(max_workers=args.nproc) as pool:
-                        process = partial(process_image, force=args.force)
+                        process = partial(process_image, force=args.force, retry_failed=args.retry_failed)
                         plines = pool.map(process, fitsfiles, timeout=300)  # plines comes out in same order as fitslines!
 
                     plines = [line for line in plines if line is not None]  # trim out any None entries

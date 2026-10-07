@@ -46,6 +46,8 @@ from mmtwfs.telescope import TelescopeFactory
 from mmtwfs.f9topbox import CompMirror
 from mmtwfs.zernike import ZernikeVector, zernike_slopes, cart2pol, pol2cart
 from mmtwfs.photometry import make_spot_mask
+from mmtwfs.background import pupil_footprint, pupil_background, pedestal
+from mmtwfs.period import measure_grid_period, grid_scale, plot_periodicity
 from mmtwfs.custom_exceptions import (
     WFSConfigException,
     WFSAnalysisFailed,
@@ -93,6 +95,17 @@ def spot_profile(r, amplitude=1, a=1):
     Model for long-exposure spot PSFs in Shack-Hartmann images.
     """
     return amplitude * np.exp(-a * r ** (5 / 3))
+
+
+def subtract_background2d(data, box_size, filter_size, npixels=5, dilate_size=11):
+    """
+    Small-box mode-estimator background with WFS spots masked out. This is the original background
+    method; it works well when spots are well separated.
+    """
+    bkg_estimator = ModeEstimatorBackground()
+    mask = make_spot_mask(data, nsigma=2, npixels=npixels, dilate_size=dilate_size)
+    bkg = Background2D(data, box_size, filter_size=filter_size, bkg_estimator=bkg_estimator, mask=mask)
+    return data - bkg.background
 
 
 def wfs_norm(
@@ -334,7 +347,7 @@ def center_pupil(input_data, pup_mask, threshold=0.8, sigma=10.0, plot=True):
     return xp, yp, fig
 
 
-def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True, cen=None):
+def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True, cen=None, box=50):
     """
     Use wfsfind to locate and centroid spots.  Measure their S/N ratios and the sigma of a 2D gaussian fit to
     the co-added spot.
@@ -345,6 +358,11 @@ def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True, cen=None):
         WFS image to analyze, either FITS file or ndarray image data
     apsize : float
         Diameter/width of the SH apertures
+    cen : list-like or None
+        Pupil center (x, y). If given, background statistics come from a box around it rather than the whole image.
+    box : int
+        Half-width in pixels of the background statistics box around cen. It should fit inside the central
+        obscuration, or light from the inner ring of spots inflates the noise estimate.
 
     Returns
     -------
@@ -364,7 +382,7 @@ def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True, cen=None):
     else:
         xcen, ycen = int(cen[0]), int(cen[1])
         mean, median, stddev = stats.sigma_clipped_stats(
-            data[ycen - 50:ycen + 50, xcen - 50:ycen + 50], sigma=3.0, maxiters=None
+            data[ycen - box:ycen + box, xcen - box:xcen + box], sigma=3.0, maxiters=None
         )
 
     # use wfsfind() and pass it the clipped stddev from here
@@ -596,7 +614,7 @@ def get_slopes(
     apsize = ref_spacing
 
     srcs, masks, snrs, sigma, ellipticity, coadded_spot, wfsfind_fig = get_apertures(
-        data, apsize, fwhm=fwhm, thresh=thresh, cen=(xcen, ycen)
+        data, apsize, fwhm=fwhm, thresh=thresh, cen=(xcen, ycen), box=int(pup_inner / np.sqrt(2.0))
     )
 
     # ignore low S/N spots
@@ -819,6 +837,12 @@ class SH_Reference(object):
 
         self.xcen = self.apertures["xcentroid"].mean()
         self.ycen = self.apertures["ycentroid"].mean()
+        # pupil center in the reference image's own pixels. adjust_center() moves xcen/ycen to wherever the pupil
+        # is on the science frame, but measuring the reference grid needs to know where it is in self.data.
+        self.img_xcen = self.xcen
+        self.img_ycen = self.ycen
+        # grid frequencies measured from self.data; filled in by WFS.reference_grid()
+        self.grid = None
         self.xspacing, self.yspacing = grid_spacing(data, self.apertures)
 
         # make masks for each reference spot and fit a 2D gaussian to get its FWHM. the reference FWHM is subtracted in
@@ -915,9 +939,26 @@ class WFS(object):
     Defines configuration pattern and methods common to all WFS systems
     """
 
+    # defaults for poor-seeing handling. these are class attributes so that config blocks (including the frozen
+    # legacy f9 one) don't need to define them; any config can override them.
+    bkg_method = "background2d"  # or "pupil"
+    bkg_box = 16  # block size in pixels for the pupil background fit
+    bkg_order = 4  # polynomial order of the pupil background fit
+    bkg_pedestal = True  # with bkg_method = "pupil", also remove the floor between spots with pedestal()
+    periodicity_fallback = True  # focus-only correction from the grid period when spot analysis fails
+    period_snr_thresh = 250.0  # below ~300, fallback errors were underestimated on the Oct 2026 MMIRS run
+    period_err_factor = 1.0  # calibration of the propagated grid-scale error
+    period_err_floor = 0.0  # systematic grid-scale error added in quadrature
+    m2_gain_periodicity = 0.5  # extra gain on fallback focus corrections
+    periodicity_focus_max = 300.0 * u.um
+
     def __init__(self, config={}, plot=True, **kwargs):
         key = self.__class__.__name__.lower()
         self.__dict__.update(merge_config(mmtwfs_config["wfs"][key], config))
+        if self.bkg_method not in ("background2d", "pupil"):
+            raise WFSConfigException(
+                value=f"Unknown bkg_method {self.bkg_method!r}; must be 'background2d' or 'pupil'."
+            )
         self.telescope = TelescopeFactory(
             telescope=self.telescope, secondary=self.secondary
         )
@@ -1160,6 +1201,157 @@ class WFS(object):
         mode = self.default_mode
         return mode
 
+    def prepare_reference(self, mode, hdr=None):
+        """
+        Center the mode's reference apertures on the expected pupil position and apply the pupil mask.
+        """
+        ref = self.modes[mode]["reference"]
+        xcen, ycen = self.ref_pupil_location(mode, hdr=hdr)
+        ref.adjust_center(xcen, ycen)
+        ref.apply_pupil(self.pup_inner, self.pup_size / 2.0)
+        return ref
+
+    def find_pupil_center(self, data, pup_mask):
+        """
+        Locate the pupil with center_pupil(). Never raises: falls back to the nominal center (cor_coords, the same
+        position get_slopes() checks against) if centering fails or lands more than cen_tol away from it.
+
+        Returns
+        -------
+        xcen, ycen : float
+        measured : bool
+            False if the nominal center was used
+        """
+        try:
+            xcen, ycen, _ = center_pupil(
+                data, pup_mask, threshold=self.cen_thresh, sigma=self.cen_sigma, plot=False
+            )
+        except Exception as e:
+            log.warning(f"Pupil centering failed, using nominal center {self.cor_coords}: {e}")
+            return self.cor_coords[0], self.cor_coords[1], False
+        if np.hypot(xcen - self.cor_coords[0], ycen - self.cor_coords[1]) > self.cen_tol:
+            log.warning(
+                f"Measured pupil center [{xcen:.1f}, {ycen:.1f}] more than {self.cen_tol} pixels from "
+                f"{self.cor_coords}; using nominal center."
+            )
+            return self.cor_coords[0], self.cor_coords[1], False
+        return xcen, ycen, True
+
+    def subtract_pupil_background(self, data, mode, center):
+        """
+        Remove the scattered-light halo using pixels outside the pupil and, optionally, the diffuse floor
+        between spots. See `mmtwfs.background`.
+        """
+        ref = self.modes[mode]["reference"]
+        pitch = np.mean([ref.xspacing, ref.yspacing])
+        footprint = pupil_footprint(
+            data.shape, center, self.pup_size / 2.0, inner=self.pup_inner, margin=pitch
+        )
+        data = data - pupil_background(data, footprint, box=self.bkg_box, order=self.bkg_order)
+        if self.bkg_pedestal:
+            data = data - pedestal(data, pitch)
+        return data
+
+    def reference_grid(self, mode):
+        """
+        Measure, once per reference, the grid frequencies of the mode's reference image with the same method used
+        on science frames, so window and sampling effects cancel in the ratio.
+
+        The search is wide because the mean of xspacing and yspacing is only the grid period for square grids. On
+        hexagonal grids (newf9) yspacing is half the row offset. The sharp reference spots make the fundamentals
+        the strongest peaks, and science frames are then searched around the measured reference period.
+        """
+        ref = self.modes[mode]["reference"]
+        if ref.grid is None:
+            grid = measure_grid_period(
+                ref.data - np.median(ref.data),
+                (ref.img_xcen, ref.img_ycen),
+                self.pup_size / 2.0,
+                np.mean([ref.xspacing, ref.yspacing]),
+                inner=self.pup_inner,
+                search=0.6,
+                snr_thresh=0.0,
+            )
+            if grid is not None:
+                # the padded power spectrum is 10-40 MB and only needed for plotting science frames; don't keep it
+                # for the life of the WFS object
+                for key in ("power", "freq_axis"):
+                    grid.pop(key)
+            ref.grid = grid
+        return ref.grid
+
+    def focus_from_scale(self, scale, scale_err, mode, rotator, hdr=None):
+        """
+        Convert a grid scale (measured spacing / reference spacing) into a focus-only wavefront and M2 focus
+        correction. The slope field of a pure scale change is synthesized at the reference aperture positions and
+        fit with the same machinery as fit_wavefront(), so reference aberrations, rotation, and sign conventions
+        match the full analysis. Requires prepare_reference(mode, hdr) to have been called.
+
+        The fit of noiseless synthetic slopes has ~zero formal error, so the Z04 error bar is set from scale_err
+        instead. calculate_focus() scales corrections by (1 - frac_error), so poorly measured scales are
+        automatically down-weighted.
+
+        Returns
+        -------
+        zv : ZernikeVector
+            Rotated, reference-subtracted wavefront with Z04 error bar
+        focus : `~astropy.units.Quantity`
+            M2 focus correction after m2_gain_periodicity and periodicity_focus_max clipping
+        """
+        ref = self.modes[mode]["reference"]
+        x = np.asarray(ref.masked_apertures["xcentroid"])
+        y = np.asarray(ref.masked_apertures["ycentroid"])
+        coords = ref.pup_coords(self.pup_size / 2.0)
+
+        # the fit is linear in the slopes, so fit a unit scale change once and scale the coefficients
+        unit_slopes = -self.tiltfactor * np.array([x, y])
+        params = make_init_pars(nmodes=3, modestart=2)
+        unit = ZernikeVector(coeffs=lmfit.minimize(slope_diff, params, args=(coords, unit_slopes)))
+        ds = scale - 1.0
+        raw = ZernikeVector(
+            Z02=unit["Z02"].value * ds,
+            Z03=unit["Z03"].value * ds,
+            Z04=unit["Z04"].value * ds,
+            errorbars={"Z04": np.abs(unit["Z04"].value) * scale_err},
+        )
+
+        raw.rotate(angle=-(self.rotation - rotator))
+        zv = raw - self.reference_aberrations(mode, hdr=hdr)
+
+        focus = self.m2_gain_periodicity * self.calculate_focus(zv.copy())
+        fmax = self.periodicity_focus_max.to_value(u.um)
+        focus = np.clip(focus.to_value(u.um), -fmax, fmax) * u.um
+        return zv, focus
+
+    def periodicity_focus(self, data, mode, center, rotator, hdr=None, plot=True):
+        """
+        Focus-only fallback for frames whose spots are visible but too blurred to centroid: measure the grid
+        period from the power spectrum, compare with the reference grid, and convert the scale change into a
+        focus correction. Requires prepare_reference(mode, hdr). Returns None if the grid isn't detected.
+        """
+        ref_grid = self.reference_grid(mode)
+        if ref_grid is None:
+            return None
+        meas = measure_grid_period(
+            data,
+            center,
+            self.pup_size / 2.0,
+            np.mean(ref_grid["spacing"]),
+            inner=self.pup_inner,
+            snr_thresh=self.period_snr_thresh,
+        )
+        if meas is None:
+            return None
+
+        grid = grid_scale(meas, ref_grid)
+        grid["scale_err"] = float(np.hypot(self.period_err_factor * grid["scale_err_fit"], self.period_err_floor))
+        grid["snr"] = meas["snr"]
+        grid["center"] = tuple(center)
+
+        zv, focus = self.focus_from_scale(grid["scale"], grid["scale_err"], mode, rotator, hdr=hdr)
+        fig = plot_periodicity(meas) if plot else None
+        return {"grid": grid, "zernike": zv, "pending_focus": focus, "figure": fig}
+
     def process_image(self, fitsfile):
         """
         Process the image to make it suitable for accurate wavefront analysis.  Steps include nuking cosmic rays,
@@ -1174,13 +1366,10 @@ class WFS(object):
             trimdata, sigclip=5.0, niter=5, cleantype="medmask", psffwhm=5.0
         )
 
-        # calculate the background and subtract it
-        bkg_estimator = ModeEstimatorBackground()
-        mask = make_spot_mask(data, nsigma=2, npixels=5, dilate_size=11)
-        bkg = Background2D(
-            data, (10, 10), filter_size=(5, 5), bkg_estimator=bkg_estimator, mask=mask
-        )
-        data -= bkg.background
+        # calculate the background and subtract it. with bkg_method = "pupil" this is done later in
+        # measure_slopes() once the pupil center is known.
+        if self.bkg_method == "background2d":
+            data = subtract_background2d(data, (10, 10), (5, 5))
 
         return data, hdr
 
@@ -1240,12 +1429,19 @@ class WFS(object):
         # make mask for finding wfs spot pattern
         pup_mask = self.pupil_mask(hdr=hdr)
 
-        # get adjusted reference center position and update the reference
-        xcen, ycen = self.ref_pupil_location(mode, hdr=hdr)
-        self.modes[mode]["reference"].adjust_center(xcen, ycen)
+        self.prepare_reference(mode, hdr=hdr)
 
-        # apply pupil to the reference
-        self.modes[mode]["reference"].apply_pupil(self.pup_inner, self.pup_size / 2.0)
+        # pupil center for the pupil background and the periodicity fallback; only computed when needed
+        center = None
+        center_measured = False
+        if self.bkg_method == "pupil":
+            *center, center_measured = self.find_pupil_center(data, pup_mask)
+            try:
+                data = self.subtract_pupil_background(data, mode, center)
+            except Exception as e:
+                # process_image() skipped Background2D for this method, so remove at least a constant level
+                log.warning(f"Pupil background failed, subtracting the median instead: {e}")
+                data = data - np.median(data)
 
         ref_zv = self.reference_aberrations(mode, hdr=hdr)
 
@@ -1296,6 +1492,29 @@ class WFS(object):
             results["figures"] = {}
             results["mode"] = mode
             results["figures"]["slopes"] = slope_fig
+            if self.periodicity_fallback:
+                # this must never turn an analysis failure into an exception
+                try:
+                    if center is None:
+                        *center, center_measured = self.find_pupil_center(data, pup_mask)
+                    fallback = self.periodicity_focus(data, mode, center, rotator, hdr=hdr, plot=plot)
+                    if fallback is not None:
+                        fallback["grid"]["center_measured"] = center_measured
+                except Exception as fe:
+                    log.warning(f"Periodicity fallback failed: {fe}")
+                    fallback = None
+                if fallback is not None:
+                    grid = fallback["grid"]
+                    log.warning(
+                        f"Using focus-only periodicity fallback: scale = {grid['scale']:.5f} +/- "
+                        f"{grid['scale_err']:.5f}, SNR = {grid['snr'].min():.0f}, focus = {fallback['pending_focus']}"
+                    )
+                    results["focus_only"] = True
+                    results["method"] = "periodicity"
+                    results["grid"] = grid
+                    results["zernike"] = fallback["zernike"]
+                    results["pending_focus"] = fallback["pending_focus"]
+                    results["figures"]["periodicity"] = fallback["figure"]
             return results
         except Exception as e:
             raise WFSAnalysisFailed(value=str(e))
@@ -1673,13 +1892,10 @@ class NewF9(F9):
             rawdata, sigclip=15.0, niter=5, cleantype="medmask", psffwhm=10.0
         )
 
-        # calculate the background and subtract it
-        bkg_estimator = ModeEstimatorBackground()
-        mask = make_spot_mask(data, nsigma=2, npixels=7, dilate_size=13)
-        bkg = Background2D(
-            data, (50, 50), filter_size=(15, 15), bkg_estimator=bkg_estimator, mask=mask
-        )
-        data -= bkg.background
+        # calculate the background and subtract it. with bkg_method = "pupil" this is done later in
+        # measure_slopes() once the pupil center is known.
+        if self.bkg_method == "background2d":
+            data = subtract_background2d(data, (50, 50), (15, 15), npixels=7, dilate_size=13)
 
         return data, hdr
 
@@ -1711,13 +1927,10 @@ class F5(WFS):
             trimdata, sigclip=15.0, niter=5, cleantype="medmask", psffwhm=10.0
         )
 
-        # calculate the background and subtract it
-        bkg_estimator = ModeEstimatorBackground()
-        mask = make_spot_mask(data, nsigma=2, npixels=5, dilate_size=11)
-        bkg = Background2D(
-            data, (20, 20), filter_size=(11, 11), bkg_estimator=bkg_estimator, mask=mask
-        )
-        data -= bkg.background
+        # calculate the background and subtract it. with bkg_method = "pupil" this is done later in
+        # measure_slopes() once the pupil center is known.
+        if self.bkg_method == "background2d":
+            data = subtract_background2d(data, (20, 20), (11, 11))
 
         return data, hdr
 
@@ -2215,13 +2428,10 @@ class MMIRS(F5):
             trimdata, sigclip=5.0, niter=5, cleantype="medmask", psffwhm=5.0
         )
 
-        # calculate the background and subtract it
-        bkg_estimator = ModeEstimatorBackground()
-        mask = make_spot_mask(data, nsigma=2, npixels=5, dilate_size=11)
-        bkg = Background2D(
-            data, (20, 20), filter_size=(7, 7), bkg_estimator=bkg_estimator, mask=mask
-        )
-        data -= bkg.background
+        # calculate the background and subtract it. with bkg_method = "pupil" this is done later in
+        # measure_slopes() once the pupil center is known.
+        if self.bkg_method == "background2d":
+            data = subtract_background2d(data, (20, 20), (7, 7))
 
         return data, hdr
 

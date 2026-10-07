@@ -416,6 +416,9 @@ mmtwfs_config = {
             "m1_gain": 0.5,
             # default gain to apply to secondary mirror corrections
             "m2_gain": 1.0,
+            # periodicity fallback error calibration from the October 2026 run (scatter around full fits)
+            "period_err_factor": 1.48,
+            "period_err_floor": 0.0,
             # number of zernike modes to fit
             "nzern": 21,
             # E/W flip in image motion
