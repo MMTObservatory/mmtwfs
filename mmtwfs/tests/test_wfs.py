@@ -528,6 +528,8 @@ def test_focus_from_scale_matches_analytic():
     expected = k * 0.01 - zref["Z04"].value
     assert np.isclose(zv["Z04"].value, expected, rtol=0.02)
     assert np.isclose(zv.errorbars["Z04"].value, abs(k) * 1e-4, rtol=0.02)
+    # only defocus is measured; the reference's other terms would show up as if they had been
+    assert list(zv.coeffs) == ["Z04"]
 
 
 def test_focus_from_scale_gain():

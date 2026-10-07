@@ -1317,6 +1317,9 @@ class WFS(object):
 
         raw.rotate(angle=-(self.rotation - rotator))
         zv = raw - self.reference_aberrations(mode, hdr=hdr)
+        # only defocus is measured. the subtraction leaves the reference's other terms (sign-flipped) and ~0 tilts,
+        # which would read as measured aberrations, so keep Z04 alone.
+        zv = ZernikeVector(Z04=zv["Z04"].value, errorbars={"Z04": zv.errorbars["Z04"].value}, units=zv.units)
 
         focus = self.m2_gain_periodicity * self.calculate_focus(zv.copy())
         fmax = self.periodicity_focus_max.to_value(u.um)
