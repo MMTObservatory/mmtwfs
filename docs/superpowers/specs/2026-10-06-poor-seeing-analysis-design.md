@@ -80,10 +80,16 @@ New function `measure_grid_period(data, center, radius, ref_spacing, search=0.2,
 4. Search an annulus of `+/- search` fractional width around the reference fundamental frequency `1/ref_spacing`
    for the strongest peak, then the strongest peak at least 60 degrees from it (and from its conjugate). This
    handles both square and hexagonal lenslet arrays.
-5. Refine each peak to sub-pixel accuracy with a 3x3 log-paraboloid (Gaussian) fit.
+5. Refine each peak to sub-pixel accuracy with a 3x3 log-paraboloid (Gaussian) fit. Keep the fit covariance,
+   with the noise level estimated from the robust scatter of the power in the search annulus.
 6. Build the 2x2 grid frequency matrix and derive:
    - `scale`: mean scale relative to the reference (reference spacing divided by measured spacing, averaged
      over the two vectors);
+   - `scale_err`: uncertainty on `scale`,
+     `sqrt((period_err_factor * sigma_fit)**2 + period_err_floor**2)`, where `sigma_fit` is propagated from the
+     peak-fit covariances. `period_err_factor` (default 1.0) and `period_err_floor` (default 0.0) are config keys
+     calibrated in validation step (a); the floor accounts for aberrations other than defocus (coma,
+     astigmatism) that the pure-scale model ignores;
    - `xscale`, `yscale`, `rotation` (diagnostics);
    - `snr`: peak power divided by the robust (median/MAD) power in the search annulus.
 7. Return a dict, or `None` if either peak's SNR is below `period_snr_thresh` (config, default about 10; tuned
@@ -103,6 +109,20 @@ converted with a hand-coded formula in production code. Instead:
 - Apply the same rotation and reference subtraction that `fit_wavefront` applies, producing a ZernikeVector
   with only Z04 populated (plus reference terms as they normally are).
 - Feed it to the unchanged `calculate_focus()`.
+
+Uncertainty propagation:
+
+- Fitting noiseless synthetic slopes gives a Z04 `stderr` of about zero (lmfit scales the covariance by the
+  reduced chi-squared), or `None`. Because `calculate_focus()` scales the correction by
+  `1 - frac_error("Z04")`, that would apply a noisy fallback measurement at full gain.
+- Z04 is linear in `scale`, so compute `k = dZ04/dscale` by running the synthetic-slope fit for a unit scale
+  perturbation. This stays well defined when `scale` is near 1.
+- Before rotation and reference subtraction, set `errorbars["Z04"] = |k| * scale_err` on the raw fit vector,
+  replacing the fit's own Z04 `stderr`. The existing ZernikeVector machinery then carries it to
+  `calculate_focus()`: `rotate()` passes error bars through, subtracting the reference adds them in
+  quadrature, and `denormalize()` rescales them.
+- As a result, `calculate_focus()` automatically down-weights poorly measured corrections and returns zero when
+  `scale_err` is comparable to the measured defocus.
 
 Analytic cross-check, used only in tests: the fringe Z4 coefficient is approximately
 `tiltfactor * (scale - 1) * R / 4`, where `R = pup_size / 2`. For MMIRS (`tiltfactor` about 3207 nm/px,
@@ -128,8 +148,11 @@ mmtwfs:
 - New config keys (base `WFS` defaults, overridable per WFS):
   - `periodicity_fallback`: bool, default True
   - `period_snr_thresh`: float
-  - `m2_gain_periodicity`: default 0.5
+  - `m2_gain_periodicity`: default 0.5. This is applied on top of the uncertainty-based down-weighting in
+    `calculate_focus()`, so it partly double-counts. It stays at 0.5 for the first runs and is revisited with
+    real data; it may end up at 1.0 or be removed.
   - `periodicity_focus_max`: default 300 um
+  - `period_err_factor`, `period_err_floor`: uncertainty calibration (section 2)
 - `reanalyze` records `method` and the fallback focus in its output so archived data can be compared.
 
 wfssrv (separate PR, after the mmtwfs PR merges):
@@ -157,6 +180,9 @@ Unit tests in `mmtwfs/tests/`:
   up to about the pitch/2, Poisson noise and an added halo: recovers `scale` to within 2e-4 on sharp images and
   1e-3 on blurred ones; returns `None` on pure noise.
 - The fit-based Z4 from section 3 matches the analytic formula to within 2%.
+- On synthetic images with many noise realisations, the scatter of `scale` matches `scale_err` to within 30%
+  (with factor 1, floor 0). The Z04 error bar survives rotation, reference subtraction and `denormalize()`, and
+  `calculate_focus()` returns zero when `scale_err` is larger than `|scale - 1|`.
 - `pupil_background` and `pedestal` on synthetic data: spot centroids shift by less than 0.05 px; the halo is
   removed to within the noise.
 - `measure_slopes` on a test frame where `get_slopes` fails returns `focus_only=True` with a finite
@@ -167,7 +193,10 @@ Unit tests in `mmtwfs/tests/`:
 Offline validation on the October 2026 MMIRS run (scripts kept in `~/MMT/mmirs_vignetting`, not shipped):
 
 a. On the frames that already succeed (about 990), compare periodicity-derived focus with full-fit focus.
-   Target: no bias, scatter of 10 um or less. This sets `period_snr_thresh`.
+   Target: no bias, scatter of 10 um or less. This sets `period_snr_thresh`. It also calibrates the uncertainty:
+   choose `period_err_factor` and `period_err_floor` so that the pulls
+   `(fallback focus - full-fit focus) / sigma` have unit width across the SNR range, with sigma combining the
+   fallback uncertainty and the full fit's Z04 error bar in quadrature.
 b. Compare old and new background, and the slicing fix alone, on success rate and on Zernike agreement for
    frames that succeed both ways. The new background must not change Zernikes beyond the existing fit scatter.
 c. Count how many of the 1707 failures now give a full result, a focus-only result, or neither, broken down by
