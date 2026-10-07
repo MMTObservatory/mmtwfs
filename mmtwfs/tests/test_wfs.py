@@ -614,3 +614,10 @@ def test_pupil_background_failure_is_contained():
     with patch("mmtwfs.wfs.pupil_background", side_effect=ValueError("too few background blocks")):
         results = mmirs.measure_slopes(test_file, plot=False)
     assert results["slopes"] is not None or results.get("focus_only", False)
+
+
+@pytest.mark.parametrize("method", ["Pupil", "bkg2d", None])
+def test_bkg_method_validated(method):
+    # a typo would otherwise silently mean no background subtraction at all
+    with pytest.raises(WFSConfigException):
+        WFSFactory(wfs="mmirs", config={"bkg_method": method})

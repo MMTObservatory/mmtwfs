@@ -950,6 +950,10 @@ class WFS(object):
     def __init__(self, config={}, plot=True, **kwargs):
         key = self.__class__.__name__.lower()
         self.__dict__.update(merge_config(mmtwfs_config["wfs"][key], config))
+        if self.bkg_method not in ("background2d", "pupil"):
+            raise WFSConfigException(
+                value=f"Unknown bkg_method {self.bkg_method!r}; must be 'background2d' or 'pupil'."
+            )
         self.telescope = TelescopeFactory(
             telescope=self.telescope, secondary=self.secondary
         )
