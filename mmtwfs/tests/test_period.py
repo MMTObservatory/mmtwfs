@@ -1,0 +1,91 @@
+# Licensed under a 3-clause BSD style license - see LICENSE.rst
+
+import numpy as np
+import pytest
+import matplotlib.pyplot as plt
+
+from mmtwfs.period import measure_grid_period, grid_scale, plot_periodicity
+from mmtwfs.tests.synthetic import make_sh_image, gaussian_halo
+
+CENTER = (256.0, 256.0)
+RADIUS = 172.5
+INNER = 40.0
+PITCH = 22.7
+
+
+def _scale(img, hexgrid=False, center=CENTER):
+    ref, _ = make_sh_image(sigma=2.0, hexgrid=hexgrid)
+    r = measure_grid_period(ref, CENTER, RADIUS, PITCH, inner=INNER, snr_thresh=0.0)
+    m = measure_grid_period(img, center, RADIUS, PITCH, inner=INNER)
+    return grid_scale(m, r)
+
+
+@pytest.mark.parametrize("hexgrid", [False, True])
+@pytest.mark.parametrize("truth", [0.97, 1.0, 1.03])
+@pytest.mark.parametrize("sigma, tol", [(2.0, 5e-4), (6.0, 1e-3)])
+def test_measure_grid_period_scale(hexgrid, truth, sigma, tol):
+    rng = np.random.default_rng(1)
+    img, _ = make_sh_image(spacing=PITCH * truth, sigma=sigma, hexgrid=hexgrid)
+    img = img + rng.normal(0.0, 5.0, img.shape)
+    g = _scale(img, hexgrid=hexgrid)
+    assert abs(g["scale"] - truth) < tol
+    assert abs(g["rotation"]) < 0.5
+
+
+def test_measure_grid_period_rotated_hex():
+    rng = np.random.default_rng(4)
+    img, _ = make_sh_image(hexgrid=True, angle=10.0, sigma=3.0)
+    ref, _ = make_sh_image(hexgrid=True, angle=10.0, sigma=2.0)
+    r = measure_grid_period(ref, CENTER, RADIUS, PITCH, inner=INNER, snr_thresh=0.0)
+    m = measure_grid_period(img + rng.normal(0.0, 5.0, img.shape), CENTER, RADIUS, PITCH, inner=INNER)
+    assert abs(grid_scale(m, r)["scale"] - 1.0) < 5e-4
+
+
+def test_measure_grid_period_halo():
+    # a halo 30x brighter than the spot peaks; the built-in high-pass keeps it out of the search annulus
+    rng = np.random.default_rng(5)
+    img, _ = make_sh_image(spacing=PITCH * 1.03, sigma=6.0)
+    img = img + gaussian_halo(img.shape, CENTER, 150.0, 300.0) + rng.normal(0.0, 5.0, img.shape)
+    g = _scale(img)
+    assert abs(g["scale"] - 1.03) < 3e-3
+
+
+def test_measure_grid_period_noise_returns_none():
+    rng = np.random.default_rng(6)
+    noise = rng.normal(0.0, 5.0, (512, 512))
+    assert measure_grid_period(noise, CENTER, RADIUS, PITCH, inner=INNER) is None
+
+
+def test_measure_grid_period_off_edge():
+    # pupil hanging 60 px off the left edge must not raise, and still find the grid
+    rng = np.random.default_rng(7)
+    center = (RADIUS - 60.0, 256.0)
+    img, _ = make_sh_image(shape=(512, 640), center=(RADIUS + 68.0, 256.0), sigma=3.0)
+    img = img[:, 128:] + rng.normal(0.0, 5.0, (512, 512))
+    g = _scale(img, center=center)
+    assert abs(g["scale"] - 1.0) < 2e-3
+
+
+def test_scale_err_is_conservative():
+    # the propagated error ignores correlations between zero-padded bins, so it overestimates the true
+    # scatter. pin it between 1x and 5x; period_err_factor calibrates it on real data.
+    rng = np.random.default_rng(8)
+    ref, _ = make_sh_image(sigma=2.0)
+    r = measure_grid_period(ref, CENTER, RADIUS, PITCH, inner=INNER, snr_thresh=0.0)
+    img0, _ = make_sh_image(spacing=PITCH * 1.004, sigma=2.0)
+    scales, errs = [], []
+    for _ in range(40):
+        m = measure_grid_period(img0 + rng.normal(0.0, 30.0, img0.shape), CENTER, RADIUS, PITCH, inner=INNER)
+        g = grid_scale(m, r)
+        scales.append(g["scale"])
+        errs.append(g["scale_err_fit"])
+    ratio = np.std(scales) / np.median(errs)
+    assert 0.2 < ratio < 1.0
+
+
+def test_plot_periodicity():
+    img, _ = make_sh_image(sigma=3.0)
+    m = measure_grid_period(img, CENTER, RADIUS, PITCH, inner=INNER)
+    fig = plot_periodicity(m)
+    assert fig.get_label() == "Grid Periodicity"
+    plt.close("all")
