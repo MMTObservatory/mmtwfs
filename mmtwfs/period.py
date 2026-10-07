@@ -227,10 +227,15 @@ def plot_periodicity(meas):
     keep = np.abs(f) <= lim
     fig, ax = plt.subplots()
     fig.set_label("Grid Periodicity")
+    logp = np.log10(meas["power"][np.ix_(keep, keep)] + np.finfo(float).tiny)
+    # stretch from the noise floor to the strongest peak. the full range reaches down to near-empty bins many decades
+    # below the noise and leaves everything that matters a flat, dark grey.
     ax.imshow(
-        np.log10(meas["power"][np.ix_(keep, keep)] + np.finfo(float).tiny),
+        logp,
         origin="lower",
         cmap="Greys",
+        vmin=np.median(logp),
+        vmax=logp.max(),
         extent=(f[keep][0], f[keep][-1], f[keep][0], f[keep][-1]),
     )
     t = np.linspace(0, 2 * np.pi, 361)
@@ -238,7 +243,9 @@ def plot_periodicity(meas):
         ax.plot(rad * np.cos(t), rad * np.sin(t), color="blue", lw=0.8)
     for (fx, fy), snr, sp in zip(meas["freqs"], meas["snr"], meas["spacing"]):
         ax.scatter([fx, -fx], [fy, -fy], facecolors="none", edgecolors="red", s=80)
-        ax.annotate(f"{sp:.3f} px (SNR {snr:.0f})", (fx, fy), color="red", fontsize=8)
+        ax.annotate(
+            f"{sp:.3f} px (SNR {snr:.0f})", (fx, fy), xytext=(8, 8), textcoords="offset points", color="red", fontsize=8
+        )
     ax.set_xlabel("f$_x$ (cycles/pixel)")
     ax.set_ylabel("f$_y$ (cycles/pixel)")
     ax.set_title("Grid period (focus-only fallback)")

@@ -108,6 +108,11 @@ def test_plot_periodicity():
     m = measure_grid_period(img, CENTER, RADIUS, PITCH, inner=INNER)
     fig = plot_periodicity(m)
     assert fig.get_label() == "Grid Periodicity"
+    # the stretch runs from the noise floor (median) to the strongest peak, not from the near-empty minimum, which
+    # leaves the whole spectrum a dark, flat grey
+    im = fig.axes[0].images[0]
+    shown = np.asarray(im.get_array())
+    assert im.get_clim() == pytest.approx((np.median(shown), shown.max()))
     plt.close("all")
 
 

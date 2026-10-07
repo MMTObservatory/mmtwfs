@@ -228,6 +228,10 @@ def test_frosted_donut():
     assert results["method"] == "periodicity"
     assert abs(results["grid"]["scale"] - 0.899) < 5e-3
     assert -40.0 < results["pending_focus"].to_value(u.um) < -24.0
+    # the Z04 error carried through the same gains as the correction
+    z04_err = results["zernike"].errorbars["Z04"]
+    expected = wfs.m2_gain_periodicity * wfs.m2_gain * z04_err / wfs.secondary.focus_trans
+    assert results["focus_err"].to_value(u.um) == pytest.approx(expected.to_value(u.um), abs=0.01)
     plt.close("all")
 
 
@@ -524,6 +528,8 @@ def test_focus_from_scale_matches_analytic():
     expected = k * 0.01 - zref["Z04"].value
     assert np.isclose(zv["Z04"].value, expected, rtol=0.02)
     assert np.isclose(zv.errorbars["Z04"].value, abs(k) * 1e-4, rtol=0.02)
+    # only defocus is measured; the reference's other terms would show up as if they had been
+    assert list(zv.coeffs) == ["Z04"]
 
 
 def test_focus_from_scale_gain():

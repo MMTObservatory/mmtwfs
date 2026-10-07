@@ -1317,6 +1317,9 @@ class WFS(object):
 
         raw.rotate(angle=-(self.rotation - rotator))
         zv = raw - self.reference_aberrations(mode, hdr=hdr)
+        # only defocus is measured. the subtraction leaves the reference's other terms (sign-flipped) and ~0 tilts,
+        # which would read as measured aberrations, so keep Z04 alone.
+        zv = ZernikeVector(Z04=zv["Z04"].value, errorbars={"Z04": zv.errorbars["Z04"].value}, units=zv.units)
 
         focus = self.m2_gain_periodicity * self.calculate_focus(zv.copy())
         fmax = self.periodicity_focus_max.to_value(u.um)
@@ -1349,8 +1352,18 @@ class WFS(object):
         grid["center"] = tuple(center)
 
         zv, focus = self.focus_from_scale(grid["scale"], grid["scale_err"], mode, rotator, hdr=hdr)
+        # the Z04 error bar through the same gains as the correction, before the (1 - frac_error) down-weighting
+        zd = zv.copy()
+        zd.denormalize()
+        focus_err = np.abs(self.m2_gain_periodicity * self.m2_gain * zd.errorbars["Z04"] / self.secondary.focus_trans)
         fig = plot_periodicity(meas) if plot else None
-        return {"grid": grid, "zernike": zv, "pending_focus": focus, "figure": fig}
+        return {
+            "grid": grid,
+            "zernike": zv,
+            "pending_focus": focus,
+            "focus_err": focus_err.to(u.um).round(2),
+            "figure": fig,
+        }
 
     def process_image(self, fitsfile):
         """
@@ -1505,15 +1518,17 @@ class WFS(object):
                     fallback = None
                 if fallback is not None:
                     grid = fallback["grid"]
-                    log.warning(
-                        f"Using focus-only periodicity fallback: scale = {grid['scale']:.5f} +/- "
-                        f"{grid['scale_err']:.5f}, SNR = {grid['snr'].min():.0f}, focus = {fallback['pending_focus']}"
-                    )
+                    # one value per line so the focus correction isn't lost off the right edge of a log window
+                    log.warning("Using focus-only periodicity fallback:")
+                    log.warning(f"    grid scale = {grid['scale']:.5f} +/- {grid['scale_err']:.5f}")
+                    log.warning(f"    SNR = {grid['snr'].min():.0f}")
+                    log.warning(f"    focus = {fallback['pending_focus']} +/- {fallback['focus_err']}")
                     results["focus_only"] = True
                     results["method"] = "periodicity"
                     results["grid"] = grid
                     results["zernike"] = fallback["zernike"]
                     results["pending_focus"] = fallback["pending_focus"]
+                    results["focus_err"] = fallback["focus_err"]
                     results["figures"]["periodicity"] = fallback["figure"]
             return results
         except Exception as e:
