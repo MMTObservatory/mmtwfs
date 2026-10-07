@@ -23,8 +23,6 @@ jobs:
           pytest: false
         - linux: py313-alldeps
           name: py313
-        - linux: py313-devdeps
-          name: py313-devdeps
         # coverage comes from this job only; the code has no version-specific paths
         - linux: py314-alldeps-cov
           name: py314
