@@ -5,12 +5,13 @@ import importlib
 from unittest.mock import patch
 
 import numpy as np
+import pytest
 
 import matplotlib.pyplot as plt
 
 from mmtwfs.zernike import ZernikeVector
 from mmtwfs.config import mmtwfs_config
-from mmtwfs.wfs import WFSFactory, check_wfsdata, mk_wfs_mask, wfsfind
+from mmtwfs.wfs import WFSFactory, check_wfsdata, mk_wfs_mask, wfsfind, get_apertures
 from mmtwfs.custom_exceptions import WFSConfigException, WFSCommandException, WFSAnalysisFailed
 
 
@@ -397,3 +398,21 @@ def test_mk_wfs_mask_with_outfile(tmp_path):
     mask = mk_wfs_mask(test_file, thresh_factor=4.0, outfile=str(outfile))
     assert mask.min() == 0.0
     assert outfile.exists()
+
+
+def test_get_apertures_background_region():
+    # quiet region left of x=150, very noisy to the right. with cen=(100, 400) the 100x100 stats box is
+    # entirely in the quiet region; the old typo (xcen - 50:ycen + 50) made it run to x=450.
+    rng = np.random.default_rng(42)
+    data = rng.normal(0.0, 1.0, (512, 512))
+    data[:, 150:] = rng.normal(0.0, 100.0, (512, 362))
+    captured = {}
+
+    def fake_wfsfind(data, fwhm=7.0, threshold=5.0, plot=True, ap_radius=5.0, std=None):
+        captured["std"] = std
+        raise RuntimeError("stop after background stats")
+
+    with patch("mmtwfs.wfs.wfsfind", side_effect=fake_wfsfind):
+        with pytest.raises(RuntimeError):
+            get_apertures(data, 20.0, cen=(100, 400))
+    assert captured["std"] < 2.0
