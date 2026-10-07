@@ -822,7 +822,6 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
     - `period_snr_thresh = 20.0`
     - `period_err_factor = 1.0`
     - `period_err_floor = 0.0`
-    - `period_scale_offset = 0.0`
     - `m2_gain_periodicity = 0.5`
     - `periodicity_focus_max = 300.0 * u.um`
   - `WFS.prepare_reference(mode, hdr=None) -> SH_Reference`: centers the reference and applies the pupil, as
@@ -956,7 +955,6 @@ Before replacing, confirm each block's `npixels` and `dilate_size`; the values a
     period_snr_thresh = 20.0
     period_err_factor = 1.0  # calibration of the propagated grid-scale error
     period_err_floor = 0.0  # systematic grid-scale error added in quadrature
-    period_scale_offset = 0.0  # calibrated offset added to the measured grid scale
     m2_gain_periodicity = 0.5  # extra gain on fallback focus corrections
     periodicity_focus_max = 300.0 * u.um
 ```
@@ -1226,8 +1224,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Produces:
   - `WFS.periodicity_focus(data, mode, center, rotator, hdr=None, plot=True) -> dict | None` with keys `grid`,
     `zernike`, `pending_focus`, `figure`. `grid` has:
-    - `scale`: offset applied
-    - `scale_raw`
+    - `scale`
     - `scale_err`: factor and floor applied
     - `scale_err_fit`
     - `scales`
@@ -1348,8 +1345,6 @@ attribute doesn't exist. The disabled and no-grid tests may already pass.
             return None
 
         grid = grid_scale(meas, ref_grid)
-        grid["scale_raw"] = grid["scale"]
-        grid["scale"] = grid["scale_raw"] + self.period_scale_offset
         grid["scale_err"] = float(np.hypot(self.period_err_factor * grid["scale_err_fit"], self.period_err_floor))
         grid["snr"] = meas["snr"]
         grid["center"] = tuple(center)
@@ -1563,7 +1558,7 @@ def init():
 def fb_row(fb):
     g = fb["grid"]
     return dict(fb_ok=True, fb_focus=fb["pending_focus"].to_value(u.um), fb_z04=fb["zernike"]["Z04"].value,
-                fb_z04_err=fb["zernike"].errorbars["Z04"].value, scale=g["scale_raw"],
+                fb_z04_err=fb["zernike"].errorbars["Z04"].value, scale=g["scale"],
                 scale_err_fit=g["scale_err_fit"], snr=float(np.min(g["snr"])))
 
 
@@ -1647,9 +1642,11 @@ def say(s=""):
 # (a) calibration on frames where both full fit and fallback exist (legacy background, branch code)
 both = b2d[b2d["full_ok"] & b2d["fb_ok"]]
 d = both["full_z04"] - both["fb_z04"]  # nm
+# the median difference is expected (the full fit separates spherical from focus; the grid scale doesn't),
+# so it is reported but not corrected. the error calibration uses the scatter around it.
 offset_nm = np.median(d)
 say(f"(a) {len(both)} frames with both answers")
-say(f"    median(full - fallback) Z04 = {offset_nm:.1f} nm -> period_scale_offset = {offset_nm / K:+.2e}")
+say(f"    median(full - fallback) Z04 = {offset_nm:.1f} nm (diagnostic only; not corrected)")
 sig_fit = np.abs(K) * both["scale_err_fit"]
 r2 = (d - offset_nm) ** 2 - both["full_z04_err"] ** 2
 # robust linear fit r2 ~ a * sig_fit^2 + b over sig_fit quintiles (medians of r2 / 0.455 for chi2_1)
@@ -1668,7 +1665,7 @@ pulls = (d - offset_nm) / total
 say(f"    pull width (1.4826*MAD) = {1.4826 * np.median(np.abs(pulls - np.median(pulls))):.2f} (target 1)")
 dfoc = both["full_focus"] - both["fb_focus"]
 say(f"    focus full - fallback: median {np.median(dfoc):+.1f} um, 1.4826*MAD "
-    f"{1.4826 * np.median(np.abs(dfoc - np.median(dfoc))):.1f} um (target <= 10 um after offset)")
+    f"{1.4826 * np.median(np.abs(dfoc - np.median(dfoc))):.1f} um (target <= 10 um scatter)")
 for lo, hi in ((20, 100), (100, 300), (300, 1000), (1000, np.inf)):
     m = (both["snr"] >= lo) & (both["snr"] < hi)
     if m.sum() > 5:
@@ -1708,7 +1705,8 @@ open("calibration.txt", "w").write("\n".join(lines) + "\n")
 
 Run: `cd ~/MMT/mmirs_vignetting/seeing && /Users/tim/conda/envs/mmtwfs/bin/python calibrate.py`
 Expected: `calibration.txt` with sections (a)–(c). The pass criteria come from the spec:
-- (a) fallback-vs-full focus scatter of 10 µm or less after the offset, and pull width close to 1;
+- (a) fallback-vs-full focus scatter (around the median difference) of 10 µm or less, and pull width close to 1.
+  The median difference itself is reported only; it reflects spherical/focus coupling and is not corrected;
 - (b) pupil vs bkg2d Zernike median differences within the existing fit scatter (1.4826*MAD), and the pupil
   method's full-ok count at least that of bkg2d;
 - (c) a recovery count reported per category.
@@ -1728,7 +1726,7 @@ Expected: `calibration.txt` with sections (a)–(c). The pass criteria come from
 **Interfaces:**
 - Consumes: the numbers from `calibration.txt` and the user's decision (Task 8)
 
-- [ ] **Step 1: Write the failing test,** filling in the approved values for `<factor>`, `<floor>` and `<offset>`.
+- [ ] **Step 1: Write the failing test,** filling in the approved values for `<factor>` and `<floor>`.
   Delete the `bkg_method` assertion if the user decided against switching:
 
 ```python
@@ -1737,7 +1735,6 @@ def test_mmirs_poor_seeing_config():
     assert mmirs.bkg_method == "pupil"
     assert mmirs.period_err_factor == <factor>
     assert mmirs.period_err_floor == <floor>
-    assert mmirs.period_scale_offset == <offset>
 ```
 
 - [ ] **Step 2: Run it and confirm it fails**
@@ -1754,7 +1751,6 @@ Expected: FAIL on the first differing attribute.
             "bkg_method": "pupil",
             "period_err_factor": <factor>,
             "period_err_floor": <floor>,
-            "period_scale_offset": <offset>,
 ```
 
 - [ ] **Step 4: Run the full suite**

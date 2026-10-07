@@ -193,9 +193,9 @@ Unit tests in `mmtwfs/tests/`:
 Offline validation on the October 2026 MMIRS run (scripts kept in `~/MMT/mmirs_vignetting`, not shipped):
 
 a. On the frames that already succeed (about 990), compare periodicity-derived focus with full-fit focus.
-   Target: no bias, scatter of 10 um or less. This sets `period_snr_thresh`. It also calibrates the uncertainty:
+   Target: scatter of 10 um or less around the median difference (the median is reported, not corrected). This sets `period_snr_thresh`. It also calibrates the uncertainty:
    choose `period_err_factor` and `period_err_floor` so that the pulls
-   `(fallback focus - full-fit focus) / sigma` have unit width across the SNR range, with sigma combining the
+   `(fallback focus - full-fit focus - median difference) / sigma` have unit width across the SNR range, with sigma combining the
    fallback uncertainty and the full fit's Z04 error bar in quadrature.
 b. Compare old and new background, and the slicing fix alone, on success rate and on Zernike agreement for
    frames that succeed both ways. The new background must not change Zernikes beyond the existing fit scatter.
@@ -231,10 +231,13 @@ Where they conflict with the sections above, these take precedence.
 - **The propagated `scale_err` is conservative** by about 3x, because zero-padded bins are correlated. The test
   pins the empirical-scatter / error ratio to between 0.2 and 1.0. `period_err_factor` (default 1.0) is calibrated
   on real data.
-- **New `period_scale_offset`** (default 0), calibrated in validation step (a). On the test frame the FFT focus is
-  about 6 um more negative than the full fit, because spherical aberration also contributes to the mean grid
-  scale. Blur moves both estimates by about 1e-3 in scale through edge-spot centroid shifts. A harmonic-ratio
-  blur correction was tried and rejected because it over-corrected synthetic data.
+- **No scale offset.** The FFT focus differs from the full fit by a few um (about 6 um on the test frame), because
+  the full fit separates spherical aberration from focus and the mean grid scale doesn't. That difference is not
+  corrected. Spherical and focus are strongly coupled and are corrected together by focus moves and M1 bending
+  anyway, and in seeing bad enough to need the fallback a few um of focus doesn't matter. Validation step (a)
+  reports the median difference as a diagnostic and calibrates the uncertainty from the scatter around it. Blur also
+  moves both estimates by about 1e-3 in scale through edge-spot centroid shifts. A harmonic-ratio blur correction
+  was tried and rejected because it over-corrected synthetic data.
 - **Pedestal test.** It checks for a flat residual (std < 0.1) rather than centroid shifts directly. A flat
   residual cannot move centroids.
 - **Background helper.** Each `process_image` override keeps its own `Background2D` parameters, passed to a shared
