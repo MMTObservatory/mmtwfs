@@ -223,11 +223,15 @@ def check_image(f, wfskey=None):
     return data, hdr
 
 
-def process_image(f, force=False):
+def process_image(f, force=False, retry_failed=False):
     """
     Process FITS file, f, to get info we want from the header and then analyse it with the
     appropriate WFS instance. Return results in a comma-separated line that will be collected
     and saved in a CSV file.
+
+    With retry_failed, files marked as failed by an earlier run are analyzed again while cached
+    results for good files are reused. The failed marker is removed first and is recreated if
+    the file fails again.
     """
     if "Ref" in str(f) or "sog" in str(f) or "coadded" in str(f):
         return None
@@ -243,8 +247,11 @@ def process_image(f, force=False):
             return upgrade_cached_line(lines[0])
 
     if not force and Path.exists(failed):
-        log.info(f"Already failed processing {f.name}, skipping...")
-        return None
+        if not retry_failed:
+            log.info(f"Already failed processing {f.name}, skipping...")
+            return None
+        log.info(f"Retrying {f.name}, which failed previously...")
+        failed.unlink()
 
     try:
         data, hdr = check_image(f)
@@ -362,6 +369,13 @@ def main():
     )
 
     parser.add_argument(
+        '--retry-failed',
+        help="Reanalyze files that failed in earlier runs, reusing cached results for the rest. "
+             "Rebuilds the CSV for each directory.",
+        action="store_true"
+    )
+
+    parser.add_argument(
         '-n', '--nproc',
         metavar="<# processes>",
         help="Number of parallel processes. Defaults to half number of available cores.",
@@ -383,7 +397,7 @@ def main():
     for d in dirs:
         d = rootdir / d
         if d.is_dir():
-            if not args.forcedir and Path.exists(d / "reanalyze_results.csv"):
+            if not (args.forcedir or args.retry_failed) and Path.exists(d / "reanalyze_results.csv"):
                 log.info(f"Already processed {d.name}...")
             else:
                 try:
@@ -393,7 +407,7 @@ def main():
                     fitsfiles = sorted(list(d.glob("*.fits")))
                     log.info(f"Processing {len(fitsfiles)} images in {d}...")
                     with concurrent.futures.ProcessPoolExecutor(max_workers=args.nproc) as pool:
-                        process = partial(process_image, force=args.force)
+                        process = partial(process_image, force=args.force, retry_failed=args.retry_failed)
                         plines = pool.map(process, fitsfiles, timeout=300)  # plines comes out in same order as fitslines!
 
                     plines = [line for line in plines if line is not None]  # trim out any None entries
