@@ -555,6 +555,15 @@ def test_reference_grid_cached():
     assert "power" not in g and "freq_axis" not in g
 
 
+def test_periodicity_no_reference_grid():
+    # a reference image whose grid can't be measured gives no fallback rather than a bogus scale
+    mmirs, mode, hdr = _mmirs_ready()
+    ref = mmirs.modes[mode]["reference"]
+    ref.data = np.zeros_like(ref.data)
+    assert mmirs.reference_grid(mode) is None
+    assert mmirs.periodicity_focus(ref.data, mode, (ref.img_xcen, ref.img_ycen), 0.0 * u.deg, plot=False) is None
+
+
 def _blurred_mmirs(tmp_path, sigma):
     # gaussian blur of a good MMIRS frame: sigma >= 5 makes the spot analysis fail but leaves the grid visible
     test_file = WFS_DATA_DIR / "test_data" / "mmirs_wfs_0150.fits"

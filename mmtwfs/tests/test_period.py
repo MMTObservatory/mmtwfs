@@ -5,7 +5,7 @@ import pytest
 import matplotlib.pyplot as plt
 from scipy import ndimage
 
-from mmtwfs.period import measure_grid_period, grid_scale, plot_periodicity
+from mmtwfs.period import measure_grid_period, grid_scale, plot_periodicity, _refine_peak
 from mmtwfs.tests.synthetic import make_sh_image, gaussian_halo
 
 CENTER = (256.0, 256.0)
@@ -55,6 +55,25 @@ def test_measure_grid_period_noise_returns_none():
     rng = np.random.default_rng(6)
     noise = rng.normal(0.0, 5.0, (512, 512))
     assert measure_grid_period(noise, CENTER, RADIUS, PITCH, inner=INNER) is None
+
+
+def test_measure_grid_period_blank_returns_none():
+    # no noise power to measure SNR against
+    assert measure_grid_period(np.zeros((512, 512)), CENTER, RADIUS, PITCH, inner=INNER) is None
+
+
+def test_measure_grid_period_no_second_peak():
+    # no two directions in the half-plane are more than 90 deg apart
+    img, _ = make_sh_image(sigma=2.0)
+    assert measure_grid_period(img, CENTER, RADIUS, PITCH, inner=INNER, min_sep=91.0) is None
+
+
+def test_refine_peak_rejects_non_maximum():
+    # n = 8 puts the (2, 2) bin off zero frequency, as peaks in the search annulus always are
+    power = np.ones((5, 5))
+    assert _refine_peak(power, 8, 2, 2, 1.0) is None
+    power[2, 2] = 4.0
+    assert _refine_peak(power, 8, 2, 2, 1.0) is not None
 
 
 def test_measure_grid_period_off_edge():
