@@ -21,6 +21,13 @@ from mmtwfs.custom_exceptions import WFSConfigException, WFSCommandException, WF
 WFS_DATA_DIR = importlib.resources.files("mmtwfs") / "data"
 
 
+@pytest.fixture(autouse=True)
+def close_figures():
+    # creating a WFS draws reference figures; don't let them pile up past matplotlib's open-figure warning
+    yield
+    plt.close("all")
+
+
 def _analyze_image(wfs, test_file):
     results = wfs.measure_slopes(test_file)
     zresults = wfs.fit_wavefront(results)
@@ -431,6 +438,35 @@ def test_get_apertures_background_region():
     assert captured["std"] < 2.0
 
 
+def test_get_apertures_background_box_size():
+    # quiet within 30 px of cen, noisy beyond: a box that stays inside (like the central obscuration) sees only
+    # the quiet part
+    rng = np.random.default_rng(43)
+    data = rng.normal(0.0, 100.0, (512, 512))
+    data[226:286, 226:286] = rng.normal(0.0, 1.0, (60, 60))
+    captured = {}
+
+    def fake_wfsfind(data, fwhm=7.0, threshold=5.0, plot=True, ap_radius=5.0, std=None):
+        captured["std"] = std
+        raise RuntimeError("stop after background stats")
+
+    with patch("mmtwfs.wfs.wfsfind", side_effect=fake_wfsfind):
+        with pytest.raises(RuntimeError):
+            get_apertures(data, 20.0, cen=(256, 256), box=28)
+    assert captured["std"] < 2.0
+
+
+def test_get_slopes_noise_box_inside_obscuration():
+    # the noise box must fit inside the central obscuration, or the first ring of spots inflates the noise
+    # estimate on blurry frames
+    mmirs = WFSFactory(wfs="mmirs")
+    test_file = WFS_DATA_DIR / "test_data" / "mmirs_wfs_0150.fits"
+    with patch("mmtwfs.wfs.get_apertures", side_effect=RuntimeError("stop")) as spy:
+        with pytest.raises(WFSAnalysisFailed):
+            mmirs.measure_slopes(test_file, plot=False)
+    assert spy.call_args.kwargs["box"] == int(mmirs.pup_inner / np.sqrt(2.0))
+
+
 def test_wfs_poor_seeing_defaults():
     for s in mmtwfs_config["wfs"]:
         wfs = WFSFactory(wfs=s)
@@ -621,3 +657,14 @@ def test_bkg_method_validated(method):
     # a typo would otherwise silently mean no background subtraction at all
     with pytest.raises(WFSConfigException):
         WFSFactory(wfs="mmirs", config={"bkg_method": method})
+
+
+def test_periodicity_calibration():
+    # calibrated on the October 2026 MMIRS run: below grid SNR ~300 the frame-to-frame scatter of fallback focus
+    # was 1.5-2.4x larger than the propagated errors; above it the errors needed scaling by 1.48. 250 keeps the
+    # F/9 frosted-donut frame (SNR 262), whose correction looks right.
+    assert WFSFactory(wfs="f5").period_snr_thresh == 250.0
+    mmirs = WFSFactory(wfs="mmirs")
+    assert mmirs.period_snr_thresh == 250.0
+    assert mmirs.period_err_factor == 1.48
+    assert mmirs.bkg_method == "background2d"

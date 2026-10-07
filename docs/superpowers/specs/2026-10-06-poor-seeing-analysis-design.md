@@ -247,3 +247,17 @@ Where they conflict with the sections above, these take precedence.
   are upgraded with `method = full`.
 - **Stale pending corrections.** wfssrv clears pending M1, coma and recenter flags when it applies a focus-only
   result, so nothing pending from an earlier image is applied with it.
+
+## Validation outcome (October 2026 MMIRS run, 2697 frames)
+
+- The `get_apertures` slicing fix alone lost 31 full fits: the +/-50 px noise box is larger than the MMIRS central
+  obscuration (40 px radius), so on blurry frames the inner ring of spots inflated the noise estimate. The box
+  half-width is now `pup_inner / sqrt(2)`, so it fits inside the obscuration. Result: 1015 full fits vs 990 on
+  `main`, none lost, identical Zernikes on the common frames.
+- The pupil background reached the same 1015 but shifted Z11 by about -32 nm, so MMIRS stays on `background2d`.
+- Fallback vs full fit on 963 frames with both: focus scatter 3.8 um, median offset 0. `period_err_factor` = 1.48
+  for MMIRS, no floor.
+- Fallback-only frames repeat to 6 um (SNR > 1000) and 10 um (300-1000) but about 28 um below SNR 300, where the
+  propagated errors are 1.5-2.4x too small. `period_snr_thresh` default is 250, which keeps the F/9 frosted-donut
+  frame (SNR 262).
+- 1672 of the 1707 frames that failed on `main` now get a focus-only correction.

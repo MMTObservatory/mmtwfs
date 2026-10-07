@@ -347,7 +347,7 @@ def center_pupil(input_data, pup_mask, threshold=0.8, sigma=10.0, plot=True):
     return xp, yp, fig
 
 
-def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True, cen=None):
+def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True, cen=None, box=50):
     """
     Use wfsfind to locate and centroid spots.  Measure their S/N ratios and the sigma of a 2D gaussian fit to
     the co-added spot.
@@ -358,6 +358,11 @@ def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True, cen=None):
         WFS image to analyze, either FITS file or ndarray image data
     apsize : float
         Diameter/width of the SH apertures
+    cen : list-like or None
+        Pupil center (x, y). If given, background statistics come from a box around it rather than the whole image.
+    box : int
+        Half-width in pixels of the background statistics box around cen. It should fit inside the central
+        obscuration, or light from the inner ring of spots inflates the noise estimate.
 
     Returns
     -------
@@ -377,7 +382,7 @@ def get_apertures(data, apsize, fwhm=5.0, thresh=7.0, plot=True, cen=None):
     else:
         xcen, ycen = int(cen[0]), int(cen[1])
         mean, median, stddev = stats.sigma_clipped_stats(
-            data[ycen - 50:ycen + 50, xcen - 50:xcen + 50], sigma=3.0, maxiters=None
+            data[ycen - box:ycen + box, xcen - box:xcen + box], sigma=3.0, maxiters=None
         )
 
     # use wfsfind() and pass it the clipped stddev from here
@@ -609,7 +614,7 @@ def get_slopes(
     apsize = ref_spacing
 
     srcs, masks, snrs, sigma, ellipticity, coadded_spot, wfsfind_fig = get_apertures(
-        data, apsize, fwhm=fwhm, thresh=thresh, cen=(xcen, ycen)
+        data, apsize, fwhm=fwhm, thresh=thresh, cen=(xcen, ycen), box=int(pup_inner / np.sqrt(2.0))
     )
 
     # ignore low S/N spots
@@ -941,7 +946,7 @@ class WFS(object):
     bkg_order = 4  # polynomial order of the pupil background fit
     pedestal = True  # with bkg_method = "pupil", also remove the floor between spots
     periodicity_fallback = True  # focus-only correction from the grid period when spot analysis fails
-    period_snr_thresh = 20.0
+    period_snr_thresh = 250.0  # below ~300, fallback errors were underestimated on the Oct 2026 MMIRS run
     period_err_factor = 1.0  # calibration of the propagated grid-scale error
     period_err_floor = 0.0  # systematic grid-scale error added in quadrature
     m2_gain_periodicity = 0.5  # extra gain on fallback focus corrections
