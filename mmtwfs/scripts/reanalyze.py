@@ -36,6 +36,20 @@ tz = pytz.timezone("America/Phoenix")
 
 
 # instantiate all of the WFS systems...
+CSV_HEADER = "time,wfs,file,exptime,airmass,az,el,osst,outt,chamt,tiltx,tilty,"\
+    "transx,transy,focus,focerr,cc_x_err,cc_y_err,xcen,ycen,seeing,raw_seeing,"\
+    "vlt_seeing,raw_vlt_seeing,ellipticity,fwhm,wavefront_rms,residual_rms,method\n"
+
+
+def upgrade_cached_line(line):
+    """
+    .output files written before the method column existed are one field short; they were all full analyses.
+    """
+    if len(line.strip().split(",")) == len(CSV_HEADER.strip().split(",")) - 1:
+        return line.rstrip("\n") + ",full\n"
+    return line
+
+
 wfs_keys = ['f9', 'newf9', 'f5', 'mmirs', 'binospec']
 wfs_systems = {}
 wfs_names = {}
@@ -226,7 +240,7 @@ def process_image(f, force=False):
             lines = fp.readlines()
 
         if len(lines) > 0:
-            return lines[0]
+            return upgrade_cached_line(lines[0])
 
     if not force and Path.exists(failed):
         log.info(f"Already failed processing {f.name}, skipping...")
@@ -284,7 +298,7 @@ def process_image(f, force=False):
                 f"{cc_y_err.value},{results['xcen']},{results['ycen']},{results['seeing'].value}," \
                 f"{results['raw_seeing'].value},{results["vlt_seeing"].value},{results["raw_vlt_seeing"].value},"\
                 f"{results['ellipticity']},{results['fwhm']},{zresults['zernike_rms'].value}," \
-                f"{zresults['residual_rms'].value}\n"
+                f"{zresults['residual_rms'].value},full\n"
             zfile = f.parent / (f.stem + ".reanalyze.zernike")
             zresults['zernike'].save(filename=zfile)
             spotfile = f.parent / (f.stem + ".spots.csv")
@@ -297,6 +311,18 @@ def process_image(f, force=False):
             log.error(f"Problem fitting wavefront for {f.name}: {e}")
             failed.touch()
             return None
+    elif results.get('focus_only', False):
+        nan = np.nan
+        # the M2 focus error before the fallback's extra gain and clipping, comparable to full-analysis rows
+        focerr = wfs_systems[wfskey].calculate_focus(results['zernike'].copy())
+        xcen, ycen = results['grid']['center']
+        line = f"{obstime},{wfskey},{f.name},{exptime},{airmass},{az},{el},{osst},{outt}," \
+            f"{chamt},{tiltx},{tilty},{transx},{transy},{focus},{focerr.value},{nan},{nan}," \
+            f"{xcen},{ycen},{nan},{nan},{nan},{nan},{nan},{nan},{nan},{nan},periodicity\n"
+        results['zernike'].save(filename=f.parent / (f.stem + ".periodicity.zernike"))
+        with open(outfile, 'w') as fp:
+            fp.write(line)
+        return line
     else:
         failed.touch()  # mark this file as failed
         return None
@@ -350,9 +376,7 @@ def main():
     log.info(f"Using {args.nproc} cores...")
 
     dirs = sorted(list(args.dirs))  # pathlib, where have you been all my life!
-    csv_header = "time,wfs,file,exptime,airmass,az,el,osst,outt,chamt,tiltx,tilty,"\
-        "transx,transy,focus,focerr,cc_x_err,cc_y_err,xcen,ycen,seeing,raw_seeing,"\
-        "vlt_seeing,raw_vlt_seeing,ellipticity,fwhm,wavefront_rms,residual_rms\n"
+    csv_header = CSV_HEADER
 
     log.info(f"Found {len(dirs)} directories to process...")
 
