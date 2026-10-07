@@ -21,14 +21,19 @@ jobs:
       envs: |
         - linux: codestyle
           pytest: false
-        - linux: py313-alldeps-cov
+        - linux: py313-alldeps
           name: py313
-        - linux: py313-devdeps-cov
+        - linux: py313-devdeps
           name: py313-devdeps
+        # coverage comes from this job only; the code has no version-specific paths
         - linux: py314-alldeps-cov
           name: py314
-        - linux: py314-devdeps-cov
+        - linux: py314-devdeps
           name: py314-devdeps
+        # 3.15 is still a prerelease; -dev lets setup-python install it
+        - linux: py315-devdeps
+          name: py315-devdeps
+          python-version: '3.15-dev'
         - linux: build_docs
           pytest: false
       coverage: 'codecov'
