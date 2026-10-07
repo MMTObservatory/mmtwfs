@@ -194,7 +194,12 @@ def test_too_few_spots():
     test_file = WFS_DATA_DIR / "test_data" / "mmirs_bogus.fits"
     mmirs = WFSFactory(wfs="mmirs")
     results = mmirs.measure_slopes(test_file)
+    # too few spots for the full analysis, but the grid is clear enough for the focus-only fallback
     assert results["slopes"] is None
+    assert results["focus_only"]
+    assert results["method"] == "periodicity"
+    assert abs(results["grid"]["scale"] - 0.9895) < 2e-3
+    assert -6.0 < results["pending_focus"].to_value(u.um) < 3.0
     plt.close("all")
 
 
@@ -210,7 +215,12 @@ def test_frosted_donut():
     test_file = WFS_DATA_DIR / "test_data" / "f9wfs_20200225-205600.fits"
     wfs = WFSFactory(wfs="newf9")
     results = wfs.measure_slopes(test_file)
+    # spot detection fails on the blurred donut, but the hex grid is visible and gives a focus-only correction
     assert results["slopes"] is None
+    assert results["focus_only"]
+    assert results["method"] == "periodicity"
+    assert abs(results["grid"]["scale"] - 0.899) < 5e-3
+    assert -40.0 < results["pending_focus"].to_value(u.um) < -24.0
     plt.close("all")
 
 
