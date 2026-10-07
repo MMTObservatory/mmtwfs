@@ -209,3 +209,38 @@ c. Count how many of the 1707 failures now give a full result, a focus-only resu
 2. wfssrv PR consuming the new result keys.
 3. After an observing run with the fallback live, review the logs and decide whether to switch other WFSs to
    the new background.
+
+## Amendments (from prototyping during planning, 2026-10-06)
+
+Throwaway prototypes on synthetic grids and on blurred copies of `mmirs_wfs_0150.fits` changed these details.
+Where they conflict with the sections above, these take precedence.
+
+- **Module layout.** The period estimator lives in a new `mmtwfs/period.py` (`measure_grid_period`, `grid_scale`,
+  `plot_periodicity`) rather than in `wfs.py`. Diagnostics are per-vector `scales` and a `rotation`, not
+  `xscale`/`yscale`, since hexagonal grids have no x/y vectors.
+- **High-pass before the FFT.** `measure_grid_period` subtracts a Gaussian-smoothed copy (sigma = one pitch) before
+  windowing. Without it, a halo 30x brighter than the spot peaks biased the scale by 1e-2. With it the bias is
+  2e-3 or less.
+- **Reference grid measured the same way.** The scale is the ratio of reference to measured grid frequency, both
+  from `measure_grid_period`, so window effects cancel. `SH_Reference` keeps its image-frame pupil center
+  (`img_xcen`, `img_ycen`) for this.
+- **Pupil background.** It uses box-median binning (`bkg_box` default 16 px) plus a sigma-clipped polynomial of
+  order 4 (`bkg_order`). Order 4 interpolated broad halos (sigma 250 to 400 px) to within the noise; order 3 left
+  residuals 4 to 10 times larger.
+- **`period_snr_thresh` default is 20.** Pure noise gives peak SNR of about 7; real MMIRS frames give about 1000.
+- **The propagated `scale_err` is conservative** by about 3x, because zero-padded bins are correlated. The test
+  pins the empirical-scatter / error ratio to between 0.2 and 1.0. `period_err_factor` (default 1.0) is calibrated
+  on real data.
+- **New `period_scale_offset`** (default 0), calibrated in validation step (a). On the test frame the FFT focus is
+  about 6 um more negative than the full fit, because spherical aberration also contributes to the mean grid
+  scale. Blur moves both estimates by about 1e-3 in scale through edge-spot centroid shifts. A harmonic-ratio
+  blur correction was tried and rejected because it over-corrected synthetic data.
+- **Pedestal test.** It checks for a flat residual (std < 0.1) rather than centroid shifts directly. A flat
+  residual cannot move centroids.
+- **Background helper.** Each `process_image` override keeps its own `Background2D` parameters, passed to a shared
+  `subtract_background2d` helper. They are not moved into config.
+- **wfssrv output.** wfssrv saves fallback wavefronts as `<file>.periodicity.zernike` instead of adding a comment to
+  `.zernike`. `reanalyze` does the same and adds a trailing `method` column. Cached `.output` lines from older runs
+  are upgraded with `method = full`.
+- **Stale pending corrections.** wfssrv clears pending M1, coma and recenter flags when it applies a focus-only
+  result, so nothing pending from an earlier image is applied with it.
