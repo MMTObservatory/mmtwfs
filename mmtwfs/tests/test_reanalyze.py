@@ -1,5 +1,6 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 
+import concurrent.futures
 import importlib
 import shutil
 import sys
@@ -104,7 +105,10 @@ def test_main_retry_failed(tmp_path):
     csv = d / "reanalyze_results.csv"
 
     def run(*args):
-        with patch.object(sys, "argv", ["reanalyze", "-r", str(tmp_path), "-d", d.name, "-n", "1", *args]):
+        # forking this process, which already has numpy's threads running, can deadlock a worker (the default
+        # on linux before python 3.14), so use threads; reanalyze itself starts from a fresh process
+        with patch.object(sys, "argv", ["reanalyze", "-r", str(tmp_path), "-d", d.name, "-n", "1", *args]), \
+                patch("concurrent.futures.ProcessPoolExecutor", concurrent.futures.ThreadPoolExecutor):
             main()
 
     run()
