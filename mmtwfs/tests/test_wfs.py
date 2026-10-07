@@ -513,6 +513,8 @@ def test_reference_grid_cached():
     ref = mmirs.modes[mode]["reference"]
     assert np.allclose(g["spacing"], np.mean([ref.xspacing, ref.yspacing]), rtol=0.02)
     assert mmirs.reference_grid(mode) is g
+    # the cache lives as long as the WFS object (e.g. in wfssrv); keep only the small arrays, not the spectrum
+    assert "power" not in g and "freq_axis" not in g
 
 
 def _blurred_mmirs(tmp_path, sigma):

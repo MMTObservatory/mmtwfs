@@ -1244,7 +1244,7 @@ class WFS(object):
         """
         ref = self.modes[mode]["reference"]
         if ref.grid is None:
-            ref.grid = measure_grid_period(
+            grid = measure_grid_period(
                 ref.data - np.median(ref.data),
                 (ref.img_xcen, ref.img_ycen),
                 self.pup_size / 2.0,
@@ -1253,6 +1253,12 @@ class WFS(object):
                 search=0.6,
                 snr_thresh=0.0,
             )
+            if grid is not None:
+                # the padded power spectrum is 10-40 MB and only needed for plotting science frames; don't keep it
+                # for the life of the WFS object
+                for key in ("power", "freq_axis"):
+                    grid.pop(key)
+            ref.grid = grid
         return ref.grid
 
     def focus_from_scale(self, scale, scale_err, mode, rotator, hdr=None):
