@@ -518,3 +518,22 @@ def test_zernike_slopes():
     dx, dy = zernike_slopes(zv, rho, phi)
     assert dx is not None
     assert dy is not None
+
+
+def test_load_lmfit():
+    import warnings
+    import lmfit
+
+    params = lmfit.Parameters()
+    params.add("Z04", value=1.0)
+    params.add("Z05", value=1.0)
+    x = np.linspace(0, 1, 50)
+    noise = np.random.default_rng(1).normal(0, 1, x.size)
+    result = lmfit.minimize(lambda p: p["Z04"] * x + p["Z05"] - (300 * x - 20 + noise), params)
+    with warnings.catch_warnings():
+        # numpy 2 deprecates handing objects whose __array__ won't take copy= to astropy, as lmfit Parameters are
+        warnings.simplefilter("error")
+        zv = ZernikeVector(coeffs=result)
+    assert u.isclose(zv["Z04"], result.params["Z04"].value * u.nm)
+    assert u.isclose(zv["Z05"], result.params["Z05"].value * u.nm)
+    assert u.isclose(zv.errorbars["Z04"], result.params["Z04"].stderr * u.nm)

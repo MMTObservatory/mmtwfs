@@ -24,43 +24,6 @@ def test_telescope():
         assert t.secondary.diameter == mmtwfs_config["secondary"][s]["diameter"]
 
 
-def test_pupil_mask():
-    for s in mmtwfs_config["secondary"]:
-        tel = mmtwfs_config["secondary"][s]["telescope"]
-        t = TelescopeFactory(telescope=tel, secondary=s)
-        mask = t.pupil_mask(size=400)
-        assert mask.shape == (400, 400)
-        assert mask.max() == 1.0
-        assert mask.min() == 0.0
-
-
-def test_bogus_pupil_mask():
-    for s in mmtwfs_config["secondary"]:
-        tel = mmtwfs_config["secondary"][s]["telescope"]
-        t = TelescopeFactory(telescope=tel, secondary=s)
-        try:
-            t.pupil_mask(size=900)
-        except WFSConfigException:
-            assert True
-        except Exception as e:
-            assert e is not None
-            assert False
-        else:
-            assert False
-
-
-def test_psf():
-    for s in mmtwfs_config["secondary"]:
-        tel = mmtwfs_config["secondary"][s]["telescope"]
-        t = TelescopeFactory(telescope=tel, secondary=s)
-        zv = ZernikeVector(Z04=500 * u.nm)
-        p, p_fig = t.psf(zv=zv)
-        p_im = p[0].data
-        assert p_im.max() < 1.0
-        assert p_fig is not None
-        plt.close("all")
-
-
 def test_force_file():
     t = MMT()
     # define a zernike vector with AST45 of -1000 nm and check if the correction equals the forces required to bend
@@ -179,16 +142,6 @@ def test_telescope_invalid_secondary_direct():
         assert True
     else:
         assert False
-
-
-def test_psf_no_unit():
-    """Test psf with wavelength without unit (assumed meters)"""
-    t = MMT()
-    zv = ZernikeVector(Z04=500 * u.nm)
-    p, p_fig = t.psf(zv=zv, wavelength=550e-9, plot=False)
-    p_im = p[0].data
-    assert p_im.max() < 1.0
-    plt.close("all")
 
 
 def test_connect_disconnect():

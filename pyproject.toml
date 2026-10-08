@@ -21,7 +21,6 @@ dependencies = [
     "parse",
     "pytz",
     "coloredlogs",
-    "poppy",
 ]
 
 [project.optional-dependencies]
