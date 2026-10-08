@@ -16,10 +16,12 @@ import matplotlib
 
 import numpy as np
 
+import astropy.units as u
 from astropy.time import Time
 
 from astropy.io import fits
 from mmtwfs.wfs import WFSFactory
+from mmtwfs.zernike import ZernikeVector
 
 from astropy.utils.exceptions import AstropyWarning, AstropyDeprecationWarning
 
@@ -38,15 +40,46 @@ tz = pytz.timezone("America/Phoenix")
 # instantiate all of the WFS systems...
 CSV_HEADER = "time,wfs,file,exptime,airmass,az,el,osst,outt,chamt,tiltx,tilty,"\
     "transx,transy,focus,focerr,cc_x_err,cc_y_err,xcen,ycen,seeing,raw_seeing,"\
-    "vlt_seeing,raw_vlt_seeing,ellipticity,fwhm,wavefront_rms,residual_rms,method\n"
+    "vlt_seeing,raw_vlt_seeing,ellipticity,fwhm,wavefront_rms,residual_rms,method,delivered_iq\n"
+CSV_COLUMNS = CSV_HEADER.strip().split(",")
 
 
-def upgrade_cached_line(line):
+def delivered_iq(wfskey, zv, seeing):
     """
-    .output files written before the method column existed are one field short; they were all full analyses.
+    FWHM in arcsec of the delivered PSF at 500 nm: the optics PSF from the measured wavefront convolved with the
+    seeing as observed. NaN when there's no usable seeing or the PSF can't be calculated.
     """
-    if len(line.strip().split(",")) == len(CSV_HEADER.strip().split(",")) - 1:
-        return line.rstrip("\n") + ",full\n"
+    if not np.isfinite(seeing) or seeing <= 0:
+        return np.nan
+    try:
+        psf, _ = wfs_systems[wfskey].telescope.psf(zv, band="500nm", seeing=seeing * u.arcsec, plot=False)
+    except Exception as e:
+        log.error(f"Problem calculating delivered IQ: {e}")
+        return np.nan
+    return psf.delivered_fwhm.to_value(u.arcsec)
+
+
+def upgrade_cached_line(line, zfile=None):
+    """
+    Bring a line from an .output file written by an older version up to the current CSV_HEADER. Lines from before
+    the method column were all full analyses. Lines from before the delivered_iq column get it from the wavefront
+    saved in zfile.
+    """
+    fields = line.strip().split(",")
+    if len(fields) == len(CSV_COLUMNS) - 2:
+        fields.append("full")
+    if len(fields) == len(CSV_COLUMNS) - 1:
+        iq = np.nan
+        if fields[CSV_COLUMNS.index("method")] == "full" and zfile is not None and Path(zfile).exists():
+            try:
+                zv = ZernikeVector()
+                zv.load(filename=zfile)
+                seeing = float(fields[CSV_COLUMNS.index("raw_vlt_seeing")])
+                iq = delivered_iq(fields[CSV_COLUMNS.index("wfs")], zv, seeing)
+            except Exception as e:
+                log.error(f"Problem calculating delivered IQ from {zfile}: {e}")
+        fields.append(str(iq))
+        return ",".join(fields) + "\n"
     return line
 
 
@@ -244,7 +277,11 @@ def process_image(f, force=False, retry_failed=False):
             lines = fp.readlines()
 
         if len(lines) > 0:
-            return upgrade_cached_line(lines[0])
+            line = upgrade_cached_line(lines[0], zfile=f.parent / (f.stem + ".reanalyze.zernike"))
+            if line != lines[0]:
+                with open(outfile, 'w') as fp:
+                    fp.write(line)
+            return line
 
     if not force and Path.exists(failed):
         if not retry_failed:
@@ -300,12 +337,13 @@ def process_image(f, force=False, retry_failed=False):
             zv = zresults['zernike']
             focerr = wfs_systems[wfskey].calculate_focus(zv)
             cc_x_err, cc_y_err = wfs_systems[wfskey].calculate_cc(zv)
+            iq = delivered_iq(wfskey, zresults['zernike'], results['raw_vlt_seeing'].to_value(u.arcsec))
             line = f"{obstime},{wfskey},{f.name},{exptime},{airmass},{az},{el},{osst},{outt}," \
                 f"{chamt},{tiltx},{tilty},{transx},{transy},{focus},{focerr.value},{cc_x_err.value}," \
                 f"{cc_y_err.value},{results['xcen']},{results['ycen']},{results['seeing'].value}," \
                 f"{results['raw_seeing'].value},{results["vlt_seeing"].value},{results["raw_vlt_seeing"].value},"\
                 f"{results['ellipticity']},{results['fwhm']},{zresults['zernike_rms'].value}," \
-                f"{zresults['residual_rms'].value},full\n"
+                f"{zresults['residual_rms'].value},full,{iq}\n"
             zfile = f.parent / (f.stem + ".reanalyze.zernike")
             zresults['zernike'].save(filename=zfile)
             spotfile = f.parent / (f.stem + ".spots.csv")
@@ -330,7 +368,7 @@ def process_image(f, force=False, retry_failed=False):
                 xcen, ycen = nan, nan
             line = f"{obstime},{wfskey},{f.name},{exptime},{airmass},{az},{el},{osst},{outt}," \
                 f"{chamt},{tiltx},{tilty},{transx},{transy},{focus},{focerr.value},{nan},{nan}," \
-                f"{xcen},{ycen},{nan},{nan},{nan},{nan},{nan},{nan},{nan},{nan},periodicity\n"
+                f"{xcen},{ycen},{nan},{nan},{nan},{nan},{nan},{nan},{nan},{nan},periodicity,{nan}\n"
             results['zernike'].save(filename=f.parent / (f.stem + ".periodicity.zernike"))
             with open(outfile, 'w') as fp:
                 fp.write(line)
