@@ -2,15 +2,12 @@
 # coding=utf-8
 
 import subprocess
-import warnings
 
 import numpy as np
-from skimage.transform import rotate as imrotate
 
 import astropy.units as u
 from astropy.io import ascii
 from astropy.table import Table
-from astropy import visualization
 
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
@@ -24,12 +21,6 @@ from mmtwfs.zernike import ZernikeVector
 
 import logging
 import logging.handlers
-
-# we need to wrap the poppy import in a context manager to trap its whinging about
-# missing pysynphot stuff that we don't use.
-with warnings.catch_warnings():
-    warnings.simplefilter("ignore")
-    import poppy
 
 log = logging.getLogger("Telescope")
 log.setLevel(logging.INFO)
@@ -88,103 +79,6 @@ class Telescope(object):
 
         # ratio of the size of the central obstruction of the secondary to the size of the primary
         self.obscuration = self.secondary.diameter / self.diameter
-
-        # create model of MMTO pupil including secondary and secondary support obstructions
-        self.pupil = self._pupil_model()
-
-        # initialize poppy optical system used for calculating the PSFs
-        self.osys = poppy.OpticalSystem()
-        self.osys.add_pupil(self.pupil)
-        self.osys.add_pupil(
-            poppy.ZernikeWFE(
-                radius=self.radius.to(u.m).value, coefficients=[0.0, 0.0, 0.0, 0.0]
-            )
-        )
-        self.osys.add_detector(pixelscale=self.psf_pixel_scale, fov_arcsec=self.psf_fov)
-
-    def _pupil_model(self):
-        """
-        Use poppy to create a model of the pupil given the configured primary and secondary mirrors.
-        """
-        primary = poppy.CircularAperture(radius=self.radius.to(u.m).value)
-        secondary = poppy.SecondaryObscuration(
-            secondary_radius=self.secondary.diameter.to(u.m).value / 2,
-            n_supports=self.n_supports,
-            support_width=self.support_width.to(u.m).value,
-            support_angle_offset=self.support_offset.to(u.deg).value,
-        )
-        pup_model = poppy.CompoundAnalyticOptic(
-            opticslist=[primary, secondary], name="MMTO"
-        )
-        return pup_model
-
-    def pupil_mask(self, rotation=0.0, size=512):
-        """
-        Use the pupil model to make a pupil mask that can be used as a kernel for finding pupil-like things in images
-        """
-        if size >= 700:
-            msg = "WFS pupil sizes are currently restricted to 700 pixels in diameter or less."
-            raise WFSConfigException(value=msg)
-
-        rotation = u.Quantity(rotation, u.deg)
-
-        # not sure how to get the image data out directly, but the to_fits() method gives me a path...
-        pup_im = imrotate(
-            self.pupil.to_fits(npix=size)[0].data.astype(float), rotation.value
-        )
-        pup_im = pup_im / pup_im.max()
-        return pup_im
-
-    def psf(self, zv=ZernikeVector(), wavelength=550.0 * u.nm, plot=True):
-        """
-        Take a ZernikeVector and calculate resulting PSF at given wavelength.
-        """
-        # poppy wants the wavelength in meters
-        try:
-            w = wavelength.to(u.m).value
-        except AttributeError:
-            w = wavelength  # if no unit provided, assumed meters
-
-        # poppy wants the piston term so whack it in there if modestart isn't already 1
-        if zv.modestart != 1:
-            zv.modestart = 1
-            zv["Z01"] = 0.0
-
-        # poppy wants coeffs in meters
-        zv.units = u.m
-
-        # poppy wants Noll normalized coefficients
-        coeffs = zv.norm_array
-
-        # pop detector out to reuse, pop old wavefront error out to make way for new
-        det = self.osys.planes.pop()
-        fov = det.fov_arcsec.value
-
-        # add new wavefront error and put detector back in place
-        wfe = poppy.ZernikeWFE(radius=self.radius.to(u.m).value, coefficients=coeffs)
-        self.osys.add_pupil(wfe)
-        self.osys.planes.append(det)
-
-        psf = self.osys.calc_psf(w)
-
-        psf_fig = None
-        if plot:
-            psf_fig, ax = plt.subplots()
-            psf_fig.set_label("PSF at {0:0.0f}".format(wavelength))
-            norm = visualization.mpl_normalize.ImageNormalize(
-                stretch=visualization.LinearStretch()
-            )
-            ims = ax.imshow(
-                psf[0].data,
-                extent=[-fov / 2, fov / 2, -fov / 2, fov / 2],
-                cmap=cm.magma,
-                norm=norm,
-            )
-            ax.set_xlabel("arcsec")
-            ax.set_ylabel("arcsec")
-            cb = psf_fig.colorbar(ims)
-            cb.set_label("Fraction of Total Flux")
-        return psf, psf_fig
 
 
 class FLWO12(Telescope):

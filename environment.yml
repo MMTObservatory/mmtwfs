@@ -13,7 +13,6 @@ dependencies:
   - matplotlib
   - parse
   - photutils
-  - poppy
   - pytz
   - scikit-image
   - scipy

@@ -97,10 +97,6 @@ mmtwfs_config = {
             "support_width": 0.12 * u.m,
             # offset of support struts in degrees
             "support_offset": 45.0 * u.deg,
-            # arcsec/pixel
-            "psf_pixel_scale": 0.02,
-            # arcsec
-            "psf_fov": 1.0,
             # influence matrix to map actuator forces to surface displacement
             "surf2act_file": WFS_DATA_DIR / "Surf2ActTEL_32.bin",
             # influence matrix to map actuator forces (N) to surface displacement (nm) at each BCV node
@@ -141,10 +137,6 @@ mmtwfs_config = {
             "support_width": 0.03 * u.m,
             # offset of support struts in degrees
             "support_offset": 0.0 * u.deg,
-            # arcsec/pixel
-            "psf_pixel_scale": 0.02,
-            # arcsec
-            "psf_fov": 1.0,
         },
         "flwo15": {
             # primary diameter
@@ -155,10 +147,6 @@ mmtwfs_config = {
             "support_width": 0.03 * u.m,
             # offset of support struts in degrees
             "support_offset": 45.0 * u.deg,
-            # arcsec/pixel
-            "psf_pixel_scale": 0.02,
-            # arcsec
-            "psf_fov": 1.0,
         },
     },
     "secondary": {
