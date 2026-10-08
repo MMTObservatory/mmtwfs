@@ -17,6 +17,7 @@ from mmtwfs.psf import (
     area_fwhm,
     ee50_diameter,
     broadband_psf,
+    MAX_OPTICS_NPIX,
 )
 
 D = 6.5 * u.m
@@ -89,6 +90,7 @@ def test_unaberrated_fwhm():
     assert u.isclose(r.optics_fwhm, 1.029 * lam_over_d(500 * u.nm), rtol=0.03)
     assert r.delivered is None
     assert r.delivered_fwhm is None
+    assert r.delivered_fov is None
 
 
 def test_flux_normalization():
@@ -108,6 +110,14 @@ def test_large_defocus_fits_in_field():
     r = broadband_psf(ZernikeVector(Z04=3000 * u.nm), diameter=D, obscuration_diameter=0 * u.m)
     assert r.optics.sum() > 0.95
     assert r.optics_fwhm < r.optics_fov / 2
+
+
+def test_huge_defocus_caps_optics_grid():
+    """far out of focus the field outgrows the pixel budget, so the sampling coarsens rather than the field shrinking"""
+    r = broadband_psf(ZernikeVector(Z04=8000 * u.nm), diameter=D, obscuration_diameter=0 * u.m, nwave=3)
+    assert r.optics.shape[0] <= MAX_OPTICS_NPIX + 1
+    assert r.optics_pixel_scale > lam_over_d(450 * u.nm) / 2
+    assert r.optics.sum() > 0.95
 
 
 def test_tilt_ignored_and_input_untouched():
@@ -130,6 +140,9 @@ def test_delivered_follows_seeing(band):
     assert u.isclose(r.seeing_fwhm, expected, rtol=0.01)
     assert u.isclose(r.delivered_fwhm, expected, rtol=0.03)
     assert np.isclose(r.delivered.sum(), r.optics.sum(), rtol=0.02)
+    # the delivered field is sized to hold the seeing halo
+    assert u.isclose(r.delivered_fov, r.delivered.shape[0] * r.delivered_pixel_scale)
+    assert r.delivered_fov > 6 * r.seeing_fwhm
 
 
 def test_delivered_includes_aberrations():
@@ -150,6 +163,13 @@ def test_telescope_psf():
         r, fig = t.psf(ZernikeVector(Z04=300 * u.nm), plot=False)
         assert fig is None
         assert r.optics_fwhm > lam_over_d(450 * u.nm, t.diameter)
+
+
+def test_telescope_psf_default_wavefront():
+    t = MMT()
+    r, fig = t.psf(plot=False)
+    assert fig is None
+    assert r.optics_fwhm < 1.1 * lam_over_d(550 * u.nm, t.diameter)
 
 
 def test_telescope_psf_plot():
