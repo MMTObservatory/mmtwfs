@@ -18,6 +18,7 @@ from mmtwfs.config import recursive_subclasses, merge_config, mmtwfs_config
 from mmtwfs.custom_exceptions import WFSConfigException
 from mmtwfs.secondary import SecondaryFactory
 from mmtwfs.zernike import ZernikeVector
+from mmtwfs.psf import broadband_psf, plot_psf
 
 import logging
 import logging.handlers
@@ -79,6 +80,31 @@ class Telescope(object):
 
         # ratio of the size of the central obstruction of the secondary to the size of the primary
         self.obscuration = self.secondary.diameter / self.diameter
+
+    def psf(self, zv=None, band="500nm", seeing=None, nwave=11, pixel_scale=None, fov=None, plot=True):
+        """
+        Calculate the broadband optics-only PSF for the wavefront in ZernikeVector **zv** and, if **seeing**
+        (FWHM at 500 nm) is given, the delivered PSF including the atmosphere. **band** is a key of
+        `~mmtwfs.psf.PSF_BANDS` or a (center, fractional half-width) tuple. Returns a
+        `~mmtwfs.psf.PSFResult` and, if **plot**, a figure of the PSFs.
+        """
+        if zv is None:
+            zv = ZernikeVector()
+        result = broadband_psf(
+            zv,
+            diameter=self.diameter,
+            obscuration_diameter=self.secondary.diameter,
+            n_supports=self.n_supports,
+            support_width=self.support_width,
+            support_offset=self.support_offset,
+            band=band,
+            seeing=seeing,
+            nwave=nwave,
+            pixel_scale=pixel_scale,
+            fov=fov,
+        )
+        fig = plot_psf(result) if plot else None
+        return result, fig
 
 
 class FLWO12(Telescope):
