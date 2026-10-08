@@ -1225,7 +1225,8 @@ class ZernikeVector(MutableMapping):
         """
         has_errors = fit_report.errorbars
         for k, v in fit_report.params.items():
-            self.__setitem__(k, v)
+            # pass the bare value. astropy can't convert an lmfit Parameter without numpy 2 deprecation warnings.
+            self.__setitem__(k, v.value)
             if has_errors:
                 self.errorbars[k] = u.Quantity(v.stderr, self.units)
 
