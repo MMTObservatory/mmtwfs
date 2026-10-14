@@ -47,6 +47,7 @@ fix_mmtwfs_csvs = "mmtwfs.scripts.fix_csvs:main"
 fix_mmirs_exposure_time = "mmtwfs.scripts.fix_mmirs_exposure_time:main"
 rename_mmirs_files = "mmtwfs.scripts.rename_mmirs_files:main"
 reanalyze = "mmtwfs.scripts.reanalyze:main"
+nightreport = "mmtwfs.scripts.nightreport:main"
 
 [project.urls]
 Repository = "https://github.com/mmtobservatory/mmtwfs.git"

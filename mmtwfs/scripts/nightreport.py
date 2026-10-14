@@ -7,13 +7,17 @@ Nightly WFS report: render a night built by mmtwfs.nightlog.load_night into a se
 JSON data files in the night's directory.
 """
 
+import argparse
 import base64
+import concurrent.futures
 import html
 import io
 import json
 import logging
 import os
+import re
 from collections import Counter
+from pathlib import Path
 
 import matplotlib
 matplotlib.use("Agg")
@@ -21,7 +25,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 from astropy.table import Table, vstack  # noqa: E402
 
-from mmtwfs.nightlog import FIT_TERMS, get_mmt  # noqa: E402
+from mmtwfs.nightlog import FIT_TERMS, get_mmt, load_night, SETTLE_DEFAULTS  # noqa: E402
 from mmtwfs.version import version  # noqa: E402
 
 log = logging.getLogger("NightReport")
@@ -241,3 +245,62 @@ def write_report(night):
     summary = summarize(night)
     _atomic_write(out / "nightreport.html", render_html(night, summary))
     _atomic_write(out / "nightreport_summary.json", json.dumps(summary, indent=2, allow_nan=False))
+
+
+NIGHT_RE = re.compile(r"^\d{8}$")
+
+
+def night_dirs(paths):
+    nights = []
+    for p in map(Path, paths):
+        if NIGHT_RE.match(p.name) and p.is_dir():
+            nights.append(p)
+        elif p.is_dir():
+            nights.extend(d for d in p.iterdir() if d.is_dir() and NIGHT_RE.match(d.name))
+    return sorted(nights)
+
+
+def run_night(path, params):
+    """Build and write one night's report. Returns True on success."""
+    try:
+        write_report(load_night(path, params))
+        log.info(f"Wrote report for {path.name}")
+        return True
+    except Exception:
+        log.exception(f"Report failed for {path}")
+        return False
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Nightly WFS report from wfs.log, frames, and reanalyze outputs")
+    parser.add_argument("dirs", nargs="+", metavar="DIR",
+                        help="night directory (YYYYMMDD) or a parent containing night directories")
+    parser.add_argument("--forcedir", action="store_true", help="rebuild reports that already exist")
+    parser.add_argument("--focus-thresh", type=float, default=SETTLE_DEFAULTS["focus_thresh"],
+                        help="focus settle threshold (um)")
+    parser.add_argument("--coma-thresh", type=float, default=SETTLE_DEFAULTS["coma_thresh"],
+                        help="coma settle threshold (arcsec)")
+    parser.add_argument("--consecutive", type=int, default=SETTLE_DEFAULTS["consecutive"],
+                        help="consecutive frames that must meet a threshold")
+    parser.add_argument("--iq-abs", type=float, default=SETTLE_DEFAULTS["iq_abs"],
+                        help="absolute IQ plateau tolerance (arcsec)")
+    parser.add_argument("--iq-frac", type=float, default=SETTLE_DEFAULTS["iq_frac"],
+                        help="fractional IQ plateau tolerance")
+    parser.add_argument("-n", "--nproc", type=int, default=1, help="nights to process in parallel")
+    args = parser.parse_args(argv)
+
+    params = {**SETTLE_DEFAULTS, "focus_thresh": args.focus_thresh, "coma_thresh": args.coma_thresh,
+              "consecutive": args.consecutive, "iq_abs": args.iq_abs, "iq_frac": args.iq_frac}
+    todo = []
+    for night in night_dirs(args.dirs):
+        if not args.forcedir and (night / "nightreport_summary.json").exists():
+            log.info(f"Already reported {night.name}")
+        else:
+            todo.append(night)
+
+    if args.nproc > 1:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=args.nproc) as pool:
+            results = list(pool.map(run_night, todo, [params] * len(todo)))
+    else:
+        results = [run_night(night, params) for night in todo]
+    return 0 if all(results) else 1
