@@ -129,6 +129,21 @@ def test_clears_gains_and_connection(tmp_path):
     assert list(ev["detail"][4:]) == ["disconnected", "connected", "mmirs"]
 
 
+def test_clear_m2_uses_connection_of_selected_wfs(tmp_path):
+    # wfssrv keeps a connected flag per WFS object; the reset line belongs to the selected WFS
+    text = """\
+2026-10-02 11:00:00,000 - WFSsrv - INFO - F/9 WFS with SBIG Camera is connected.
+2026-10-02 20:00:00,000 - WFSsrv - INFO - Binospec WFS is disconnected.
+2026-10-02 20:01:00,000 - WFSsrv - INFO - Setting newf9
+2026-10-02 20:02:00,000 - Secondary - INFO - Resetting hexapod's WFS offsets to 0...
+2026-10-02 20:03:00,000 - WFSsrv - INFO - Setting binospec
+2026-10-02 20:04:00,000 - Secondary - INFO - Resetting hexapod's WFS offsets to 0...
+"""
+    ev = parse_log(_write(tmp_path, text), "20261003").events
+    clears = ev[ev["kind"] == "clear_m2"]
+    assert list(clears["time"]) == [np.datetime64("2026-10-03T03:02:00.000")]
+
+
 def test_validity_spher_and_errors(tmp_path):
     text = """\
 2026-10-02 19:14:40,000 - WFSsrv - INFO - Analyzing /home/mmtop/wfsdat/mmirs_wfs_0014.fits...

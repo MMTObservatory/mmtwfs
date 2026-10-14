@@ -25,6 +25,7 @@ from astropy.utils.exceptions import AstropyWarning
 
 from mmtwfs.outputs import read_output
 from mmtwfs.telescope import MMT
+from mmtwfs.config import mmtwfs_config
 from mmtwfs.wfs import WFSFactory
 from mmtwfs.zernike import ZernikeVector
 
@@ -71,11 +72,12 @@ PATTERNS = [
     ("m1_gain", re.compile(rf"^Setting M1 gain to (?P<v>{NUM})")),
     ("m2_gain", re.compile(rf"^Setting M2 gain to (?P<v>{NUM})")),
     ("wfs_select", re.compile(r"^Setting (?P<wfs>\w+)$")),
-    ("connect", re.compile(r" (?:is|already) (?P<state>connected|disconnected)\.?$")),
+    ("connect", re.compile(r"^(?P<name>.+?) (?:is|already) (?P<state>connected|disconnected)\.?$")),
     ("validity", re.compile(r"(?P<msg>only focus corrections valid|wavefront fit too poor)")),
 ]
 CELL_REPLIES = {"m1_full": ("full", 1.0), "m1_rejected": ("rejected", 0.0), "m1_unexpected": ("unexpected", 1.0)}
 ERROR_LOGGERS = ("Telescope", "Secondary")
+WFS_NAMES = {key: cfg["name"] for key, cfg in mmtwfs_config["wfs"].items()}  # "Setting <key>" -> "<name> is connected."
 
 
 def _default(dtype):
@@ -140,7 +142,9 @@ def parse_log(logfile, night):
     start, end = night_window(night)
     sends, events, analyses = [], [], []
     n_lines = n_outside = n_unrecognized = 0
-    connected = None
+    connected = {}  # wfssrv keeps a connected flag per WFS object, keyed here by WFS name
+    last_connected = None  # most recent connect state of any WFS, for resets before any WFS is selected
+    selected = None
     last_m1 = None
     prev_kind = None
 
@@ -157,10 +161,14 @@ def parse_log(logfile, night):
             n_lines += 1
             stamp, ms, logger, level, msg = m.groups()
             t = datetime.strptime(stamp, "%Y-%m-%d %H:%M:%S") + timedelta(milliseconds=int(ms)) + LOCAL_UTC_OFFSET
-            if not start <= t < end:
-                n_outside += 1
-                continue
             kind, mm = _match(msg)
+            if kind == "connect":
+                last_connected = connected[mm["name"]] = mm["state"] == "connected"
+            elif kind == "wfs_select":
+                selected = WFS_NAMES.get(mm["wfs"], mm["wfs"])
+            if not start <= t < end:
+                n_outside += 1  # connection state and WFS selection still carry into the window
+                continue
 
             if kind == "analyze":
                 analyses.append(dict(time=t, file=Path(mm["path"]).name, spher=False))
@@ -192,7 +200,8 @@ def parse_log(logfile, night):
             elif kind == "clear_m1":
                 events.append(dict(time=t, kind="clear_m1"))
             elif kind == "clear_m2":
-                if connected is not False:
+                state = connected.get(selected) if selected is not None else last_connected
+                if state is not False:
                     events.append(dict(time=t, kind="clear_m2"))
             elif kind in ("m1_gain", "m2_gain"):
                 if prev_kind != "bad_gain":
@@ -200,7 +209,6 @@ def parse_log(logfile, night):
             elif kind == "wfs_select":
                 events.append(dict(time=t, kind="wfs_select", detail=mm["wfs"]))
             elif kind == "connect":
-                connected = mm["state"] == "connected"
                 events.append(dict(time=t, kind="connect", detail=mm["state"]))
             elif kind == "validity":
                 events.append(dict(time=t, kind="validity", detail=mm["msg"], file=current_file()))
