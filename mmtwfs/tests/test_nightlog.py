@@ -235,6 +235,15 @@ def test_read_frames_mjd_fallback_and_untimed(tmp_path):
     assert counts == {"n_unreadable": 1, "n_untimed": 1}
 
 
+def test_read_frames_skips_malformed_headers(tmp_path):
+    _frame(tmp_path, "mmirs_wfs_0001.fits", MMIRS_HDR)
+    _frame(tmp_path, "mmirs_wfs_0002.fits", {**MMIRS_HDR, "CATRA": ""})
+    _frame(tmp_path, "mmirs_wfs_0003.fits", {**MMIRS_HDR, "DATE-OBS": "2026-10-03Tgarbage"})
+    frames, counts = read_frames(tmp_path)
+    assert list(frames["file"]) == ["mmirs_wfs_0001.fits"]
+    assert counts == {"n_unreadable": 2, "n_untimed": 0}
+
+
 def test_read_frames_empty_dir(tmp_path):
     frames, _ = read_frames(tmp_path)
     assert len(frames) == 0 and "delivered_iq" in frames.colnames

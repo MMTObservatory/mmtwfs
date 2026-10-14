@@ -308,20 +308,21 @@ def read_frames(nightdir):
             continue  # same skip rule as reanalyze; Binospec names have dots in their timestamps
         try:
             hdr = _read_header(f)
-        except Exception as e:  # astropy raises several types for corrupt files
+            t = _frame_time(hdr)
+            if t is not None:
+                coords = dict(catra=_ra_deg(hdr.get("CATRA")), catdec=_dec_deg(hdr.get("CATDEC")),
+                              ra=_ra_deg(hdr.get("RA")), dec=_dec_deg(hdr.get("DEC")))
+        except Exception as e:  # corrupt files and malformed header values raise several types
             log.warning(f"Can't read {f}: {e}")
             counts["n_unreadable"] += 1
             continue
-        t = _frame_time(hdr)
         if t is None:
             counts["n_untimed"] += 1
             continue
         stem = f.name.removesuffix(".fits")
         row = dict(
             time=t, file=f.name, wfs=frame_wfs(f.name, hdr), catid=str(hdr.get("CATID", "") or "").strip(),
-            catra=_ra_deg(hdr.get("CATRA")), catdec=_dec_deg(hdr.get("CATDEC")),
-            ra=_ra_deg(hdr.get("RA")), dec=_dec_deg(hdr.get("DEC")),
-            spher=-1, visit=-1,
+            spher=-1, visit=-1, **coords,
         )
         row.update({k: _float(hdr.get(key)) for k, key in HEADER_FLOATS.items()})
         output = None
