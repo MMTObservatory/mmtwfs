@@ -55,21 +55,24 @@ These are all files in a night directory.
 - **Names:** online frame paths look like `/home/mmtop/wfsdat/<name>.fits`. Frames are matched to the archive by
   basename.
 
-**FITS frames** (`*.fits`). This includes failed frames. Files with no `DATE-OBS`, such as `*.coadded_spot.fits`, are
-skipped. These header keys are used:
+**FITS frames** (`*.fits`). This includes failed frames. Derived products with more than one dot in the name, such as
+`*.coadded_spot.fits`, are skipped. Headers are merged across all HDUs, as reanalyze does, because Binospec keeps
+`DATE-OBS` and `EXPTIME` in HDU 1. These header keys are used:
 
 | Key | Use |
 |---|---|
-| `DATE-OBS` | frame time (UTC) |
+| `DATE-OBS` | frame time (UTC). If it's missing or has no time part, `MJD` is used. A frame with neither is skipped and counted. |
 | `WFSNAME` | which WFS took the frame |
 | `EXPTIME` | exposure time |
 | `CATID`, `CATRA`, `CATDEC` | target identity, used to split the night into visits |
-| `RA`, `DEC`, `RAOFF`, `DECOFF` | fallback target position, and offset events |
+| `RA`, `DEC`, `RAOFF`, `DECOFF` | fallback target position, and offset events. Binospec writes `RA`/`DEC` as sexagesimal strings. |
 | `AZ`, `EL` | slew distance, ΔAZ, ΔEL |
 | `TRANSX`, `TRANSY`, `TRANSZ`, `TILTX`, `TILTY` | hexapod total position, plotted for context |
 
 **Reanalyze outputs**, when present:
-- `<stem>.output`: one CSV line with the columns in `mmtwfs.scripts.reanalyze.CSV_COLUMNS`.
+- `<stem>.output`: one CSV line with the columns in `CSV_COLUMNS`. Those constants move from
+  `mmtwfs/scripts/reanalyze.py` to a new `mmtwfs/outputs.py`, because importing the reanalyze script builds five WFS
+  objects (about 6 s). reanalyze then re-imports them.
 - `<stem>.reanalyze.zernike`.
 - `<stem>.failed`.
 
@@ -104,7 +107,7 @@ nightreport.py: render_html(night), write_csvs(night), write_summary(night)
 ```
 
 `load_night(path, params=SETTLE_DEFAULTS) -> Night` is the one entry point, and Phase 2 will call it from wfssrv.
-Every table is an `astropy.table.Table` with UTC `Time` columns.
+Every table is an `astropy.table.Table`. Times are UTC `numpy.datetime64[ms]` columns, not astropy `Time`, so empty tables keep their schema and matplotlib plots them directly. Durations are float seconds.
 
 ## Data model
 
@@ -112,11 +115,17 @@ Every table is an `astropy.table.Table` with UTC `Time` columns.
 
 - **From the header:** `time`, `file`, `wfs`, `exptime`, `catid`, `catra`, `catdec`, `ra`, `dec`, `raoff`, `decoff`,
   `az`, `el`, `transx`, `transy`, `transz`, `tiltx`, `tilty`.
-- **From reanalyze `.output`, if present:** `focus`, `focerr`, `cc_x_err`, `cc_y_err`, `wavefront_rms`,
-  `residual_rms`, `raw_vlt_seeing`, `delivered_iq`, `method`.
+- **From reanalyze `.output`, if present:**
+  - `focus`: the measured M2 focus correction in µm, at gain 1 and after errorbar shrinkage. It comes from the
+    `.output` **`focerr`** column. The `.output` `focus` column is the hexapod position (`TRANSZ`), which the header
+    already gives.
+  - `cc_x_err`, `cc_y_err`: the measured coma corrections (″).
+  - `wavefront_rms`, `residual_rms`, `raw_vlt_seeing`, `delivered_iq`, `method`.
+- **`focus_unc`:** the focus uncertainty in µm, |Z04 errorbar| / `focus_trans`, from `.reanalyze.zernike`.
 - **`status`:** `ok` (an `.output` exists), `failed` (a `.failed` exists), or `unanalyzed`.
-- **`spher`:** whether this frame was analyzed online with `spher=true`, taken from the `/analyze` request in the log.
-  It is null if the frame wasn't analyzed online.
+- **`spher`:** whether this frame was analyzed online with all spherical terms ignored. It's taken from the
+  `Ignoring all spherical terms` line, as opposed to `Only ignoring the high-order spherical terms`, which immediately
+  follows that frame's `Analyzing <file>` line. It is null if the frame wasn't analyzed online.
 - **`m1_resid_rms`:** the RMS of the M1-actionable Zernike vector (nm).
 - **`m1_force_rms`:** the RMS of the proposed M1 forces (N).
 - **Sources for those two M1 fields:** the frame's `.masked.zernike` if it exists. Otherwise they are recomputed with
@@ -131,12 +140,22 @@ Columns are `time`, `kind`, `file`, `value`, `value2`, `forces_file`, `fmax`, `f
 | kind | Log source | value(s) |
 |---|---|---|
 | `m1` | `Sending forces from <file>.forces` | `forces_file`; `fmax`/`fmin` come from `Maximum force` / `Minimum force` |
-| `m1focus` | `Adjusting M1 focus by N um` | µm sent to the `m1spherical` z channel |
+| `m1focus` | `Secondary - Moving <hex> hexapod N um in Z to correct spherical aberration...` | µm actually sent to the `m1spherical` z channel. This is already scaled by the applied fraction, unlike `Adjusting M1 focus by`. |
 | `focus` | `Sending N um focus to secondary` | µm sent to the `wfs` z channel |
 | `coma` | `Sending X arcsec/Y arcsec CC_X/CC_Y to secondary` | `value` = CC_X in ″, `value2` = CC_Y in ″ |
 
-For `m1`, `applied` is `full` if the next cell reply is `...forces successfully applied in full.`, `partial` or `error`
-for the other replies, and `unknown` if no reply is found.
+For `m1`, `applied` and `frac` follow `MMT.bend_mirror`:
+
+| Cell reply | `applied` | `frac` |
+|---|---|---|
+| `...forces successfully applied in full.` | `full` | 1 |
+| `...applied N% of requested forces.` | `partial` | N/100 |
+| `...forces rejected!` or `...unable to apply forces!` | `rejected` | 0 |
+| `...got unexpected reply...` | `unexpected` | 1, which is what wfssrv itself assumes |
+| no reply found | `unknown` | 1 |
+
+**Only sends that reached the hardware are logged:** focus and coma `Sending ...` lines and `Sending forces from` lines
+appear only when wfssrv is connected.
 
 **Matching `file`:** a send line doesn't name its frame, except for `m1`. So `file` is the most recently analyzed frame
 before the send.
@@ -147,17 +166,20 @@ These are non-send events. Columns are `time`, `kind`, `detail`, `file`. The kin
 
 | kind | Source |
 |---|---|
-| `clear_m1` | `GET /clearm1`, and the corresponding `Clearing forces...` lines |
-| `clear_m2` | `GET /clearm2` |
-| `clear_all` | `GET /clear` |
-| `m1_gain`, `m2_gain` | `Setting M1 gain to N`, `Setting M2 gain to N` |
-| `wfs_select` | `WFSsrv - INFO - Setting <wfs>`, logged when a WFS is selected (including at server start). Gains go back to that WFS's defaults. |
+| `clear_m1` | `Telescope - Clearing forces and spherical aberration focus offsets...`, which is logged only when connected |
+| `clear_m2` | `Secondary - Resetting hexapod's WFS offsets to 0...`. This is logged even when disconnected, so it counts only if the most recent connection line (`<name> is connected.` / `is disconnected.` / `already ...`) isn't a disconnect. |
+| `m1_gain`, `m2_gain` | `Setting M1 gain to N`, `Setting M2 gain to N`. Skipped when the line right before it is `Invalid M1 gain` or `Invalid M2 gain`, because the handler logs "Setting" even for gains it rejected. |
+| `wfs_select` | `WFSsrv - INFO - Setting <wfs>`. It's logged on every WFS page load, so it's informational only. Gains persist per WFS object until wfssrv restarts. |
+| `connect` | `<name> is connected.` / `is disconnected.` / `already connected` / `already disconnected`; `detail` is `connected` or `disconnected` |
 | `error` | `Telescope - ERROR` and `Secondary - ERROR` lines, such as cell `Bad force data` |
 | `validity` | `only focus corrections valid` and `wavefront fit too poor` |
 
 ### `analyses`
 
-One row per online `/analyze` request, with columns `time`, `file`, `spher`, `connect`.
+One row per `Analyzing <file>` line, with columns `time`, `file`, and `spher`.
+
+**Gain in effect:** the most recent `m1_gain` (or `m2_gain`) event before a given time. Before the first one, it's the
+WFS config default. A wfssrv restart resets gains, but it can't be detected reliably, which is a known limitation.
 
 ### `visits`
 
@@ -188,7 +210,7 @@ All times are measured from the visit's first frame (`start`). Each metric can b
 
 **Binospec and MMIRS:**
 - **`focus_settle_thresh` (definition 1):** the first of K consecutive `ok` frames with |`focus`| < F. Nothing has to
-  be sent for this. `focerr` at that frame is reported alongside, so you can tell whether F is below the noise.
+  be sent for this. `focus_unc` at that frame is reported alongside, so you can tell whether F is below the noise.
 - **`focus_settle_conv` (definition 3):** the plateau is the median of |`focus`| over the last half of the visit's `ok`
   frames. Settling is the first of K consecutive `ok` frames with |`focus`| ≤ plateau + F.
 - **`iq_settle_conv`:** the same plateau test on `delivered_iq`. Settling is within max(`iq_abs`, `iq_frac` × plateau)
@@ -223,7 +245,7 @@ These defaults are first guesses. Before merging, they get checked against 20261
 
 Per visit:
 
-**First good frame**, meaning what the slew left behind: `first_focus`, `first_focerr`, `first_cc_x`, `first_cc_y`,
+**First good frame**, meaning what the slew left behind: `first_focus`, `first_focus_unc`, `first_cc_x`, `first_cc_y`,
 `first_wavefront_rms`, `first_iq`, from the first `ok` frame.
 
 **Sends**, summed over two windows: [`start`, settle] using `focus_settle_thresh` (or the visit end if it's null), and
@@ -240,19 +262,25 @@ the whole visit. The `_settle` and `_visit` columns give each window. For each w
 ### M1
 
 The state is a 104-element force vector, starting at zero for each night.
-- **Sends:** each `m1` send adds the vector from its `forces_file`. A send whose `applied` isn't `full` is still added,
-  and also flagged.
-- **Clears:** `clear_m1` and `clear_all` reset the vector to zero.
+- **Sends:** each `m1` send adds `frac` × the vector from its `forces_file`, which is exactly what
+  `MMT.correct_primary` does to its own running total. A send whose `applied` isn't `full` is also flagged.
+- **Clears:** `clear_m1` resets the vector to zero. A wfssrv "clear all" logs both a `clear_m1` and a `clear_m2`.
+  There is no separate `clear_all` kind.
 - **A send with no forces file:** a missing `forces_file` is flagged, and the state doesn't change.
 - **Snapshots:** after every change, a snapshot records:
   - `time`, and the max, min, and RMS of the force (N)
-  - `surf_rms`: cumulative force @ `MMT.load_act2surf()` gives the surface at the BCV nodes (nm). This is its RMS.
-  - **Zernike terms:** a least-squares fit of Z05, Z06, and Z09–Z22 to that surface. The fit uses
-    `nodecoor["bcv_rho"]` and `nodecoor["bcv_phi"]` with the same normalization `bending_forces` uses.
+  - `surf_rms`: cumulative force @ `MMT.load_act2surf()` gives the surface at the BCV nodes (nm). This is its standard
+    deviation, so piston is removed.
+  - **Zernike terms:** a least-squares fit of Z04, Z05, Z06, and Z09–Z22 to that surface. Each basis column is
+    `ZernikeVector(Zj=1).rotate(-90°).total_phase(bcv_rho, bcv_phi)`, using the same rotation and node coordinates as
+    `bending_forces`. So the coefficients come out in the WFS frame.
+  - **Fit accuracy**, checked on 2026-10-14 by feeding `bending_forces(ZernikeVector(Zj=A), gain=1)` back through the
+    fit: Z05 and Z09 come back as −A within 0.5%, and Z11 within 3%. About 25% of the Z11 amplitude appears in Z22,
+    which reflects what the actuators can physically bend.
   - **Units:** the coefficients are reported as wavefront nm (2 × surface), so they can be compared directly with the
     WFS-measured Zernikes. Plot labels say "wavefront".
-- **Actuator mapping:** the index-to-actuator-ID mapping for `.forces` rows is the same one `bend_mirror` and
-  `to_rcell` use.
+- **Actuator mapping:** each `.forces` row is `act_id<TAB>force`, written by `to_rcell`. The IDs are 1–52 and 101–152.
+  Rows are aligned to `MMT.actcoor["act_id"]` by ID, not by position.
 
 **Consistency check:** within one span between clears, the fitted terms should roughly equal
 −Σ(gain × sent `.masked.zernike`) over the terms M1 can hold. The integration test requires every term larger than
@@ -270,7 +298,6 @@ Running sums per channel, each starting at zero:
 Resets:
 - `clear_m1` resets `m1spherical_z`.
 - `clear_m2` resets `wfs_*`.
-- `clear_all` resets everything.
 
 A snapshot is taken after every change. The header `TRANSZ`, `TILTX`, and `TILTY` from the frames are plotted alongside
 as total hexapod position, which includes the elevation and temperature LUTs. There's no reconciliation between them
@@ -281,12 +308,11 @@ and the commanded sums.
 | flag | Detection | Reported detail |
 |---|---|---|
 | `spher_ignored` | spans of consecutive `analyses` with `spher=true` | span start and end; Z11 being ignored, from the frames' Zernikes; force max and RMS of `calculate_primary` with only the Z22 mask, i.e. the forces a full correction including spherical would have needed |
-| `m1_blocked_focus` | `ok` frames with \|`focus`\| > 150 µm (the wfssrv gate) | file, focus |
+| `m1_blocked_focus` | `ok` frames where M2 gain × `focus` > +150 µm. This is wfssrv's gate exactly: signed, and applied to the gain-scaled pending focus. | file, pending focus |
 | `validity` | `validity` events | message |
 | `m1_partial` | `m1` sends whose `applied` isn't `full` | file, reply |
 | `missing_forces` | `m1` send with no `.forces` file in the archive | file |
 | `error` | `error` events | message |
-| `wfs_reselect` | a `wfs_select` after the night's first frame | time and WFS. Gains reset to the defaults here. M1 and M2 accounting continue, because the hardware state persists. |
 
 Flags appear on the visit they fall in, in the events table, and as markers on the timeline.
 
@@ -302,12 +328,12 @@ external resources. Sections:
    - number of visits, clears by kind, and sends by kind
    - medians: `raw_vlt_seeing`, `delivered_iq`, `focus_settle_thresh`, `focus_settle_conv`, `gap`, `t_first_ok`
    - flag counts
-   - warnings: reanalyze outputs missing, `wfs.log` missing, WFS reselected mid-night, log lines outside the night
-     window
+   - warnings: reanalyze outputs missing, `wfs.log` missing, log lines outside the night window, frames skipped as
+     unreadable or without a time
 2. **Night timeline:** panels stacked on a shared UTC axis.
    - **Panels, top to bottom:**
      1. EL, with the visits drawn as labeled bands
-     2. focus with `focerr` errorbars, plus ticks for focus sends
+     2. focus error with `focus_unc` errorbars, plus ticks for focus sends
      3. CC x/y
      4. raw VLT seeing and delivered IQ
      5. cumulative M2 channels
@@ -363,7 +389,8 @@ nightreport [--forcedir] [--focus-thresh 10] [--coma-thresh 2] [--consecutive 2]
 
 **Parser:**
 - Table-driven unit tests with real log lines copied from 2025 and 2026 logs, one per pattern: sends of each kind,
-  clears, gains, validity, cell errors, spherical-ignore `/analyze` requests, and polling noise.
+  clears, gains (including a rejected gain), connection state, validity, cell errors, the spherical-ignore lines,
+  continuation lines, and polling noise.
 - Timezone conversion and the night window, including a log that runs past the night, like 20261005.
 
 **Visits:** synthetic frame tables covering a target change, an offset within a target, and the fallback with no
