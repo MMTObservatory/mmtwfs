@@ -8,8 +8,9 @@ import pytest
 from astropy.io import fits
 
 from mmtwfs.nightlog import (
-    build_visits, EVENT_COLUMNS, first_run, FRAME_COLUMNS, frame_wfs, gain_at, get_wfs, m1_frame_metrics,
-    m1_resid_rms, night_window, parse_log, read_frames, SEND_COLUMNS, SETTLE_DEFAULTS, _table, visit_settle,
+    build_visits, EVENT_COLUMNS, first_run, fit_surface_zernikes, FIT_TERMS, FRAME_COLUMNS, frame_wfs, gain_at,
+    get_mmt, get_wfs, m1_accounting, m1_frame_metrics, m1_resid_rms, m2_accounting, night_window, parse_log,
+    read_forces, read_frames, SEND_COLUMNS, SETTLE_DEFAULTS, _table, visit_settle,
 )
 from mmtwfs.zernike import ZernikeVector
 
@@ -410,3 +411,59 @@ def test_send_windows_and_f9_last_send():
 
     vf["wfs"] = "newf9"
     assert visit_settle(vf, sends, SETTLE_DEFAULTS, forces, _FakeTelescope())["settle_def"] == "last_send"
+
+
+def test_read_forces_aligns_by_actuator_id(tmp_path):
+    p = tmp_path / "x.forces"
+    p.write_text("101\t5.0\n1\t-2.5\n")
+    vec = read_forces(p, [1, 2, 101])
+    assert list(vec) == [-2.5, 0.0, 5.0]
+
+
+@pytest.mark.parametrize("term, amp, rel", [("Z05", 200.0, 0.01), ("Z09", -100.0, 0.01), ("Z11", 150.0, 0.05)])
+def test_surface_fit_recovers_bent_term(term, amp, rel):
+    mmt = get_mmt()
+    f = mmt.bending_forces(zv=ZernikeVector(**{term: amp}), gain=1.0)
+    fit = fit_surface_zernikes(np.asarray(f["force"]) @ mmt.load_act2surf(), mmt)
+    assert set(fit) == set(FIT_TERMS)
+    assert fit[term] == pytest.approx(-amp, rel=rel)
+
+
+def _t(minutes):
+    return np.datetime64("2026-10-03T08:00:00") + np.timedelta64(minutes, "m")
+
+
+def test_m1_accounting_sends_clears_and_missing():
+    mmt = get_mmt()
+    n = mmt.n_act
+    sends = _table([
+        dict(time=_t(1), kind="m1", forces_file="a.forces", frac=1.0),
+        dict(time=_t(2), kind="m1", forces_file="b.forces", frac=0.5),
+        dict(time=_t(3), kind="m1", forces_file="missing.forces", frac=1.0),
+        dict(time=_t(5), kind="m1", forces_file="a.forces", frac=1.0),
+    ], SEND_COLUMNS)
+    events = _table([dict(time=_t(4), kind="clear_m1"), dict(time=_t(4), kind="clear_m2")], EVENT_COLUMNS)
+    forces = {"a.forces": np.full(n, 2.0), "b.forces": np.full(n, 4.0)}
+    m1, maps = m1_accounting(sends, events, forces, mmt)
+    assert len(m1) == 4  # three applied sends and one clear; the missing file adds no snapshot
+    assert m1["frms"][1] == pytest.approx(4.0)  # 2 + 0.5 * 4
+    assert m1["frms"][2] == 0.0
+    assert m1["frms"][3] == pytest.approx(2.0)
+    assert [label for _, label, _ in maps] == ["before clear", "end of night"]
+    assert maps[0][2] == pytest.approx(np.full(n, 4.0))
+
+
+def test_m2_accounting_resets_per_channel():
+    sends = _table([
+        dict(time=_t(1), kind="focus", value=10.0),
+        dict(time=_t(2), kind="coma", value=1.0, value2=-1.0),
+        dict(time=_t(3), kind="m1focus", value=5.0),
+        dict(time=_t(5), kind="focus", value=3.0),
+        dict(time=_t(7), kind="m1focus", value=2.0),
+    ], SEND_COLUMNS)
+    events = _table([dict(time=_t(4), kind="clear_m1"), dict(time=_t(6), kind="clear_m2")], EVENT_COLUMNS)
+    m2 = m2_accounting(sends, events)
+    last = m2[-1]
+    assert (last["wfs_z"], last["wfs_cc_x"], last["m1spherical_z"]) == (0.0, 0.0, 2.0)
+    after_m1_clear = m2[m2["time"] == _t(4)][0]
+    assert (after_m1_clear["wfs_z"], after_m1_clear["m1spherical_z"]) == (10.0, 0.0)

@@ -7,6 +7,7 @@ Build a structured record of one night of WFS operations from the wfssrv log (wf
 the reanalyze outputs. This module only builds data; mmtwfs.scripts.nightreport renders it.
 """
 
+import functools
 import logging
 import re
 import warnings
@@ -23,6 +24,7 @@ from astropy.time import Time
 from astropy.utils.exceptions import AstropyWarning
 
 from mmtwfs.outputs import read_output
+from mmtwfs.telescope import MMT
 from mmtwfs.wfs import WFSFactory
 from mmtwfs.zernike import ZernikeVector
 
@@ -583,3 +585,122 @@ def visit_settle(vframes, vsends, params, forces, telescope):
         for key, value in _send_totals(s, forces, telescope).items():
             out[f"{key}_{window}"] = value
     return out
+
+
+FIT_TERMS = ["Z04", "Z05", "Z06"] + [f"Z{j:02d}" for j in range(9, 23)]
+M1_COLUMNS = [("time", TIME), ("fmax", float), ("fmin", float), ("frms", float), ("surf_rms", float)] + \
+    [(t, float) for t in FIT_TERMS]
+M2_CHANNELS = ["wfs_z", "wfs_cc_x", "wfs_cc_y", "m1spherical_z"]
+M2_COLUMNS = [("time", TIME)] + [(c, float) for c in M2_CHANNELS]
+
+
+@functools.cache
+def get_mmt():
+    return MMT()
+
+
+def read_forces(path, act_ids):
+    """A .forces file (act_id<TAB>force, as written by MMT.to_rcell) as a vector aligned to act_ids."""
+    data = np.loadtxt(path, ndmin=2)
+    lookup = dict(zip(data[:, 0].astype(int), data[:, 1]))
+    return np.array([lookup.get(int(a), 0.0) for a in act_ids])
+
+
+@functools.cache
+def _surface_basis(telescope):
+    rho, phi = telescope.nodecoor["bcv_rho"], telescope.nodecoor["bcv_phi"]
+    cols = []
+    for term in FIT_TERMS:
+        zv = ZernikeVector(**{term: 1.0})
+        zv.rotate(-90 * u.deg)  # same rotation bending_forces applies, so fitted terms are in the WFS frame
+        cols.append(np.asarray(zv.total_phase(rho, phi), dtype=float))
+    return np.array(cols).T
+
+
+def fit_surface_zernikes(surface, telescope):
+    """Least-squares Zernike fit to an M1 surface (nm at the BCV nodes), returned as wavefront nm (2 x surface)."""
+    coeffs, *_ = np.linalg.lstsq(_surface_basis(telescope), surface, rcond=None)
+    return dict(zip(FIT_TERMS, 2.0 * coeffs))
+
+
+def _m1_snapshot(time, state, telescope):
+    surface = state @ telescope.load_act2surf()
+    row = dict(time=time, fmax=float(state.max()), fmin=float(state.min()), frms=_rms(state),
+               surf_rms=float(np.std(surface)))
+    row.update(fit_surface_zernikes(surface, telescope))
+    return row
+
+
+def m1_accounting(sends, events, forces, telescope):
+    """
+    Running total of the forces applied to M1, starting from zero (M1 is raised in a cleared state every night).
+    Each m1 send adds frac x its .forces vector, as MMT.correct_primary does. clear_m1 resets the total.
+    """
+    state = np.zeros(telescope.n_act)
+    rows, maps = [], []
+    steps = [(s["time"], "send", s) for s in sends[sends["kind"] == "m1"]]
+    steps += [(e["time"], "clear", e) for e in events[events["kind"] == "clear_m1"]]
+    steps.sort(key=lambda s: (s[0], s[1] == "send"))
+    for time, what, item in steps:
+        if what == "clear":
+            if np.any(state):
+                maps.append((time, "before clear", state.copy()))
+            state = np.zeros(telescope.n_act)
+        else:
+            vec = forces.get(item["forces_file"])
+            if vec is None:
+                continue  # reported as a missing_forces flag
+            state = state + item["frac"] * vec
+        rows.append(_m1_snapshot(time, state, telescope))
+    if np.any(state):
+        maps.append((steps[-1][0], "end of night", state.copy()))
+    return _table(rows, M1_COLUMNS), maps
+
+
+def m2_accounting(sends, events):
+    """Running sums of the WFS offsets sent to the hexapod, per channel, reset by the matching clear."""
+    state = dict.fromkeys(M2_CHANNELS, 0.0)
+    steps = [(s["time"], s["kind"], s) for s in sends if s["kind"] in ("focus", "coma", "m1focus")]
+    steps += [(e["time"], e["kind"], e) for e in events if e["kind"] in ("clear_m1", "clear_m2")]
+    steps.sort(key=lambda s: s[0])
+    rows = []
+    for time, kind, item in steps:
+        if kind == "focus":
+            state["wfs_z"] += item["value"]
+        elif kind == "coma":
+            state["wfs_cc_x"] += item["value"]
+            state["wfs_cc_y"] += item["value2"]
+        elif kind == "m1focus":
+            state["m1spherical_z"] += item["value"]
+        elif kind == "clear_m1":
+            state["m1spherical_z"] = 0.0
+        elif kind == "clear_m2":
+            state.update(wfs_z=0.0, wfs_cc_x=0.0, wfs_cc_y=0.0)
+        rows.append(dict(time=time, **state))
+    return _table(rows, M2_COLUMNS)
+
+
+def m1_consistency(sends, events, analyses, nightdir, m1):
+    """
+    Compare the fitted cumulative M1 terms at the end of the night with what the sends should have produced since
+    the last clear: -sum(frac x gain x masked Zernike term). Returns {term: (fitted, expected)}.
+    """
+    if len(m1) == 0:
+        return {}
+    clears = events["time"][events["kind"] == "clear_m1"]
+    since = np.max(clears) if len(clears) else np.datetime64("NaT")
+    expected = dict.fromkeys(FIT_TERMS, 0.0)
+    analysed_at = dict(zip(analyses["file"], analyses["time"]))
+    for s in sends[sends["kind"] == "m1"]:
+        if not np.isnat(since) and s["time"] < since:
+            continue
+        masked = nightdir / f"{s['file']}.masked.zernike"
+        if not masked.exists():
+            continue
+        zv = _load_zv(masked)
+        gain = gain_at(events, "m1_gain", analysed_at.get(s["file"], s["time"]), 0.5)
+        for term in FIT_TERMS:
+            if term in zv.coeffs:
+                expected[term] -= s["frac"] * gain * zv[term].value
+    last = m1[-1]
+    return {term: (float(last[term]), expected[term]) for term in FIT_TERMS}
