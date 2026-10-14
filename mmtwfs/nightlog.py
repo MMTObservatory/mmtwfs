@@ -11,7 +11,7 @@ import functools
 import logging
 import re
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -455,6 +455,16 @@ def _load_zv(path):
     return zv
 
 
+def load_masked_zv(path):
+    """
+    An online .masked.zernike in the WFS frame. wfssrv saves the zv_masked that calculate_primary returns, and
+    bending_forces has already rotated that vector -90 deg in place into the BCV frame, so undo the rotation.
+    """
+    zv = _load_zv(path)
+    zv.rotate(90 * u.deg)
+    return zv
+
+
 def focus_uncertainty(zv, wfs):
     """Focus uncertainty (um) implied by the Z04 errorbar, on the same scale as calculate_focus at M2 gain 1."""
     z = zv.copy()
@@ -484,7 +494,7 @@ def m1_frame_metrics(frames, nightdir, events):
                 frames["focus_unc"][i] = focus_uncertainty(zv_full, wfs)
             masked_file = nightdir / f"{row['file']}.masked.zernike"
             if masked_file.exists():
-                zv_masked = _load_zv(masked_file)
+                zv_masked = load_masked_zv(masked_file)
                 forces = wfs.telescope.bending_forces(zv=zv_masked.copy(), gain=gain)
             elif zv_full is not None:
                 mask = ["Z11", "Z22"] if row["spher"] == 1 else ["Z22"]
@@ -697,7 +707,7 @@ def m1_consistency(sends, events, analyses, nightdir, m1):
         masked = nightdir / f"{s['file']}.masked.zernike"
         if not masked.exists():
             continue
-        zv = _load_zv(masked)
+        zv = load_masked_zv(masked)
         gain = gain_at(events, "m1_gain", analysed_at.get(s["file"], s["time"]), 0.5)
         for term in FIT_TERMS:
             if term in zv.coeffs:
@@ -782,3 +792,93 @@ def find_flags(frames, sends, events, analyses, forces, nightdir):
             add(s["time"], "missing_forces", s["file"], f"{s['forces_file']} not in the archive")
     flags.sort(key=lambda f: f["time"])
     return _table(flags, FLAG_COLUMNS)
+
+
+VISIT_COLUMNS = [
+    ("visit", int), ("wfs", str), ("catid", str), ("start", TIME), ("end", TIME), ("n_frames", int), ("n_ok", int),
+    ("n_failed", int), ("el", float), ("d_az", float), ("d_el", float), ("slew_sep", float), ("gap", float),
+    ("t_first_ok", float), ("settle_def", str), ("focus_settle_thresh", float), ("focus_unc_at_settle", float),
+    ("focus_settle_conv", float), ("iq_settle_conv", float), ("coma_settle_thresh", float),
+    ("settle_last_send", float), ("first_focus", float), ("first_focus_unc", float), ("first_cc_x", float),
+    ("first_cc_y", float), ("first_wavefront_rms", float), ("first_iq", float), ("m1_resid_first", float),
+    ("m1_resid_last", float), ("m1_force_first", float),
+] + [(f"{k}_{w}", int if k == "n_sends" else float)
+     for w in ("settle", "visit")
+     for k in ("n_sends", "net_focus", "net_m1focus", "net_cc_x", "net_cc_y", "m1_sent_rms", "m1_sent_surf_rms")] \
+  + [("flags", str)]
+
+
+@dataclass
+class Night:
+    path: Path
+    params: dict
+    frames: Table
+    visits: Table
+    sends: Table
+    events: Table
+    analyses: Table
+    flags: Table
+    m1: Table
+    m2: Table
+    m1_maps: list = field(default_factory=list)
+    m1_check: dict = field(default_factory=dict)
+    counts: dict = field(default_factory=dict)
+    warnings: list = field(default_factory=list)
+
+
+def load_night(path, params=None):
+    """
+    Everything the nightly report needs for the night archived in directory `path` (named YYYYMMDD).
+    """
+    path = Path(path)
+    params = {**SETTLE_DEFAULTS, **(params or {})}
+    notes = []
+
+    frames, counts = read_frames(path)
+    logfile = path / "wfs.log"
+    if logfile.exists():
+        logdata = parse_log(logfile, path.name)
+    else:
+        logdata = empty_logdata()
+        notes.append("wfs.log missing: no sends, clears, or cumulative accounting")
+    counts.update(n_log_lines=logdata.n_lines, n_outside=logdata.n_outside, n_unrecognized=logdata.n_unrecognized)
+    if logdata.n_outside:
+        notes.append(f"{logdata.n_outside} log lines outside the night window were ignored")
+    if counts["n_unreadable"] or counts["n_untimed"]:
+        notes.append(f"skipped {counts['n_unreadable']} unreadable and {counts['n_untimed']} untimed frames")
+    if len(frames) and not np.any(frames["status"] == "ok"):
+        notes.append("no reanalyze outputs: frame measurements and settle times are missing")
+
+    sends, analyses = logdata.sends, logdata.analyses
+    spher_of = dict(zip(analyses["file"], analyses["spher"]))
+    for i, f in enumerate(frames["file"]):
+        if f in spher_of:
+            frames["spher"][i] = int(bool(spher_of[f]))
+
+    visit_rows, offsets = build_visits(frames, params)
+    events = logdata.events
+    if offsets:
+        events = _table(sorted([dict(zip(events.colnames, r)) for r in events] + offsets, key=lambda e: e["time"]),
+                        EVENT_COLUMNS)
+    m1_frame_metrics(frames, path, events)
+
+    mmt = get_mmt()
+    forces = {}
+    for ff in set(sends["forces_file"][sends["kind"] == "m1"]):
+        if (path / ff).exists():
+            forces[ff] = read_forces(path / ff, mmt.actcoor["act_id"])
+
+    visit_of = dict(zip(frames["file"], frames["visit"]))
+    send_visit = np.array([visit_of.get(f, -1) for f in sends["file"]], dtype=int)
+    flags = find_flags(frames, sends, events, analyses, forces, path)
+    for v in visit_rows:
+        vframes = frames[frames["visit"] == v["visit"]]
+        v.update(visit_settle(vframes, sends[send_visit == v["visit"]], params, forces, mmt))
+        v["flags"] = ",".join(sorted(set(flags["kind"][flags["visit"] == v["visit"]])))
+
+    m1, maps = m1_accounting(sends, events, forces, mmt)
+    return Night(
+        path=path, params=params, frames=frames, visits=_table(visit_rows, VISIT_COLUMNS), sends=sends,
+        events=events, analyses=analyses, flags=flags, m1=m1, m2=m2_accounting(sends, events), m1_maps=maps,
+        m1_check=m1_consistency(sends, events, analyses, path, m1), counts=counts, warnings=notes,
+    )

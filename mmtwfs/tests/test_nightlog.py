@@ -1,17 +1,19 @@
 # mmtwfs/tests/test_nightlog.py
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 
+import importlib.resources
 from datetime import datetime
 
 import numpy as np
+import astropy.units as u
 import pytest
 from astropy.io import fits
 
 from mmtwfs.nightlog import (
     ANALYSIS_COLUMNS, build_visits, EVENT_COLUMNS, find_flags, first_run, fit_surface_zernikes, FIT_TERMS,
-    FRAME_COLUMNS, frame_wfs, gain_at, get_mmt, get_wfs, m1_accounting, m1_frame_metrics, m1_resid_rms,
-    m2_accounting, night_window, parse_log, read_forces, read_frames, SEND_COLUMNS, SETTLE_DEFAULTS, _table,
-    visit_settle,
+    FRAME_COLUMNS, frame_wfs, gain_at, get_mmt, get_wfs, load_masked_zv, load_night, m1_accounting,
+    m1_frame_metrics, m1_resid_rms, m2_accounting, night_window, parse_log, read_forces, read_frames, SEND_COLUMNS,
+    SETTLE_DEFAULTS, _table, visit_settle,
 )
 from mmtwfs.zernike import ZernikeVector
 
@@ -304,7 +306,9 @@ def test_m1_resid_rms_ignores_focus():
 def test_m1_frame_metrics_prefers_masked_file(tmp_path):
     frames = _frames([("2026-10-03T08:44:38", "B", 333.0, 30.0, 0.0, 0.0, "ok", 60.0)])
     masked = ZernikeVector(Z05=200.0, Z11=50.0)
-    masked.save(filename=tmp_path / "f000.fits.masked.zernike")
+    saved = masked.copy()
+    saved.rotate(-90 * u.deg)  # wfssrv's .masked.zernike is in the BCV frame
+    saved.save(filename=tmp_path / "f000.fits.masked.zernike")
     ev = _table([dict(time=np.datetime64("2026-10-03T08:00:00"), kind="m1_gain", detail="0.2")], EVENT_COLUMNS)
     m1_frame_metrics(frames, tmp_path, ev)
     expected = get_wfs("mmirs").telescope.bending_forces(zv=masked.copy(), gain=0.2)["force"]
@@ -321,6 +325,16 @@ def test_m1_frame_metrics_recomputes_from_reanalyze(tmp_path):
     # spher=1 masks Z11, so only the Z05 term survives
     assert frames["m1_resid_rms"][0] == pytest.approx(ZernikeVector(Z05=200.0).rms.value, rel=0.01)
     assert get_wfs("mmirs").m1_gain == 0.5  # temporary gain restored
+
+
+def test_load_masked_zv_undoes_bending_rotation(tmp_path):
+    # wfssrv saves the zv_masked returned by calculate_primary, which bending_forces has rotated in place into the
+    # BCV frame; loading it must give back the WFS-frame terms that went in
+    _, _, zv_masked = get_wfs("mmirs").calculate_primary(ZernikeVector(Z05=200.0, Z09=100.0))
+    zv_masked.save(filename=tmp_path / "f000.fits.masked.zernike")
+    zv = load_masked_zv(tmp_path / "f000.fits.masked.zernike")
+    assert zv["Z05"].value == pytest.approx(200.0)
+    assert zv["Z09"].value == pytest.approx(100.0)
 
 
 def test_focus_uncertainty_from_reanalyze_errorbars(tmp_path):
@@ -496,3 +510,74 @@ def test_find_flags(tmp_path):
     assert "2 frames" in spher["detail"] and "Z11 up to 800 nm" in spher["detail"]
     assert flags[flags["kind"] == "missing_forces"][0]["file"] == "f002.fits"
     assert set(flags["visit"]) == {0}
+
+
+FIXTURE = importlib.resources.files("mmtwfs") / "data" / "test_data" / "nightreport" / "20261003"
+
+
+@pytest.fixture(scope="module")
+def night():
+    return load_night(FIXTURE)
+
+
+def test_fixture_visits(night):
+    assert list(night.visits["catid"]) == ["HIP102074", "HIP109911"]
+    second = night.visits[1]
+    assert second["gap"] > 3600  # 06:42 -> 08:44 UTC
+    assert second["n_sends_visit"] > 0
+
+
+def test_fixture_sends_and_clear(night):
+    assert int(np.sum(night.sends["kind"] == "m1")) == 8
+    assert int(np.sum(night.events["kind"] == "clear_m1")) == 1
+    clear_time = night.events["time"][night.events["kind"] == "clear_m1"][0]
+    assert clear_time == np.datetime64("2026-10-03T06:42:10.717")
+    # the M1 state starts at zero and the clear precedes every send in the fixture
+    assert night.m1["frms"][0] == 0.0
+    assert night.m1["frms"][-1] > 0.0
+
+
+def test_fixture_gain_changes_applied(night):
+    gains = night.events[night.events["kind"] == "m1_gain"]
+    assert list(gains["detail"]) == ["0.5", "0.2", "0.5", "0.2"]
+
+
+def test_fixture_m1_consistency(night):
+    checked = 0
+    for term, (fitted, expected) in night.m1_check.items():
+        if abs(expected) > 50:
+            assert fitted == pytest.approx(expected, rel=0.25), term
+            checked += 1
+    assert checked > 0
+
+
+def test_fixture_m2_sums_match_sends(night):
+    focus = night.sends["value"][night.sends["kind"] == "focus"]
+    assert night.m2["wfs_z"][-1] == pytest.approx(np.sum(focus))
+
+
+def test_fixture_frames_have_m1_metrics(night):
+    full = night.frames[(night.frames["status"] == "ok") & (night.frames["method"] == "full")]
+    assert len(full) > 0
+    assert np.all(np.isfinite(full["m1_force_rms"]))
+    assert np.all(np.isfinite(full["focus_unc"]))
+
+
+def test_load_night_without_log_or_outputs(tmp_path):
+    nd = tmp_path / "20261003"
+    nd.mkdir()
+    for f in FIXTURE.iterdir():
+        if f.name.endswith(".fits"):
+            (nd / f.name).write_bytes(f.read_bytes())
+    night = load_night(nd)
+    assert len(night.visits) == 2
+    assert any("wfs.log missing" in w for w in night.warnings)
+    assert any("no reanalyze outputs" in w for w in night.warnings)
+    assert len(night.m1) == 0
+
+
+def test_load_night_empty(tmp_path):
+    nd = tmp_path / "20261003"
+    nd.mkdir()
+    night = load_night(nd)
+    assert len(night.frames) == 0 and len(night.visits) == 0
