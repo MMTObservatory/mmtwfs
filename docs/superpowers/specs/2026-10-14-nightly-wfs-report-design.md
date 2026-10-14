@@ -423,3 +423,41 @@ cell `Bad force data` error) and 20261005 against the log. Choose the default th
 - Trending across many nights. `nightreport_summary.json` is designed so a later aggregator can collect it.
 - Pure slew time, and any reconciliation of commanded M2 offsets against the header hexapod positions.
 - Logs from before 2025.
+
+## Validation (2026-10-14)
+
+**Nights run:** all 36 archived 2026 nights on Samsung_4TB (20260801–20261005), `nightreport --forcedir -n 4`. Exit 0;
+every night got a `nightreport_summary.json`. 15 nights have no frames and get the stub report. 20260822 and 20260823
+(F/9) have no reanalyze outputs and get the warning.
+
+**Errors found and fixed during implementation and validation:**
+- `ZernikeVector.load` filled `errorbars` from the `coeffs` field, so every loaded vector reported its coefficients as
+  its errorbars. Fixed in `zernike.py`. Without the fix, `focus_unc` equals |focus|.
+- The spec's "more than one dot" rule for skipping derived products dropped every Binospec frame
+  (`wfs_ff_cal_img_2025.02.03T034813.592.fits`). Frames are now skipped with reanalyze's rule (`Ref`, `sog`, `coadded`).
+- wfssrv's `.masked.zernike` files are in the BCV frame, not the WFS frame, because `MMT.bending_forces` rotates its input
+  −90° in place and `calculate_primary` returns that same object. `nightlog.load_masked_zv` rotates them back. Before
+  this, the consistency check showed m=2 terms with flipped signs and Z09/Z10 swapped.
+- The consistency check was taken at the end of the night. Nights end with an M1 clear, so it always compared an empty
+  mirror (`m1_check_max_diff` = 0). It now uses the last span between clears that had M1 sends.
+
+**Spot checks:**
+- 20261003: 3 `clear_m1` at 20:26, 23:42, and 05:15 local, matching the log. No `clear_m2`; the log has no WFS-offset
+  resets that night. The 04:00 local `Bad force data` send is `m1_partial`, `unexpected`, frac 1. 8 visits,
+  HD168624 through WNTR24okvms_2_JzJ. Only 58 of 580 frames are `ok`; reanalyze left 522 `.failed` files.
+- 20261005: the log runs to 2026-10-07 21:22; 75 lines outside the window are reported and ignored.
+- 20260816 (Binospec): all frames timed from HDU 1; 6 visits split on `CATID`.
+
+**`m1_check_max_diff`** (nm, the largest |fitted − expected| over FIT_TERMS) on the nights with M1 sends: 9–36. The
+fixture agrees within 1.3% on every term over 50 nm, so the 25% test tolerance stands.
+
+**Thresholds** (visits with at least 2 `ok` frames):
+
+| WFS | visits | reach `focus_settle_thresh` | reach `focus_settle_conv` | median `focus_unc` (µm) | median `first_focus_unc` (µm) |
+|---|---|---|---|---|---|
+| Binospec | 21 | 21 | 21 | 1.8 | 1.9 |
+| MMIRS | 54 | 43 | 48 | 1.8 | 2.1 |
+| F/9 | 9 | 1 | 6 | 3.0 | 4.0 |
+
+Median `focus_unc` is well below 5 µm for every WFS, so F = 10 µm is several σ above the noise. Proposal: keep
+`SETTLE_DEFAULTS` unchanged. Awaiting the user's decision.
