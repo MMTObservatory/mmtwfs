@@ -692,17 +692,25 @@ def m2_accounting(sends, events):
 
 def m1_consistency(sends, events, analyses, nightdir, m1):
     """
-    Compare the fitted cumulative M1 terms at the end of the night with what the sends should have produced since
-    the last clear: -sum(frac x gain x masked Zernike term). Returns {term: (fitted, expected)}.
+    Compare the fitted cumulative M1 terms with what the sends should have produced, -sum(frac x gain x masked
+    Zernike term), over the last span between clears that had M1 sends. Nights normally end with a clear, so the end
+    of the night itself would only compare an empty mirror. Returns {term: (fitted, expected)}.
     """
-    if len(m1) == 0:
+    m1_sends = sends[sends["kind"] == "m1"]
+    if len(m1) == 0 or len(m1_sends) == 0:
         return {}
-    clears = events["time"][events["kind"] == "clear_m1"]
-    since = np.max(clears) if len(clears) else np.datetime64("NaT")
+    clears = np.sort(events["time"][events["kind"] == "clear_m1"])
+    last_send = np.max(m1_sends["time"])
+    before, after = clears[clears <= last_send], clears[clears > last_send]
+    since = before[-1] if len(before) else None
+    until = after[0] if len(after) else None
+    in_span = np.ones(len(m1), dtype=bool) if until is None else m1["time"] < until
+    if not np.any(in_span):
+        return {}
     expected = dict.fromkeys(FIT_TERMS, 0.0)
     analysed_at = dict(zip(analyses["file"], analyses["time"]))
-    for s in sends[sends["kind"] == "m1"]:
-        if not np.isnat(since) and s["time"] < since:
+    for s in m1_sends:
+        if since is not None and s["time"] < since:
             continue
         masked = nightdir / f"{s['file']}.masked.zernike"
         if not masked.exists():
@@ -712,7 +720,7 @@ def m1_consistency(sends, events, analyses, nightdir, m1):
         for term in FIT_TERMS:
             if term in zv.coeffs:
                 expected[term] -= s["frac"] * gain * zv[term].value
-    last = m1[-1]
+    last = m1[in_span][-1]
     return {term: (float(last[term]), expected[term]) for term in FIT_TERMS}
 
 

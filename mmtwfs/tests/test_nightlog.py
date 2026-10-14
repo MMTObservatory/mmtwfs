@@ -10,10 +10,10 @@ import pytest
 from astropy.io import fits
 
 from mmtwfs.nightlog import (
-    ANALYSIS_COLUMNS, build_visits, EVENT_COLUMNS, find_flags, first_run, fit_surface_zernikes, FIT_TERMS,
-    FRAME_COLUMNS, frame_wfs, gain_at, get_mmt, get_wfs, load_masked_zv, load_night, m1_accounting,
-    m1_frame_metrics, m1_resid_rms, m2_accounting, night_window, parse_log, read_forces, read_frames, SEND_COLUMNS,
-    SETTLE_DEFAULTS, _table, visit_settle,
+    ANALYSIS_COLUMNS, build_visits, calculate_primary_at, EVENT_COLUMNS, find_flags, first_run,
+    fit_surface_zernikes, FIT_TERMS, FRAME_COLUMNS, frame_wfs, gain_at, get_mmt, get_wfs, load_masked_zv,
+    load_night, m1_accounting, m1_consistency, m1_frame_metrics, m1_resid_rms, m2_accounting, night_window,
+    parse_log, read_forces, read_frames, SEND_COLUMNS, SETTLE_DEFAULTS, _table, visit_settle,
 )
 from mmtwfs.zernike import ZernikeVector
 
@@ -466,6 +466,24 @@ def test_m1_accounting_sends_clears_and_missing():
     assert m1["frms"][3] == pytest.approx(2.0)
     assert [label for _, label, _ in maps] == ["before clear", "end of night"]
     assert maps[0][2] == pytest.approx(np.full(n, 4.0))
+
+
+def test_m1_consistency_uses_last_span_with_sends(tmp_path):
+    # real nights end with an M1 clear; the check must compare the span before it, not the cleared mirror
+    mmt = get_mmt()
+    wfs = get_wfs("mmirs")
+    forces, _, zv_masked = calculate_primary_at(wfs, ZernikeVector(Z05=300.0, Z06=-200.0), [], 0.5)
+    zv_masked.save(filename=tmp_path / "a.fits.masked.zernike")
+    sends = _table([dict(time=_t(1), kind="m1", file="a.fits", forces_file="a.fits.forces", frac=1.0)],
+                   SEND_COLUMNS)
+    events = _table([dict(time=_t(0), kind="m1_gain", detail="0.5"), dict(time=_t(2), kind="clear_m1")],
+                    EVENT_COLUMNS)
+    analyses = _table([dict(time=_t(1), file="a.fits")], ANALYSIS_COLUMNS)
+    m1, _ = m1_accounting(sends, events, {"a.fits.forces": np.asarray(forces["force"])}, mmt)
+    check = m1_consistency(sends, events, analyses, tmp_path, m1)
+    fitted, expected = check["Z05"]
+    assert expected == pytest.approx(-0.5 * 300.0)
+    assert fitted == pytest.approx(expected, rel=0.05)
 
 
 def test_m2_accounting_resets_per_channel():
