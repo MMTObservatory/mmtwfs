@@ -1215,7 +1215,7 @@ class ZernikeVector(MutableMapping):
 
         self.errorbars = {}
         if "errorbars" in json_data:
-            for k, v in json_data["coeffs"].items():
+            for k, v in json_data["errorbars"].items():
                 self.errorbars[k] = u.Quantity(v, self.units)
 
     def load_lmfit(self, fit_report):

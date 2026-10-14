@@ -22,6 +22,7 @@ from astropy.time import Time
 from astropy.io import fits
 from mmtwfs.wfs import WFSFactory
 from mmtwfs.zernike import ZernikeVector
+from mmtwfs.outputs import CSV_HEADER, CSV_COLUMNS
 
 from astropy.utils.exceptions import AstropyWarning, AstropyDeprecationWarning
 
@@ -38,10 +39,6 @@ tz = pytz.timezone("America/Phoenix")
 
 
 # instantiate all of the WFS systems...
-CSV_HEADER = "time,wfs,file,exptime,airmass,az,el,osst,outt,chamt,tiltx,tilty,"\
-    "transx,transy,focus,focerr,cc_x_err,cc_y_err,xcen,ycen,seeing,raw_seeing,"\
-    "vlt_seeing,raw_vlt_seeing,ellipticity,fwhm,wavefront_rms,residual_rms,method,delivered_iq\n"
-CSV_COLUMNS = CSV_HEADER.strip().split(",")
 
 
 def delivered_iq(wfskey, zv, seeing):
