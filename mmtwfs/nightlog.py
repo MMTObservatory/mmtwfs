@@ -23,6 +23,8 @@ from astropy.time import Time
 from astropy.utils.exceptions import AstropyWarning
 
 from mmtwfs.outputs import read_output
+from mmtwfs.wfs import WFSFactory
+from mmtwfs.zernike import ZernikeVector
 
 log = logging.getLogger("NightLog")
 
@@ -405,3 +407,89 @@ def build_visits(frames, params):
                      d_el=float(first["el"] - prev["el"]),
                      slew_sep=_sep_arcsec(*_target(prev), *_target(first)))
     return visits, offsets
+
+
+_WFS_CACHE = {}
+
+
+def get_wfs(key):
+    """A WFS instance per key, built once. Only used offline; never connected."""
+    if key not in _WFS_CACHE:
+        _WFS_CACHE[key] = WFSFactory(wfs=key)
+    return _WFS_CACHE[key]
+
+
+def gain_at(events, kind, time, default):
+    """The most recent gain of this kind logged at or before time, or the WFS default."""
+    sel = events[(events["kind"] == kind) & (events["time"] <= time)]
+    return float(sel["detail"][-1]) if len(sel) else default
+
+
+def m1_resid_rms(zv):
+    """RMS (nm) of the M1-actionable terms. Z04 holds the spherical-focus offset that M2 takes, so it's excluded."""
+    z = zv.copy()
+    z.ignore("Z04")
+    return float(z.rms.value)
+
+
+def _rms(values):
+    values = np.asarray(values, dtype=float)
+    return float(np.sqrt(np.mean(values ** 2))) if values.size else np.nan
+
+
+def calculate_primary_at(wfs, zv, mask, gain):
+    """wfs.calculate_primary at a specific M1 gain, leaving the WFS's own gain untouched."""
+    orig = wfs.m1_gain
+    wfs.m1_gain = gain
+    try:
+        return wfs.calculate_primary(zv.copy(), mask=mask)
+    finally:
+        wfs.m1_gain = orig
+
+
+def _load_zv(path):
+    zv = ZernikeVector()
+    zv.load(filename=path)
+    return zv
+
+
+def focus_uncertainty(zv, wfs):
+    """Focus uncertainty (um) implied by the Z04 errorbar, on the same scale as calculate_focus at M2 gain 1."""
+    z = zv.copy()
+    z.denormalize()
+    err = z.errorbars.get("Z04")
+    if err is None:
+        return np.nan
+    return abs(float(u.Quantity(err, z.units).value / wfs.secondary.focus_trans.value))
+
+
+def m1_frame_metrics(frames, nightdir, events):
+    """
+    Fill frames["focus_unc"], frames["m1_resid_rms"] and frames["m1_force_rms"] for ok frames. For M1, use the
+    online .masked.zernike, which is exactly what fed the proposed forces. Otherwise recompute from
+    .reanalyze.zernike with the frame's spherical mask and the M1 gain in effect.
+    """
+    for i in range(len(frames)):
+        row = frames[i]
+        if row["status"] != "ok" or row["wfs"] == "unknown":
+            continue
+        try:
+            wfs = get_wfs(row["wfs"])
+            gain = gain_at(events, "m1_gain", row["time"], wfs.m1_gain)
+            zfile = nightdir / f"{row['file'].removesuffix('.fits')}.reanalyze.zernike"
+            zv_full = _load_zv(zfile) if zfile.exists() else None
+            if zv_full is not None:
+                frames["focus_unc"][i] = focus_uncertainty(zv_full, wfs)
+            masked_file = nightdir / f"{row['file']}.masked.zernike"
+            if masked_file.exists():
+                zv_masked = _load_zv(masked_file)
+                forces = wfs.telescope.bending_forces(zv=zv_masked.copy(), gain=gain)
+            elif zv_full is not None:
+                mask = ["Z11", "Z22"] if row["spher"] == 1 else ["Z22"]
+                forces, _, zv_masked = calculate_primary_at(wfs, zv_full, mask, gain)
+            else:
+                continue
+            frames["m1_resid_rms"][i] = m1_resid_rms(zv_masked)
+            frames["m1_force_rms"][i] = _rms(forces["force"])
+        except Exception as e:
+            log.warning(f"M1 metrics failed for {row['file']}: {e}")

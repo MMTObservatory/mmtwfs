@@ -8,8 +8,10 @@ import pytest
 from astropy.io import fits
 
 from mmtwfs.nightlog import (
-    _table, build_visits, FRAME_COLUMNS, frame_wfs, night_window, parse_log, read_frames, SETTLE_DEFAULTS,
+    _table, build_visits, EVENT_COLUMNS, FRAME_COLUMNS, frame_wfs, gain_at, get_wfs, m1_frame_metrics, m1_resid_rms,
+    night_window, parse_log, read_frames, SETTLE_DEFAULTS,
 )
+from mmtwfs.zernike import ZernikeVector
 
 # real lines from /Volumes/Samsung_4TB/wfsdat/20261003/wfs.log (2026-10-03 01:44 MST = 08:44 UTC)
 SEND_BLOCK = """\
@@ -280,3 +282,55 @@ def test_build_visits_empty():
     frames = _table([], FRAME_COLUMNS)
     visits, offsets = build_visits(frames, SETTLE_DEFAULTS)
     assert visits == [] and offsets == []
+
+
+def test_gain_at():
+    ev = _table([dict(time=np.datetime64("2026-10-03T08:00:00"), kind="m1_gain", detail="0.2"),
+                 dict(time=np.datetime64("2026-10-03T09:00:00"), kind="m1_gain", detail="0.5"),
+                 dict(time=np.datetime64("2026-10-03T08:30:00"), kind="m2_gain", detail="1.0")], EVENT_COLUMNS)
+    assert gain_at(ev, "m1_gain", np.datetime64("2026-10-03T07:00:00"), 0.5) == 0.5
+    assert gain_at(ev, "m1_gain", np.datetime64("2026-10-03T08:10:00"), 0.5) == 0.2
+    assert gain_at(ev, "m1_gain", np.datetime64("2026-10-03T09:00:00"), 0.5) == 0.5
+    assert gain_at(ev, "m2_gain", np.datetime64("2026-10-03T08:40:00"), 0.7) == 1.0
+
+
+def test_m1_resid_rms_ignores_focus():
+    assert m1_resid_rms(ZernikeVector(Z04=1000.0, Z05=100.0)) == pytest.approx(
+        ZernikeVector(Z05=100.0).rms.value)
+
+
+def test_m1_frame_metrics_prefers_masked_file(tmp_path):
+    frames = _frames([("2026-10-03T08:44:38", "B", 333.0, 30.0, 0.0, 0.0, "ok", 60.0)])
+    masked = ZernikeVector(Z05=200.0, Z11=50.0)
+    masked.save(filename=tmp_path / "f000.fits.masked.zernike")
+    ev = _table([dict(time=np.datetime64("2026-10-03T08:00:00"), kind="m1_gain", detail="0.2")], EVENT_COLUMNS)
+    m1_frame_metrics(frames, tmp_path, ev)
+    expected = get_wfs("mmirs").telescope.bending_forces(zv=masked.copy(), gain=0.2)["force"]
+    assert frames["m1_force_rms"][0] == pytest.approx(np.sqrt(np.mean(np.asarray(expected) ** 2)))
+    assert frames["m1_resid_rms"][0] == pytest.approx(m1_resid_rms(masked))
+
+
+def test_m1_frame_metrics_recomputes_from_reanalyze(tmp_path):
+    frames = _frames([("2026-10-03T08:44:38", "B", 333.0, 30.0, 0.0, 0.0, "ok", 60.0)])
+    frames["spher"][0] = 1
+    ZernikeVector(Z05=200.0, Z11=300.0).save(filename=tmp_path / "f000.reanalyze.zernike")
+    m1_frame_metrics(frames, tmp_path, _table([], EVENT_COLUMNS))
+    assert frames["m1_force_rms"][0] > 0
+    # spher=1 masks Z11, so only the Z05 term survives
+    assert frames["m1_resid_rms"][0] == pytest.approx(ZernikeVector(Z05=200.0).rms.value, rel=0.01)
+    assert get_wfs("mmirs").m1_gain == 0.5  # temporary gain restored
+
+
+def test_focus_uncertainty_from_reanalyze_errorbars(tmp_path):
+    frames = _frames([("2026-10-03T08:44:38", "B", 333.0, 30.0, 0.0, 0.0, "ok", 60.0)])
+    ZernikeVector(Z04=-1452.0, Z05=100.0, errorbars={"Z04": 114.4}).save(
+        filename=tmp_path / "f000.reanalyze.zernike")
+    m1_frame_metrics(frames, tmp_path, _table([], EVENT_COLUMNS))
+    focus_trans = get_wfs("mmirs").secondary.focus_trans.value  # 40.8 nm/um
+    assert frames["focus_unc"][0] == pytest.approx(114.4 / focus_trans, rel=1e-3)
+
+
+def test_m1_frame_metrics_missing_files_leave_nan(tmp_path):
+    frames = _frames([("2026-10-03T08:44:38", "B", 333.0, 30.0, 0.0, 0.0, "ok", 60.0)])
+    m1_frame_metrics(frames, tmp_path, _table([], EVENT_COLUMNS))
+    assert np.isnan(frames["m1_force_rms"][0])
