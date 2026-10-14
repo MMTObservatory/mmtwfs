@@ -8,9 +8,10 @@ import pytest
 from astropy.io import fits
 
 from mmtwfs.nightlog import (
-    build_visits, EVENT_COLUMNS, first_run, fit_surface_zernikes, FIT_TERMS, FRAME_COLUMNS, frame_wfs, gain_at,
-    get_mmt, get_wfs, m1_accounting, m1_frame_metrics, m1_resid_rms, m2_accounting, night_window, parse_log,
-    read_forces, read_frames, SEND_COLUMNS, SETTLE_DEFAULTS, _table, visit_settle,
+    ANALYSIS_COLUMNS, build_visits, EVENT_COLUMNS, find_flags, first_run, fit_surface_zernikes, FIT_TERMS,
+    FRAME_COLUMNS, frame_wfs, gain_at, get_mmt, get_wfs, m1_accounting, m1_frame_metrics, m1_resid_rms,
+    m2_accounting, night_window, parse_log, read_forces, read_frames, SEND_COLUMNS, SETTLE_DEFAULTS, _table,
+    visit_settle,
 )
 from mmtwfs.zernike import ZernikeVector
 
@@ -467,3 +468,31 @@ def test_m2_accounting_resets_per_channel():
     assert (last["wfs_z"], last["wfs_cc_x"], last["m1spherical_z"]) == (0.0, 0.0, 2.0)
     after_m1_clear = m2[m2["time"] == _t(4)][0]
     assert (after_m1_clear["wfs_z"], after_m1_clear["m1spherical_z"]) == (10.0, 0.0)
+
+
+def test_find_flags(tmp_path):
+    frames = _visit_frames([200.0, 5.0, 4.0])
+    analyses = _table([
+        dict(time=frames["time"][0], file="f000.fits", spher=True),
+        dict(time=frames["time"][1], file="f001.fits", spher=True),
+        dict(time=frames["time"][2], file="f002.fits", spher=False),
+    ], ANALYSIS_COLUMNS)
+    ZernikeVector(Z05=100.0, Z11=800.0).save(filename=tmp_path / "f000.reanalyze.zernike")
+    sends = _table([
+        dict(time=frames["time"][1], kind="m1", file="f001.fits", forces_file="f001.fits.forces",
+             applied="partial", frac=0.4),
+        dict(time=frames["time"][2], kind="m1", file="f002.fits", forces_file="f002.fits.forces",
+             applied="full", frac=1.0),
+    ], SEND_COLUMNS)
+    events = _table([dict(time=frames["time"][2], kind="error", detail="hexapod socket timed out"),
+                     dict(time=frames["time"][0], kind="validity", detail="only focus corrections valid",
+                          file="f000.fits")], EVENT_COLUMNS)
+    forces = {"f001.fits.forces": np.zeros(104)}
+    flags = find_flags(frames, sends, events, analyses, forces, tmp_path)
+    kinds = sorted(flags["kind"])
+    assert kinds == sorted(["spher_ignored", "m1_blocked_focus", "validity", "m1_partial", "missing_forces",
+                            "error"])
+    spher = flags[flags["kind"] == "spher_ignored"][0]
+    assert "2 frames" in spher["detail"] and "Z11 up to 800 nm" in spher["detail"]
+    assert flags[flags["kind"] == "missing_forces"][0]["file"] == "f002.fits"
+    assert set(flags["visit"]) == {0}

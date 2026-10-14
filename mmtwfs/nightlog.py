@@ -704,3 +704,81 @@ def m1_consistency(sends, events, analyses, nightdir, m1):
                 expected[term] -= s["frac"] * gain * zv[term].value
     last = m1[-1]
     return {term: (float(last[term]), expected[term]) for term in FIT_TERMS}
+
+
+FLAG_COLUMNS = [("time", TIME), ("kind", str), ("file", str), ("detail", str), ("visit", int)]
+M1_FOCUS_GATE = 150.0  # um; wfssrv blocks M1 corrections when pending focus exceeds this (signed comparison)
+
+
+def _spher_detail(files, frames, events, nightdir):
+    """How much spherical was being ignored, and the forces a full correction would have needed."""
+    z11 = fmax = frms = 0.0
+    wfs_of = dict(zip(frames["file"], frames["wfs"]))
+    time_of = dict(zip(frames["file"], frames["time"]))
+    for f in files:
+        stem = f.removesuffix(".fits")
+        zfile = nightdir / f"{stem}.reanalyze.zernike"
+        if not zfile.exists():
+            zfile = nightdir / f"{f}.zernike"
+        if not zfile.exists() or wfs_of.get(f, "unknown") == "unknown":
+            continue
+        try:
+            zv = _load_zv(zfile)
+            wfs = get_wfs(wfs_of[f])
+            gain = gain_at(events, "m1_gain", time_of[f], wfs.m1_gain)
+            t, _, _ = calculate_primary_at(wfs, zv, ["Z22"], gain)
+        except Exception as e:
+            log.warning(f"Couldn't size ignored spherical for {f}: {e}")
+            continue
+        z11 = max(z11, abs(float(zv["Z11"].value)) if "Z11" in zv.coeffs else 0.0)
+        fmax = max(fmax, float(np.max(np.abs(t["force"]))))
+        frms = max(frms, _rms(t["force"]))
+    return z11, fmax, frms
+
+
+def find_flags(frames, sends, events, analyses, forces, nightdir):
+    """Events worth a reviewer's attention, each tied to the visit it happened in."""
+    visit_of = dict(zip(frames["file"], frames["visit"]))
+    flags = []
+
+    def add(time, kind, file, detail):
+        if file in visit_of:
+            visit = int(visit_of[file])
+        else:  # no frame named: use the visit of the latest frame at or before the event
+            idx = int(np.searchsorted(frames["time"], time, side="right")) - 1
+            visit = int(frames["visit"][idx]) if idx >= 0 else -1
+        flags.append(dict(time=time, kind=kind, file=file, detail=detail, visit=visit))
+
+    spher = np.asarray(analyses["spher"], dtype=bool)
+    i = 0
+    while i < len(analyses):
+        if not spher[i]:
+            i += 1
+            continue
+        j = i
+        while j + 1 < len(analyses) and spher[j + 1]:
+            j += 1
+        files = list(analyses["file"][i:j + 1])
+        z11, fmax, frms = _spher_detail(files, frames, events, nightdir)
+        add(analyses["time"][i], "spher_ignored", files[0],
+            f"{analyses['time'][i]} to {analyses['time'][j]} UTC, {len(files)} frames, Z11 up to {z11:.0f} nm; "
+            f"full correction would need max |F| {fmax:.0f} N, RMS {frms:.0f} N")
+        i = j + 1
+
+    for row in frames[frames["status"] == "ok"]:
+        # mirror wfssrv: pending focus (m2_gain x measured correction) above +150 um blocks M1. The gate is signed.
+        default = get_wfs(row["wfs"]).m2_gain if row["wfs"] != "unknown" else 1.0
+        pending = gain_at(events, "m2_gain", row["time"], default) * row["focus"]
+        if pending > M1_FOCUS_GATE:
+            add(row["time"], "m1_blocked_focus", row["file"], f"pending focus {pending:.0f} um")
+    for e in events[events["kind"] == "validity"]:
+        add(e["time"], "validity", e["file"], e["detail"])
+    for e in events[events["kind"] == "error"]:
+        add(e["time"], "error", e["file"], e["detail"])
+    for s in sends[sends["kind"] == "m1"]:
+        if s["applied"] != "full":
+            add(s["time"], "m1_partial", s["file"], f"{s['applied']} ({s['frac']:.0%} assumed applied)")
+        if s["forces_file"] not in forces:
+            add(s["time"], "missing_forces", s["file"], f"{s['forces_file']} not in the archive")
+    flags.sort(key=lambda f: f["time"])
+    return _table(flags, FLAG_COLUMNS)
