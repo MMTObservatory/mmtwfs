@@ -9,12 +9,20 @@ the reanalyze outputs. This module only builds data; mmtwfs.scripts.nightreport 
 
 import logging
 import re
+import warnings
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import numpy as np
+import astropy.units as u
+from astropy.coordinates import Angle
+from astropy.io import fits
 from astropy.table import Table
+from astropy.time import Time
+from astropy.utils.exceptions import AstropyWarning
+
+from mmtwfs.outputs import read_output
 
 log = logging.getLogger("NightLog")
 
@@ -206,3 +214,127 @@ def parse_log(logfile, night):
         n_outside=n_outside,
         n_unrecognized=n_unrecognized,
     )
+
+
+# frame column <- .output column. The .output "focus" column is the hexapod position (TRANSZ); "focerr" is the
+# measured focus correction (um, at M2 gain 1), which is what settling is judged on.
+FROM_OUTPUT = {"focus": "focerr", "cc_x_err": "cc_x_err", "cc_y_err": "cc_y_err", "wavefront_rms": "wavefront_rms",
+               "residual_rms": "residual_rms", "raw_vlt_seeing": "raw_vlt_seeing", "delivered_iq": "delivered_iq"}
+HEADER_FLOATS = {"exptime": "EXPTIME", "raoff": "RAOFF", "decoff": "DECOFF", "az": "AZ", "el": "EL",
+                 "transx": "TRANSX", "transy": "TRANSY", "transz": "TRANSZ", "tiltx": "TILTX", "tilty": "TILTY"}
+FRAME_COLUMNS = (
+    [("time", TIME), ("file", str), ("wfs", str), ("catid", str), ("catra", float), ("catdec", float),
+     ("ra", float), ("dec", float)]
+    + [(k, float) for k in HEADER_FLOATS]
+    + [("status", str)]
+    + [(k, float) for k in FROM_OUTPUT]
+    + [("method", str), ("spher", np.int8), ("visit", int), ("focus_unc", float), ("m1_resid_rms", float),
+       ("m1_force_rms", float)]
+)
+
+
+def _float(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return np.nan
+
+
+def _ra_deg(value):
+    """RA from a header: float hours or a sexagesimal string, returned in degrees."""
+    if isinstance(value, str):
+        return Angle(value, unit=u.hourangle).degree
+    return _float(value) * 15.0
+
+
+def _dec_deg(value):
+    if isinstance(value, str):
+        return Angle(value, unit=u.deg).degree
+    return _float(value)
+
+
+def frame_wfs(name, hdr):
+    """
+    Which WFS took a frame, using the same clues as mmtwfs.scripts.reanalyze.check_image. The old Apogee F/9 maps to
+    the "f9" WFS key.
+    """
+    if "mmirs" in name or "mmirs" in str(hdr.get("WFSNAME", "")):
+        return "mmirs"
+    if "wfs_ff_cal_img" in name or "bino" in name:
+        return "binospec"
+    if "f9wfs" in name or "F/9 WFS" in str(hdr.get("OBSERVER", "")) or "F/9 WFS" in str(hdr.get("CAMERA", "")):
+        return "newf9"
+    if "Apogee" in str(hdr.get("INSTRUME", "")) or "Apogee" in str(hdr.get("DETECTOR", "")):
+        return "f9"
+    return "unknown"
+
+
+def _read_header(path):
+    """Merge the headers of every HDU, as reanalyze does. Binospec keeps DATE-OBS in HDU 1."""
+    hdr = {}
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", AstropyWarning)
+        with fits.open(path, ignore_missing_simple=True) as hdulist:
+            for h in hdulist:
+                hdr.update(h.header)
+    return hdr
+
+
+def _frame_time(hdr):
+    dateobs = str(hdr.get("DATE-OBS", ""))
+    if "T" in dateobs:
+        return datetime.fromisoformat(dateobs.rstrip("Z"))
+    if "MJD" in hdr:
+        return Time(float(hdr["MJD"]), format="mjd", scale="utc").datetime
+    return None
+
+
+# reanalyze skips these: reference images, the SOG camera, and derived products such as *.coadded_spot.fits
+DERIVED_MARKERS = ("Ref", "sog", "coadded")
+
+
+def read_frames(nightdir):
+    """
+    One row per WFS frame in a night directory, failed frames included, joined with its reanalyze output.
+    """
+    rows = []
+    counts = {"n_unreadable": 0, "n_untimed": 0}
+    for f in sorted(nightdir.glob("*.fits")):
+        if any(s in f.name for s in DERIVED_MARKERS):
+            continue  # same skip rule as reanalyze; Binospec names have dots in their timestamps
+        try:
+            hdr = _read_header(f)
+        except Exception as e:  # astropy raises several types for corrupt files
+            log.warning(f"Can't read {f}: {e}")
+            counts["n_unreadable"] += 1
+            continue
+        t = _frame_time(hdr)
+        if t is None:
+            counts["n_untimed"] += 1
+            continue
+        stem = f.name.removesuffix(".fits")
+        row = dict(
+            time=t, file=f.name, wfs=frame_wfs(f.name, hdr), catid=str(hdr.get("CATID", "") or "").strip(),
+            catra=_ra_deg(hdr.get("CATRA")), catdec=_dec_deg(hdr.get("CATDEC")),
+            ra=_ra_deg(hdr.get("RA")), dec=_dec_deg(hdr.get("DEC")),
+            spher=-1, visit=-1,
+        )
+        row.update({k: _float(hdr.get(key)) for k, key in HEADER_FLOATS.items()})
+        output = None
+        outfile = nightdir / f"{stem}.output"
+        if outfile.exists():
+            try:
+                output = read_output(outfile)
+            except ValueError as e:
+                log.warning(str(e))
+        if output is not None:
+            row["status"] = "ok"
+            row.update({k: output[col] for k, col in FROM_OUTPUT.items()})
+            row["method"] = output["method"]
+        elif (nightdir / f"{stem}.failed").exists():
+            row["status"] = "failed"
+        else:
+            row["status"] = "unanalyzed"
+        rows.append(row)
+    rows.sort(key=lambda r: r["time"])
+    return _table(rows, FRAME_COLUMNS), counts

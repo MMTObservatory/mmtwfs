@@ -5,8 +5,9 @@ from datetime import datetime
 
 import numpy as np
 import pytest
+from astropy.io import fits
 
-from mmtwfs.nightlog import night_window, parse_log
+from mmtwfs.nightlog import frame_wfs, night_window, parse_log, read_frames
 
 # real lines from /Volumes/Samsung_4TB/wfsdat/20261003/wfs.log (2026-10-03 01:44 MST = 08:44 UTC)
 SEND_BLOCK = """\
@@ -155,3 +156,77 @@ def test_empty_log_keeps_schema(tmp_path):
     assert len(d.sends) == 0 and "frac" in d.sends.colnames
     assert len(d.events) == 0 and "detail" in d.events.colnames
     assert d.sends["time"].dtype == np.dtype("datetime64[ms]")
+
+
+OUTPUT_LINE = ("2026-10-03T08:44:38,mmirs,{name},12.0,1.2,188.6,56.7,12,11.5,12.3,244.4,167.9,-559.2,2188.5,"
+               "9052.3,{focus},5.5,0.4,256.9,232.5,4.9,5.4,2.4,0.9,0.08,16.3,1387.4,2220.4,full,1.05")
+
+
+def _frame(d, name, hdr0, hdr1=None, data=True):
+    h0 = fits.Header(list(hdr0.items()))
+    hdus = [fits.PrimaryHDU(np.zeros((2, 2), dtype=np.int16) if data else None, header=h0)]
+    if hdr1 is not None:
+        hdus.append(fits.ImageHDU(np.zeros((2, 2), dtype=np.int16), header=fits.Header(list(hdr1.items()))))
+    fits.HDUList(hdus).writeto(d / name)
+
+
+MMIRS_HDR = {"DATE-OBS": "2026-10-03T08:44:38", "WFSNAME": "mmirs2", "EXPTIME": 12.0, "CATID": "HIP109911",
+             "CATRA": 22.26, "CATDEC": 30.1, "RA": 22.26, "DEC": 30.09, "RAOFF": 1.9, "DECOFF": -34.6,
+             "AZ": 80.0, "EL": 60.0, "TRANSX": -600.0, "TRANSY": 2400.0, "TRANSZ": 9000.0, "TILTX": 260.0,
+             "TILTY": 160.0}
+
+
+def test_frame_wfs():
+    assert frame_wfs("mmirs_wfs_0001.fits", {}) == "mmirs"
+    assert frame_wfs("wfs_ff_cal_img_2025.02.03T034813.592.fits", {}) == "binospec"
+    assert frame_wfs("f9wfs_20240426-212258.fits", {}) == "newf9"
+    assert frame_wfs("x.fits", {"INSTRUME": "Apogee"}) == "f9"
+    assert frame_wfs("x.fits", {}) == "unknown"
+
+
+def test_read_frames_status_and_columns(tmp_path):
+    _frame(tmp_path, "mmirs_wfs_0002.fits", MMIRS_HDR)
+    _frame(tmp_path, "mmirs_wfs_0001.fits", {**MMIRS_HDR, "DATE-OBS": "2026-10-03T08:44:00"})
+    _frame(tmp_path, "mmirs_wfs_0003.fits", {**MMIRS_HDR, "DATE-OBS": "2026-10-03T08:45:00"})
+    _frame(tmp_path, "mmirs_wfs_0001.coadded_spot.fits", {})
+    (tmp_path / "mmirs_wfs_0002.output").write_text(OUTPUT_LINE.format(name="mmirs_wfs_0002.fits", focus=12.5))
+    (tmp_path / "mmirs_wfs_0001.failed").write_text("")
+    frames, counts = read_frames(tmp_path)
+    assert list(frames["file"]) == ["mmirs_wfs_0001.fits", "mmirs_wfs_0002.fits", "mmirs_wfs_0003.fits"]
+    assert list(frames["status"]) == ["failed", "ok", "unanalyzed"]
+    assert frames["focus"][1] == pytest.approx(12.5)  # from the .output focerr column, not the hexapod position
+    assert frames["cc_x_err"][1] == pytest.approx(5.5)
+    assert np.isnan(frames["focus"][0])
+    assert frames["catra"][1] == pytest.approx(22.26 * 15)
+    assert frames["catid"][1] == "HIP109911"
+    assert frames["wfs"][1] == "mmirs"
+    assert list(frames["spher"]) == [-1, -1, -1]
+    assert counts == {"n_unreadable": 0, "n_untimed": 0}
+
+
+def test_read_frames_binospec_headers(tmp_path):
+    # Binospec keeps DATE-OBS/EXPTIME in HDU 1 and writes sexagesimal RA/DEC
+    hdr0 = {"MJD": 60709.15877, "CATID": "SN2025kg", "CATRA": 3.70788333, "CATDEC": -22.50586944,
+            "RA": "03:42:30.083", "DEC": "-22:29:59.850", "RAOFF": 331.3, "DECOFF": -63.6, "AZ": 206.3, "EL": 31.3}
+    _frame(tmp_path, "wfs_ff_cal_img_2025.02.03T034813.592.fits", hdr0,
+           hdr1={"DATE-OBS": "2025-02-03T03:48:13.592", "EXPTIME": 20.0})
+    frames, _ = read_frames(tmp_path)
+    assert frames["time"][0] == np.datetime64("2025-02-03T03:48:13.592")
+    assert frames["exptime"][0] == 20.0
+    assert frames["wfs"][0] == "binospec"
+    assert frames["ra"][0] == pytest.approx((3 + 42 / 60 + 30.083 / 3600) * 15)
+    assert frames["dec"][0] == pytest.approx(-(22 + 29 / 60 + 59.85 / 3600))
+
+
+def test_read_frames_mjd_fallback_and_untimed(tmp_path):
+    _frame(tmp_path, "mmirs_wfs_0001.fits", {"MJD": 61316.26998, "CATID": "X"})
+    _frame(tmp_path, "mmirs_wfs_0002.fits", {"CATID": "X"})
+    (tmp_path / "mmirs_wfs_0003.fits").write_text("not a fits file")
+    frames, counts = read_frames(tmp_path)
+    assert len(frames) == 1
+    assert counts == {"n_unreadable": 1, "n_untimed": 1}
+
+
+def test_read_frames_empty_dir(tmp_path):
+    frames, _ = read_frames(tmp_path)
+    assert len(frames) == 0 and "delivered_iq" in frames.colnames
