@@ -493,3 +493,93 @@ def m1_frame_metrics(frames, nightdir, events):
             frames["m1_force_rms"][i] = _rms(forces["force"])
         except Exception as e:
             log.warning(f"M1 metrics failed for {row['file']}: {e}")
+
+
+F9_KEYS = ("f9", "newf9")
+
+
+def first_run(mask, k):
+    """Index of the element that starts the first run of k consecutive True values, or None."""
+    run = 0
+    for i, m in enumerate(mask):
+        run = run + 1 if m else 0
+        if run == k:
+            return i - k + 1
+    return None
+
+
+def _settle_time(times, mask, k, t0):
+    i = first_run(mask, k)
+    return (np.nan, None) if i is None else (_seconds(times[i] - t0), i)
+
+
+def _send_totals(sends, forces, telescope):
+    vec = None
+    for s in sends[sends["kind"] == "m1"]:
+        f = forces.get(s["forces_file"])
+        if f is not None:
+            vec = s["frac"] * f if vec is None else vec + s["frac"] * f
+    totals = dict(
+        n_sends=len(sends),
+        net_focus=float(np.sum(sends["value"][sends["kind"] == "focus"])),
+        net_m1focus=float(np.sum(sends["value"][sends["kind"] == "m1focus"])),
+        net_cc_x=float(np.sum(sends["value"][sends["kind"] == "coma"])),
+        net_cc_y=float(np.sum(sends["value2"][sends["kind"] == "coma"])),
+        m1_sent_rms=np.nan, m1_sent_surf_rms=np.nan,
+    )
+    if vec is not None:
+        totals["m1_sent_rms"] = _rms(vec)
+        totals["m1_sent_surf_rms"] = float(np.std(vec @ telescope.load_act2surf()))
+    return totals
+
+
+def visit_settle(vframes, vsends, params, forces, telescope):
+    """
+    Settle times, the errors the slew left behind, and the corrections sent for one visit. Times are seconds from
+    the visit's first frame.
+    """
+    k, F, C = params["consecutive"], params["focus_thresh"], params["coma_thresh"]
+    t0 = vframes["time"][0]
+    ok = vframes[vframes["status"] == "ok"]
+    out = dict(settle_def="last_send" if vframes["wfs"][0] in F9_KEYS else "thresh/conv")
+
+    afocus = np.abs(np.asarray(ok["focus"], dtype=float))
+    out["focus_settle_thresh"], i_settle = _settle_time(ok["time"], afocus < F, k, t0)
+    out["focus_unc_at_settle"] = float(ok["focus_unc"][i_settle]) if i_settle is not None else np.nan
+    n = len(ok)
+    if n >= k:
+        plateau = np.nanmedian(afocus[n // 2:])
+        out["focus_settle_conv"], _ = _settle_time(ok["time"], afocus <= plateau + F, k, t0)
+        iq = np.asarray(ok["delivered_iq"], dtype=float)
+        iq_plateau = np.nanmedian(iq[n // 2:])
+        tol = max(params["iq_abs"], params["iq_frac"] * iq_plateau)
+        out["iq_settle_conv"], _ = _settle_time(ok["time"], iq <= iq_plateau + tol, k, t0)
+    else:
+        out["focus_settle_conv"] = out["iq_settle_conv"] = np.nan
+    coma_ok = (np.abs(ok["cc_x_err"]) < C) & (np.abs(ok["cc_y_err"]) < C)
+    out["coma_settle_thresh"], _ = _settle_time(ok["time"], coma_ok, k, t0)
+
+    first = ok[0] if n else None
+    for key, col in (("first_focus", "focus"), ("first_focus_unc", "focus_unc"), ("first_cc_x", "cc_x_err"),
+                     ("first_cc_y", "cc_y_err"), ("first_wavefront_rms", "wavefront_rms"),
+                     ("first_iq", "delivered_iq"), ("m1_resid_first", "m1_resid_rms"),
+                     ("m1_force_first", "m1_force_rms")):
+        out[key] = float(first[col]) if first is not None else np.nan
+    out["m1_resid_last"] = float(ok["m1_resid_rms"][-1]) if n else np.nan
+
+    if len(vsends):
+        out["settle_last_send"] = _seconds(np.max(vsends["time"]) - t0)
+    else:
+        out["settle_last_send"] = _seconds(ok["time"][0] - t0) if n else np.nan
+
+    frame_time = dict(zip(vframes["file"], vframes["time"]))
+    if i_settle is not None:
+        cutoff = ok["time"][i_settle]
+        src = np.array([frame_time.get(f, np.datetime64("NaT", "ms")) for f in vsends["file"]], dtype=TIME)
+        in_settle = vsends[src <= cutoff]
+    else:
+        in_settle = vsends
+    for window, s in (("settle", in_settle), ("visit", vsends)):
+        for key, value in _send_totals(s, forces, telescope).items():
+            out[f"{key}_{window}"] = value
+    return out

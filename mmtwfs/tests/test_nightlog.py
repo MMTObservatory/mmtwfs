@@ -8,8 +8,8 @@ import pytest
 from astropy.io import fits
 
 from mmtwfs.nightlog import (
-    _table, build_visits, EVENT_COLUMNS, FRAME_COLUMNS, frame_wfs, gain_at, get_wfs, m1_frame_metrics, m1_resid_rms,
-    night_window, parse_log, read_frames, SETTLE_DEFAULTS,
+    build_visits, EVENT_COLUMNS, first_run, FRAME_COLUMNS, frame_wfs, gain_at, get_wfs, m1_frame_metrics,
+    m1_resid_rms, night_window, parse_log, read_frames, SEND_COLUMNS, SETTLE_DEFAULTS, _table, visit_settle,
 )
 from mmtwfs.zernike import ZernikeVector
 
@@ -334,3 +334,79 @@ def test_m1_frame_metrics_missing_files_leave_nan(tmp_path):
     frames = _frames([("2026-10-03T08:44:38", "B", 333.0, 30.0, 0.0, 0.0, "ok", 60.0)])
     m1_frame_metrics(frames, tmp_path, _table([], EVENT_COLUMNS))
     assert np.isnan(frames["m1_force_rms"][0])
+
+
+class _FakeTelescope:
+    def __init__(self, n_act=3, n_node=4):
+        self._a2s = np.ones((n_act, n_node))
+
+    def load_act2surf(self):
+        return self._a2s
+
+
+def _visit_frames(focus, iq=None, status=None, cc=None):
+    t0 = np.datetime64("2026-10-03T08:44:00")
+    n = len(focus)
+    rows = []
+    for i in range(n):
+        rows.append(dict(time=t0 + np.timedelta64(30 * i, "s"), file=f"f{i:03d}.fits", wfs="mmirs",
+                         status=(status or ["ok"] * n)[i], focus=focus[i], focus_unc=1.0,
+                         cc_x_err=(cc or [0.0] * n)[i], cc_y_err=0.0, wavefront_rms=500.0,
+                         delivered_iq=(iq or [1.0] * n)[i], m1_resid_rms=100.0 - i, m1_force_rms=5.0, visit=0))
+    return _table(rows, FRAME_COLUMNS)
+
+
+def test_first_run():
+    assert first_run(np.array([False, True, False, True, True]), 2) == 3
+    assert first_run(np.array([True, True]), 2) == 0
+    assert first_run(np.array([True, False, True]), 2) is None
+
+
+def test_focus_settle_threshold_needs_k_consecutive():
+    vf = _visit_frames([80.0, 5.0, 40.0, 8.0, 6.0, 4.0])
+    s = visit_settle(vf, _table([], SEND_COLUMNS), SETTLE_DEFAULTS, {}, _FakeTelescope())
+    assert s["focus_settle_thresh"] == pytest.approx(90.0)  # frame 3 starts the first run of two
+    assert s["first_focus"] == 80.0
+    assert s["settle_def"] == "thresh/conv"
+
+
+def test_focus_never_settles():
+    vf = _visit_frames([80.0, 60.0, 50.0])
+    s = visit_settle(vf, _table([], SEND_COLUMNS), SETTLE_DEFAULTS, {}, _FakeTelescope())
+    assert np.isnan(s["focus_settle_thresh"])
+
+
+def test_convergence_definitions():
+    # plateau of |focus| in the last half is 30, so <= 40 counts as converged even though > F
+    vf = _visit_frames([100.0, 90.0, 35.0, 32.0, 30.0, 29.0], iq=[2.0, 1.8, 1.2, 1.0, 1.0, 1.01])
+    s = visit_settle(vf, _table([], SEND_COLUMNS), SETTLE_DEFAULTS, {}, _FakeTelescope())
+    assert s["focus_settle_conv"] == pytest.approx(60.0)
+    assert s["iq_settle_conv"] == pytest.approx(90.0)
+
+
+def test_no_ok_frames():
+    vf = _visit_frames([np.nan, np.nan], status=["failed", "failed"])
+    s = visit_settle(vf, _table([], SEND_COLUMNS), SETTLE_DEFAULTS, {}, _FakeTelescope())
+    assert np.isnan(s["focus_settle_thresh"]) and np.isnan(s["first_focus"])
+
+
+def test_send_windows_and_f9_last_send():
+    vf = _visit_frames([80.0, 40.0, 5.0, 4.0])
+    t0 = vf["time"][0]
+    sends = _table([
+        dict(time=t0 + np.timedelta64(5, "s"), kind="focus", file="f000.fits", value=40.0),
+        dict(time=t0 + np.timedelta64(6, "s"), kind="m1", file="f000.fits", forces_file="f000.fits.forces", frac=0.5),
+        dict(time=t0 + np.timedelta64(35, "s"), kind="coma", file="f001.fits", value=1.0, value2=-2.0),
+        dict(time=t0 + np.timedelta64(95, "s"), kind="focus", file="f003.fits", value=2.0),
+    ], SEND_COLUMNS)
+    forces = {"f000.fits.forces": np.array([2.0, 2.0, 2.0])}
+    s = visit_settle(vf, sends, SETTLE_DEFAULTS, forces, _FakeTelescope())
+    assert s["focus_settle_thresh"] == pytest.approx(60.0)
+    assert s["n_sends_settle"] == 3 and s["n_sends_visit"] == 4
+    assert s["net_focus_settle"] == 40.0 and s["net_focus_visit"] == 42.0
+    assert (s["net_cc_x_visit"], s["net_cc_y_visit"]) == (1.0, -2.0)
+    assert s["m1_sent_rms_visit"] == pytest.approx(1.0)  # 0.5 * 2 N on every actuator
+    assert s["settle_last_send"] == pytest.approx(95.0)
+
+    vf["wfs"] = "newf9"
+    assert visit_settle(vf, sends, SETTLE_DEFAULTS, forces, _FakeTelescope())["settle_def"] == "last_send"
