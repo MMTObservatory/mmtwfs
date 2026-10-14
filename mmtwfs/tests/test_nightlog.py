@@ -7,7 +7,9 @@ import numpy as np
 import pytest
 from astropy.io import fits
 
-from mmtwfs.nightlog import frame_wfs, night_window, parse_log, read_frames
+from mmtwfs.nightlog import (
+    _table, build_visits, FRAME_COLUMNS, frame_wfs, night_window, parse_log, read_frames, SETTLE_DEFAULTS,
+)
 
 # real lines from /Volumes/Samsung_4TB/wfsdat/20261003/wfs.log (2026-10-03 01:44 MST = 08:44 UTC)
 SEND_BLOCK = """\
@@ -230,3 +232,51 @@ def test_read_frames_mjd_fallback_and_untimed(tmp_path):
 def test_read_frames_empty_dir(tmp_path):
     frames, _ = read_frames(tmp_path)
     assert len(frames) == 0 and "delivered_iq" in frames.colnames
+
+
+def _frames(specs):
+    """specs: list of (iso time, catid, catra_deg, catdec_deg, raoff, decoff, status, el)"""
+    rows = [dict(time=np.datetime64(t), file=f"f{i:03d}.fits", wfs="mmirs", catid=c, catra=ra, catdec=dec,
+                 ra=ra, dec=dec, raoff=ro, decoff=do, status=s, el=el, az=100.0)
+            for i, (t, c, ra, dec, ro, do, s, el) in enumerate(specs)]
+    return _table(rows, FRAME_COLUMNS)
+
+
+def test_build_visits_splits_on_target_and_lists_offsets():
+    frames = _frames([
+        ("2026-10-03T06:40:00", "A", 300.0, 40.0, 0.0, 0.0, "ok", 50.0),
+        ("2026-10-03T06:41:00", "A", 300.0, 40.0, 0.0, 0.0, "ok", 50.5),
+        ("2026-10-03T06:42:00", "A", 300.0, 40.0, 2.0, -30.0, "ok", 51.0),
+        ("2026-10-03T08:44:00", "B", 333.0, 30.0, 0.0, 0.0, "failed", 60.0),
+        ("2026-10-03T08:44:30", "B", 333.0, 30.0, 0.0, 0.0, "ok", 60.1),
+    ])
+    visits, offsets = build_visits(frames, SETTLE_DEFAULTS)
+    assert list(frames["visit"]) == [0, 0, 0, 1, 1]
+    assert [v["catid"] for v in visits] == ["A", "B"]
+    a, b = visits
+    assert np.isnan(a["gap"]) and np.isnan(a["slew_sep"])
+    assert b["gap"] == pytest.approx(2 * 3600 + 2 * 60)
+    assert b["t_first_ok"] == pytest.approx(30.0)
+    assert b["d_el"] == pytest.approx(60.0 - 51.0)
+    assert b["n_frames"] == 2 and b["n_ok"] == 1 and b["n_failed"] == 1
+    assert b["slew_sep"] > 20 * 3600
+    assert [(o["file"], o["detail"]) for o in offsets] == [("f002.fits", "2.00,-30.00")]
+
+
+def test_build_visits_fallback_without_catalog():
+    nan = np.nan
+    frames = _frames([
+        ("2026-10-03T06:40:00", "", nan, nan, 0.0, 0.0, "ok", 50.0),
+        ("2026-10-03T06:41:00", "", nan, nan, 0.0, 0.0, "ok", 50.0),
+        ("2026-10-03T06:42:00", "", nan, nan, 0.0, 0.0, "ok", 50.0),
+    ])
+    frames["ra"] = [300.0, 300.0 + 10 / 3600, 301.0]
+    frames["dec"] = [40.0, 40.0, 40.0]
+    visits, _ = build_visits(frames, SETTLE_DEFAULTS)
+    assert list(frames["visit"]) == [0, 0, 1]
+
+
+def test_build_visits_empty():
+    frames = _table([], FRAME_COLUMNS)
+    visits, offsets = build_visits(frames, SETTLE_DEFAULTS)
+    assert visits == [] and offsets == []

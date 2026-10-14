@@ -338,3 +338,70 @@ def read_frames(nightdir):
         rows.append(row)
     rows.sort(key=lambda r: r["time"])
     return _table(rows, FRAME_COLUMNS), counts
+
+
+def _seconds(dt):
+    return float(dt / np.timedelta64(1, "s"))
+
+
+def _sep_arcsec(ra1, dec1, ra2, dec2):
+    """Great-circle separation in arcsec between two positions given in degrees."""
+    r1, d1, r2, d2 = np.radians([ra1, dec1, ra2, dec2])
+    c = np.sin(d1) * np.sin(d2) + np.cos(d1) * np.cos(d2) * np.cos(r1 - r2)
+    return float(np.degrees(np.arccos(np.clip(c, -1.0, 1.0))) * 3600.0)
+
+
+def _target(row):
+    """Target position in degrees: the catalog position, or the pointing with the offsets removed."""
+    if np.isfinite(row["catra"]) and np.isfinite(row["catdec"]):
+        return row["catra"], row["catdec"]
+    raoff = row["raoff"] if np.isfinite(row["raoff"]) else 0.0
+    decoff = row["decoff"] if np.isfinite(row["decoff"]) else 0.0
+    dec = row["dec"] - decoff / 3600.0
+    return row["ra"] - raoff / 3600.0 / np.cos(np.radians(dec)), dec
+
+
+def _same_target(a, b, params):
+    if np.isfinite(a["catra"]) and np.isfinite(b["catra"]):
+        return (round(a["catra"], 4), round(a["catdec"], 4), a["catid"]) == \
+               (round(b["catra"], 4), round(b["catdec"], 4), b["catid"])
+    return _sep_arcsec(*_target(a), *_target(b)) <= params["slew_sep"]
+
+
+def build_visits(frames, params):
+    """
+    Split time-ordered frames into visits: runs of consecutive frames on the same target. Sets frames["visit"] and
+    returns (visit rows, offset events).
+    """
+    visits, offsets = [], []
+    idx = -1
+    for i in range(len(frames)):
+        row = frames[i]
+        if i == 0 or not _same_target(frames[i - 1], row, params):
+            idx += 1
+            visits.append(dict(visit=idx, wfs=row["wfs"], catid=row["catid"], first=i))
+        elif (np.isfinite(row["raoff"]) and np.isfinite(frames[i - 1]["raoff"])
+              and (abs(row["raoff"] - frames[i - 1]["raoff"]) > 0.01
+                   or abs(row["decoff"] - frames[i - 1]["decoff"]) > 0.01)):
+            offsets.append(dict(time=row["time"], kind="offset", detail=f"{row['raoff']:.2f},{row['decoff']:.2f}",
+                                file=row["file"]))
+        frames["visit"][i] = idx
+
+    for n, v in enumerate(visits):
+        vf = frames[frames["visit"] == v["visit"]]
+        first = vf[0]
+        v.pop("first")
+        v.update(start=first["time"], end=vf["time"][-1], n_frames=len(vf),
+                 n_ok=int(np.sum(vf["status"] == "ok")), n_failed=int(np.sum(vf["status"] == "failed")),
+                 el=first["el"])
+        ok_times = vf["time"][vf["status"] == "ok"]
+        v["t_first_ok"] = _seconds(ok_times[0] - first["time"]) if len(ok_times) else np.nan
+        if n == 0:
+            v.update(gap=np.nan, d_az=np.nan, d_el=np.nan, slew_sep=np.nan)
+        else:
+            prev = frames[frames["visit"] == v["visit"] - 1][-1]
+            v.update(gap=_seconds(first["time"] - prev["time"]),
+                     d_az=float((first["az"] - prev["az"] + 180.0) % 360.0 - 180.0),
+                     d_el=float(first["el"] - prev["el"]),
+                     slew_sep=_sep_arcsec(*_target(prev), *_target(first)))
+    return visits, offsets
