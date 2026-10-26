@@ -290,7 +290,7 @@ def test_build_visits_splits_on_target_and_lists_offsets():
     assert b["d_el"] == pytest.approx(60.0 - 51.0)
     assert b["n_frames"] == 2 and b["n_ok"] == 1 and b["n_failed"] == 1
     assert b["slew_sep"] > 20 * 3600
-    assert [(o["file"], o["detail"]) for o in offsets] == [("f002.fits", "2.00,-30.00")]
+    assert [(o["file"], o["detail"]) for o in offsets] == [("f002.fits", "RA +2.00 Dec -30.00 arcsec")]
 
 
 def test_build_visits_fallback_without_catalog():

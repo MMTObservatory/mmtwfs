@@ -231,7 +231,8 @@ def parse_log(logfile, night):
 # frame column <- .output column. The .output "focus" column is the hexapod position (TRANSZ); "focerr" is the
 # measured focus correction (um, at M2 gain 1), which is what settling is judged on.
 FROM_OUTPUT = {"focus": "focerr", "cc_x_err": "cc_x_err", "cc_y_err": "cc_y_err", "wavefront_rms": "wavefront_rms",
-               "residual_rms": "residual_rms", "raw_vlt_seeing": "raw_vlt_seeing", "delivered_iq": "delivered_iq"}
+               "residual_rms": "residual_rms", "raw_vlt_seeing": "raw_vlt_seeing", "vlt_seeing": "vlt_seeing",
+               "delivered_iq": "delivered_iq"}
 HEADER_FLOATS = {"exptime": "EXPTIME", "raoff": "RAOFF", "decoff": "DECOFF", "az": "AZ", "el": "EL",
                  "transx": "TRANSX", "transy": "TRANSY", "transz": "TRANSZ", "tiltx": "TILTX", "tilty": "TILTY"}
 FRAME_COLUMNS = (
@@ -396,8 +397,9 @@ def build_visits(frames, params):
         elif (np.isfinite(row["raoff"]) and np.isfinite(frames[i - 1]["raoff"])
               and (abs(row["raoff"] - frames[i - 1]["raoff"]) > 0.01
                    or abs(row["decoff"] - frames[i - 1]["decoff"]) > 0.01)):
-            offsets.append(dict(time=row["time"], kind="offset", detail=f"{row['raoff']:.2f},{row['decoff']:.2f}",
-                                file=row["file"]))
+            # the new RAOFF/DECOFF header values: the pointing moved within the visit
+            offsets.append(dict(time=row["time"], kind="offset", file=row["file"],
+                                detail=f"RA {row['raoff']:+.2f} Dec {row['decoff']:+.2f} arcsec"))
         frames["visit"][i] = idx
 
     for n, v in enumerate(visits):

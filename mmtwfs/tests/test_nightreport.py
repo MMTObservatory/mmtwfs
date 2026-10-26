@@ -6,10 +6,11 @@ import json
 import shutil
 from unittest.mock import patch
 
+import numpy as np
 import pytest
 
 from mmtwfs.nightlog import load_night
-from mmtwfs.scripts.nightreport import main, night_dirs, summarize, write_report
+from mmtwfs.scripts.nightreport import _flag_labels, _summary_value, main, night_dirs, summarize, write_report
 
 FIXTURE = importlib.resources.files("mmtwfs") / "data" / "test_data" / "nightreport" / "20261003"
 OUTPUTS = ["nightreport.html", "nightreport_frames.csv", "nightreport_visits.csv", "nightreport_events.csv",
@@ -38,6 +39,24 @@ def test_write_report_files_and_contents(nightdir):
     assert summary["n_visits"] == 2
     assert summary["n_sends"]["m1"] == 8
     assert summary["params"]["focus_thresh"] == 10.0
+    assert summary["median_zenith_seeing"] < summary["median_raw_vlt_seeing"]
+    assert "np.str_" not in html and "['" not in html
+    assert "<div class='scroll'><table>" in html
+
+
+def test_summary_value_formatting():
+    assert _summary_value(2.0740769) == "2.074"
+    assert _summary_value(1045.0) == "1045"
+    assert _summary_value([np.str_("mmirs")]) == "mmirs"
+    assert _summary_value({"clear_m1": 3, "clear_m2": 1}) == "clear_m1: 3, clear_m2: 1"
+    assert _summary_value({}) == "none"
+    assert _summary_value(None) == ""
+
+
+def test_flag_labels_merge_close_flags():
+    frames = np.array([0.0, 100.0])
+    flags = np.array([10.0, 11.0, 12.0, 50.0, 90.0, 92.0])
+    assert _flag_labels(flags, frames) == [(10.0, "1\u20133"), (50.0, "4"), (90.0, "5\u20136")]
 
 
 def test_rerun_is_identical(nightdir):
