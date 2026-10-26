@@ -342,8 +342,8 @@ external resources. Sections:
    - **Overlays:** clears as vertical lines on every panel, and flags as markers.
 3. **M1 surface maps** of the cumulative forces, drawn just before each clear and at the end of the night, in the style
    of `MMT.plot_force_influence`.
-4. **Slew response:** `first_focus` against `d_el` and against `el`; `focus_settle_thresh` against `d_el`; and `gap` per
-   visit. `t_first_ok` stays in the visits CSV but isn't plotted: the focus settle times already show recovery.
+4. **Slew response:** `first_focus` against `d_el` and against `el`; `focus_settle_thresh` against `d_el`; and per visit,
+   `gap` with `focus_settle_thresh` stacked on it, the dead time from one track's data to the next. `t_first_ok` stays in the visits CSV but isn't plotted: the focus settle times already show recovery.
 5. **Visits table:** one row per visit with the columns above.
 6. **Events table:** clears, gain changes, offsets, flags, and errors.
 

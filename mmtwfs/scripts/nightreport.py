@@ -281,8 +281,17 @@ def slew_figure(night):
     axes[0, 1].set(xlabel="EL (deg)", ylabel="first-frame focus ($\\mu$m)")
     axes[1, 0].plot(v["d_el"], v["focus_settle_thresh"], "o")
     axes[1, 0].set(xlabel="ΔEL (deg)", ylabel="focus settle (s)")
-    axes[1, 1].bar(np.arange(len(v)), v["gap"], 0.6)
-    axes[1, 1].set(xlabel="visit", ylabel="gap between tracks (s)")
+    # observers wait for focus to settle, so gap + settle is the dead time between one track's data and the next
+    ax, x = axes[1, 1], np.arange(len(v))
+    gap = np.nan_to_num(np.asarray(v["gap"], dtype=float))  # the first visit has no track before it
+    settle = np.asarray(v["focus_settle_thresh"], dtype=float)
+    ax.bar(x, gap, 0.6, color="C0", label="gap between tracks")
+    ax.bar(x, np.nan_to_num(settle), 0.6, bottom=gap, color="C1", label="focus settle")
+    for xi, g in zip(x[~np.isfinite(settle)], gap[~np.isfinite(settle)]):
+        ax.annotate("not settled", (xi, g), xytext=(0, 3), textcoords="offset points", ha="center", va="bottom",
+                    rotation=90, fontsize=9, color="C1")
+    ax.set(xlabel="visit", ylabel="time between tracks (s)")
+    ax.legend(loc="lower left", bbox_to_anchor=(0.0, 1.0), ncol=2, borderaxespad=0.3)  # above, clear of the bars
     return fig
 
 

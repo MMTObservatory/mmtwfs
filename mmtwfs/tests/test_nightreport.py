@@ -10,8 +10,8 @@ import numpy as np
 import pytest
 
 from mmtwfs.nightlog import load_night
-from mmtwfs.scripts.nightreport import (_flag_labels, _summary_value, main, night_dirs, summarize, timeline_figure,
-                                        write_report)
+from mmtwfs.scripts.nightreport import (_flag_labels, _summary_value, main, night_dirs, slew_figure, summarize,
+                                        timeline_figure, write_report)
 
 FIXTURE = importlib.resources.files("mmtwfs") / "data" / "test_data" / "nightreport" / "20261003"
 OUTPUTS = ["nightreport.html", "nightreport_frames.csv", "nightreport_visits.csv", "nightreport_events.csv",
@@ -70,6 +70,17 @@ def test_timeline_without_log(nightdir):
     for ax in fig.axes[4:7]:
         assert [t.get_text() for t in ax.texts] == ["nothing logged"] and ax.get_legend() is None
     assert fig.axes[1].get_legend_handles_labels()[1] == ["measured focus error"]
+
+
+def test_slew_figure_stacks_settle_on_gap(nightdir):
+    night = load_night(nightdir)
+    night.visits["gap"] = [np.nan, 600.0]
+    night.visits["focus_settle_thresh"] = [40.0, np.nan]
+    ax = slew_figure(night).axes[3]
+    gap_bars, settle_bars = ax.containers
+    assert [b.get_height() for b in gap_bars] == [0.0, 600.0]
+    assert [(b.get_y(), b.get_height()) for b in settle_bars] == [(0.0, 40.0), (600.0, 0.0)]
+    assert [t.get_text() for t in ax.texts] == ["not settled"]
 
 
 def test_flag_labels_merge_close_flags():
