@@ -2,6 +2,7 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 
 import importlib.resources
+import shutil
 from datetime import datetime
 
 import numpy as np
@@ -623,3 +624,16 @@ def test_load_night_empty(tmp_path):
     nd.mkdir()
     night = load_night(nd)
     assert len(night.frames) == 0 and len(night.visits) == 0
+
+
+def test_load_night_drops_frames_outside_window(tmp_path):
+    # 20260416 was archived with a stale copy of the 20260325 night alongside its own frames
+    nd = tmp_path / "20261003"
+    shutil.copytree(FIXTURE, nd)
+    n_in = len(load_night(nd).frames)
+    _frame(nd, "mmirs_wfs_stale.fits", {**MMIRS_HDR, "DATE-OBS": "2026-09-12T08:44:38"})
+    night = load_night(nd)
+    assert len(night.frames) == n_in
+    assert "mmirs_wfs_stale.fits" not in night.frames["file"]
+    assert night.counts["n_frames_outside"] == 1
+    assert any("1 frames outside the night window were ignored" in w for w in night.warnings)

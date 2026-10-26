@@ -854,6 +854,13 @@ def load_night(path, params=None):
     notes = []
 
     frames, counts = read_frames(path)
+    # a stale copy of another night can be archived with this one; keep the frames to the window the log uses
+    start, end = (np.datetime64(t, "ms") for t in night_window(path.name))
+    inside = (frames["time"] >= start) & (frames["time"] < end)
+    counts["n_frames_outside"] = int(np.sum(~inside))
+    frames = frames[inside]
+    if counts["n_frames_outside"]:
+        notes.append(f"{counts['n_frames_outside']} frames outside the night window were ignored")
     logfile = path / "wfs.log"
     if logfile.exists():
         logdata = parse_log(logfile, path.name)
