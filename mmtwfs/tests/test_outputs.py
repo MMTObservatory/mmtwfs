@@ -46,3 +46,18 @@ def test_read_output_empty_and_bad(tmp_path):
     bad.write_text("1,2,3\n")
     with pytest.raises(ValueError):
         read_output(bad)
+
+
+def test_read_output_none_is_nan(tmp_path):
+    # reanalyze writes "None" for header values a frame lacks, e.g. the F/5 temperatures in March 2026
+    fields = LINE.split(",")
+    fields[CSV_COLUMNS.index("outt")] = fields[CSV_COLUMNS.index("chamt")] = "None"
+    p = tmp_path / "none.output"
+    p.write_text(",".join(fields) + "\n")
+    row = read_output(p)
+    assert math.isnan(row["outt"]) and math.isnan(row["chamt"])
+    assert row["focerr"] == pytest.approx(-0.0)
+    fields[CSV_COLUMNS.index("focerr")] = "junk"  # anything else unparseable is still an error
+    p.write_text(",".join(fields) + "\n")
+    with pytest.raises(ValueError):
+        read_output(p)

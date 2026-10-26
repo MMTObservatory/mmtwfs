@@ -17,7 +17,8 @@ STRING_COLUMNS = ("time", "wfs", "file", "method")
 def read_output(path):
     """
     Parse a one-line ``.output`` file into a dict keyed by CSV_COLUMNS. Lines written before the ``method`` and
-    ``delivered_iq`` columns existed are padded with "full" and NaN. Returns None for an empty file.
+    ``delivered_iq`` columns existed are padded with "full" and NaN. A "None", written for a header value the frame
+    lacks, reads as NaN. Returns None for an empty file.
     """
     text = path.read_text().strip()
     if not text:
@@ -33,5 +34,5 @@ def read_output(path):
     row = dict(zip(CSV_COLUMNS, fields))
     for col in CSV_COLUMNS:
         if col not in STRING_COLUMNS:
-            row[col] = float(row[col])
+            row[col] = float("nan" if row[col] == "None" else row[col])
     return row
