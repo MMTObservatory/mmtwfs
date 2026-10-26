@@ -10,7 +10,8 @@ import numpy as np
 import pytest
 
 from mmtwfs.nightlog import load_night
-from mmtwfs.scripts.nightreport import _flag_labels, _summary_value, main, night_dirs, summarize, write_report
+from mmtwfs.scripts.nightreport import (_flag_labels, _summary_value, main, night_dirs, summarize, timeline_figure,
+                                        write_report)
 
 FIXTURE = importlib.resources.files("mmtwfs") / "data" / "test_data" / "nightreport" / "20261003"
 OUTPUTS = ["nightreport.html", "nightreport_frames.csv", "nightreport_visits.csv", "nightreport_events.csv",
@@ -51,6 +52,24 @@ def test_summary_value_formatting():
     assert _summary_value({"clear_m1": 3, "clear_m2": 1}) == "clear_m1: 3, clear_m2: 1"
     assert _summary_value({}) == "none"
     assert _summary_value(None) == ""
+
+
+def test_timeline_legends_clear_right_axes(nightdir):
+    fig = timeline_figure(load_night(nightdir))
+    renderer = fig.canvas.get_renderer()
+    for ax in fig.axes[4:6]:
+        right_ax = next(a for a in fig.axes if a is not ax and a.bbox.bounds == ax.bbox.bounds)
+        assert ax.get_legend().get_window_extent(renderer).x0 > right_ax.get_tightbbox(renderer).x1
+    assert all(t.get_visible() for t in fig.axes[0].get_xticklabels())  # times on every panel
+
+
+def test_timeline_without_log(nightdir):
+    (nightdir / "wfs.log").unlink()
+    fig = timeline_figure(load_night(nightdir))
+    assert len(fig.axes) == 7  # no twin axes for the empty accounting panels
+    for ax in fig.axes[4:7]:
+        assert [t.get_text() for t in ax.texts] == ["nothing logged"] and ax.get_legend() is None
+    assert fig.axes[1].get_legend_handles_labels()[1] == ["measured focus error"]
 
 
 def test_flag_labels_merge_close_flags():

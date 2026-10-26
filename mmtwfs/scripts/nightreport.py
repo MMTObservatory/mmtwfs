@@ -161,20 +161,41 @@ def _flag_labels(flag_times, frame_times):
     return labels
 
 
+def _nothing_logged(ax):
+    ax.text(0.5, 0.5, "nothing logged", transform=ax.transAxes, ha="center", va="center", color="0.5")
+    ax.set_yticks([])
+
+
 def _twin_steps(ax, table, left, right, left_label, right_label):
-    """Step plots of table columns against two y axes, (column, legend label) pairs per side, with one legend."""
+    """
+    Step plots of table columns against two y axes, (column, legend label) pairs per side, with one legend. Returns
+    the right-hand axis, or None for an empty table.
+    """
+    ax.set_ylabel(left_label)
+    if len(table) == 0:
+        _nothing_logged(ax)
+        return None
     right_ax = ax.twinx()
     for n, (side, col, label) in enumerate([(ax, c, lbl) for c, lbl in left] + [(right_ax, c, lbl) for c, lbl in right]):
         side.step(table["time"], table[col], where="post", color=f"C{n}", label=label)
-    ax.set_ylabel(left_label)
     right_ax.set_ylabel(right_label)
-    # one legend for both axes, shifted to clear the right-hand axis labels
-    ax.legend(handles=ax.get_lines() + right_ax.get_lines(), **{**LEGEND_RIGHT, "bbox_to_anchor": (1.1, 1.0)})
+    ax.legend(handles=ax.get_lines() + right_ax.get_lines(), **LEGEND_RIGHT)  # moved past right_ax once drawn
+    return right_ax
+
+
+def _legends_past(fig, twins):
+    """Move each twinned panel's legend just past its right-hand axis, whose width depends on its tick labels."""
+    renderer = fig.canvas.get_renderer()
+    for ax, right_ax in twins:
+        x1 = right_ax.get_tightbbox(renderer).x1
+        x = ax.transAxes.inverted().transform((x1, 0))[0]
+        ax.get_legend().set_bbox_to_anchor((x + 0.01, 1.0), transform=ax.transAxes)
 
 
 def timeline_figure(night):
     f, ok = night.frames, night.frames[night.frames["status"] == "ok"]
-    fig, axes = plt.subplots(7, 1, sharex=True, figsize=(12, 21), gridspec_kw=dict(height_ratios=[1.6] + [1] * 6))
+    fig, axes = plt.subplots(7, 1, sharex=True, figsize=(12, 22),
+                             gridspec_kw=dict(height_ratios=[1.6] + [1] * 6, hspace=0.3))
     pts = dict(marker="o", ls="none", ms=5, mew=0, alpha=0.7)
     ax = axes[0]
     ax.plot(f["time"], f["el"], ".", ms=4, color="0.4", label="frame elevation")
@@ -199,8 +220,9 @@ def timeline_figure(night):
     ax.errorbar(ok["time"], ok["focus"], yerr=ok["focus_unc"], fmt="o", ms=4, mew=0, lw=0.8, color="C0",
                 label="measured focus error")
     focus_sends = night.sends["time"][night.sends["kind"] == "focus"]
-    ax.plot(focus_sends, np.full(len(focus_sends), 0.04), "|", ms=14, mew=1.5, color="C1",
-            transform=ax.get_xaxis_transform(), label="focus correction sent")
+    if len(focus_sends):
+        ax.plot(focus_sends, np.full(len(focus_sends), 0.04), "|", ms=14, mew=1.5, color="C1",
+                transform=ax.get_xaxis_transform(), label="focus correction sent")
     ax.set_ylabel("focus error ($\\mu$m)")
     ax = axes[2]
     ax.plot(ok["time"], ok["cc_x_err"], **pts, label="CC x")
@@ -211,24 +233,29 @@ def timeline_figure(night):
     ax.plot(ok["time"], ok["vlt_seeing"], **pts, label="zenith seeing")
     ax.plot(ok["time"], ok["delivered_iq"], **pts, label="delivered IQ")
     ax.set_ylabel("arcsec")
-    _twin_steps(axes[4], night.m2, [("wfs_z", "wfs_z ($\\mu$m)"), ("m1spherical_z", "m1spherical_z ($\\mu$m)")],
-                [("wfs_cc_x", "wfs_cc_x (arcsec)"), ("wfs_cc_y", "wfs_cc_y (arcsec)")],
-                "cumulative M2 focus\n($\\mu$m)", "cumulative M2 coma\n(arcsec)")
-    _twin_steps(axes[5], night.m1, [("frms", "force RMS (N)")], [("surf_rms", "surface RMS (nm)")],
-                "cumulative M1\nforce RMS (N)", "cumulative M1\nsurface RMS (nm)")
+    m2_right = _twin_steps(axes[4], night.m2, [("wfs_z", "wfs_z ($\\mu$m)"), ("m1spherical_z", "m1spherical_z ($\\mu$m)")],
+                           [("wfs_cc_x", "wfs_cc_x (arcsec)"), ("wfs_cc_y", "wfs_cc_y (arcsec)")],
+                           "cumulative M2 focus\n($\\mu$m)", "cumulative M2 coma\n(arcsec)")
+    m1_right = _twin_steps(axes[5], night.m1, [("frms", "force RMS (N)")], [("surf_rms", "surface RMS (nm)")],
+                           "cumulative M1\nforce RMS (N)", "cumulative M1\nsurface RMS (nm)")
     ax = axes[6]
     zv = ZernikeVector()
     for term in FIT_TERMS:
         if len(night.m1) and np.max(np.abs(night.m1[term])) > 10:
             ax.step(night.m1["time"], night.m1[term], where="post", label=f"{term} {zv.shortlabel(term).strip()}")
     ax.set_ylabel("cumulative M1\nwavefront (nm)")
+    if not ax.get_lines():
+        _nothing_logged(ax)
     ax.set_xlabel("UTC")
     ax.xaxis.set_major_formatter(DateFormatter("%H:%M"))
     for ax in axes:
         _mark_clears(ax, night.events)
+        ax.tick_params(labelbottom=True)  # times on every panel, so a reader needn't scroll to the bottom
     for ax in axes[1:]:
         if ax.get_legend() is None and ax.get_legend_handles_labels()[0]:
             ax.legend(**LEGEND_RIGHT)
+    fig.canvas.draw()
+    _legends_past(fig, [(ax, r) for ax, r in ((axes[4], m2_right), (axes[5], m1_right)) if r is not None])
     return fig
 
 
