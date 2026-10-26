@@ -34,7 +34,7 @@ from mmtwfs.zernike import ZernikeVector  # noqa: E402
 log = logging.getLogger("NightReport")
 
 VISIT_TABLE_COLUMNS = [
-    ("catid", "{}"), ("start", "{}"), ("gap", "{:.0f}"), ("t_first_ok", "{:.0f}"), ("focus_settle_thresh", "{:.0f}"),
+    ("catid", "{}"), ("start", "{}"), ("gap", "{:.0f}"), ("focus_settle_thresh", "{:.0f}"),
     ("focus_settle_conv", "{:.0f}"), ("iq_settle_conv", "{:.0f}"), ("coma_settle_thresh", "{:.0f}"),
     ("settle_last_send", "{:.0f}"), ("first_focus", "{:.1f}"), ("first_cc_x", "{:.2f}"), ("first_cc_y", "{:.2f}"),
     ("first_iq", "{:.2f}"), ("n_sends_settle", "{}"), ("net_focus_settle", "{:.1f}"), ("n_sends_visit", "{}"),
@@ -118,7 +118,6 @@ def summarize(night):
         "median_focus_settle_thresh": _median(v["focus_settle_thresh"]),
         "median_focus_settle_conv": _median(v["focus_settle_conv"]),
         "median_gap": _median(v["gap"]),
-        "median_t_first_ok": _median(v["t_first_ok"]),
         "m1_check_max_diff": max(check) if check else None,
         "warnings": night.warnings,
         "counts": night.counts,
@@ -248,18 +247,15 @@ def surface_figures(night):
 
 def slew_figure(night):
     v = night.visits
-    fig, axes = plt.subplots(2, 2, figsize=(11, 8))
+    fig, axes = plt.subplots(2, 2, figsize=(11, 8), layout="constrained")
     axes[0, 0].plot(v["d_el"], v["first_focus"], "o")
     axes[0, 0].set(xlabel="ΔEL (deg)", ylabel="first-frame focus ($\\mu$m)")
     axes[0, 1].plot(v["el"], v["first_focus"], "o")
     axes[0, 1].set(xlabel="EL (deg)", ylabel="first-frame focus ($\\mu$m)")
     axes[1, 0].plot(v["d_el"], v["focus_settle_thresh"], "o")
     axes[1, 0].set(xlabel="ΔEL (deg)", ylabel="focus settle (s)")
-    x = np.arange(len(v))
-    axes[1, 1].bar(x - 0.2, v["gap"], 0.4, label="gap")
-    axes[1, 1].bar(x + 0.2, v["t_first_ok"], 0.4, label="time to first good frame")
-    axes[1, 1].set(xlabel="visit", ylabel="s")
-    axes[1, 1].legend(**LEGEND_RIGHT)
+    axes[1, 1].bar(np.arange(len(v)), v["gap"], 0.6)
+    axes[1, 1].set(xlabel="visit", ylabel="gap between tracks (s)")
     return fig
 
 
@@ -309,7 +305,7 @@ def render_html(night, summary):
         maps = surface_figures(night)
         parts.append("".join(_img(fig) for fig in maps) if maps else "<p>No M1 forces applied.</p>")
         parts.append("<h2>Slew response</h2>" + _img(slew_figure(night)))
-    parts.append("<p>Gaps are as seen by the WFS: slew, acquisition, and WFS restart together.</p>")
+    parts.append("<p>Gaps between tracks are as seen by the WFS: slew, acquisition, and WFS restart together.</p>")
     parts.append("<h2>Visits</h2><p>Times in seconds from each visit's first frame.</p>"
                  + "<div class='scroll'>" + _html_table(night.visits, VISIT_TABLE_COLUMNS) + "</div>")
     events = night.events[[k not in ("validity", "error") for k in night.events["kind"]]]  # listed again as flags

@@ -326,7 +326,7 @@ external resources. Sections:
    - night, WFS(s), and UTC span
    - frames: ok, failed, unanalyzed
    - number of visits, clears by kind, and sends by kind
-   - medians: `raw_vlt_seeing`, `delivered_iq`, `focus_settle_thresh`, `focus_settle_conv`, `gap`, `t_first_ok`
+   - medians: `raw_vlt_seeing`, `delivered_iq`, `focus_settle_thresh`, `focus_settle_conv`, `gap`
    - flag counts
    - warnings: reanalyze outputs missing, `wfs.log` missing, log lines outside the night window, frames skipped as
      unreadable or without a time
@@ -342,8 +342,8 @@ external resources. Sections:
    - **Overlays:** clears as vertical lines on every panel, and flags as markers.
 3. **M1 surface maps** of the cumulative forces, drawn just before each clear and at the end of the night, in the style
    of `MMT.plot_force_influence`.
-4. **Slew response:** `first_focus` against `d_el` and against `el`; `focus_settle_thresh` against `d_el`; and `gap` and
-   `t_first_ok` per visit.
+4. **Slew response:** `first_focus` against `d_el` and against `el`; `focus_settle_thresh` against `d_el`; and `gap` per
+   visit. `t_first_ok` stays in the visits CSV but isn't plotted: the focus settle times already show recovery.
 5. **Visits table:** one row per visit with the columns above.
 6. **Events table:** clears, gain changes, offsets, flags, and errors.
 
