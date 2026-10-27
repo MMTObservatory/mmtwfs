@@ -221,7 +221,7 @@ def timeline_figure(night):
     f, ok = night.frames, night.frames[night.frames["status"] == "ok"]
     fig, axes = plt.subplots(7, 1, sharex=True, figsize=(12, 22),
                              gridspec_kw=dict(height_ratios=[1.6] + [1] * 6, hspace=0.3))
-    pts = dict(marker="o", ls="none", ms=5, mew=0, alpha=0.7)
+    pts = dict(marker="o", ls="none", ms=5, mew=0, alpha=0.4)
     ax = axes[0]
     ax.plot(f["time"], f["el"], ".", ms=4, color="0.4", label="frame elevation")
     for v in night.visits:
@@ -258,7 +258,7 @@ def timeline_figure(night):
     ax = axes[3]
     ax.plot(ok["time"], ok["raw_vlt_seeing"], **pts, label="raw seeing")
     ax.plot(ok["time"], ok["vlt_seeing"], **pts, label="zenith seeing")
-    ax.plot(ok["time"], ok["delivered_iq"], **pts, label="delivered IQ")
+    ax.plot(ok["time"], ok["delivered_iq"], **pts, color="C3", label="delivered IQ")  # red, apart from raw seeing
     ax.set_ylabel("arcsec")
     m2_right = _twin_steps(axes[4], night.m2, [("wfs_z", "wfs_z ($\\mu$m)"), ("m1spherical_z", "m1spherical_z ($\\mu$m)")],
                            [("wfs_cc_x", "wfs_cc_x (arcsec)"), ("wfs_cc_y", "wfs_cc_y (arcsec)")],
@@ -283,6 +283,9 @@ def timeline_figure(night):
     for ax in axes[1:]:
         if ax.get_legend() is None and ax.get_legend_handles_labels()[0]:
             ax.legend(**LEGEND_RIGHT)
+    for ax in axes[2:4]:
+        for h in ax.get_legend().legend_handles:
+            h.set_alpha(1)  # the points are faint so overlaps show; their legend markers needn't be
     fig.canvas.draw()
     _legends_past(fig, [(ax, r) for ax, r in ((axes[4], m2_right), (axes[5], m1_right)) if r is not None])
     return fig
