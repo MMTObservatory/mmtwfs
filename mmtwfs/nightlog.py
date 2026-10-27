@@ -354,6 +354,38 @@ def read_frames(nightdir):
     return _table(rows, FRAME_COLUMNS), counts
 
 
+FOCUS_ONLY_DROPPED = ("cc_x_err", "cc_y_err", "delivered_iq")
+ALL_VALID_RESID, FOCUS_VALID_RESID = 4000.0, 7000.0  # nm; wfssrv's residual RMS limits for its corrections
+
+
+def apply_validity(frames, events=None):
+    """
+    Drop the measurements wfssrv itself rejected. A wavefront residual above 7000 nm logs "wavefront fit too poor"
+    and no correction is valid, so the frame's status becomes "invalid". Between 4000 and 7000 nm only focus is
+    valid, so coma and delivered IQ are set to NaN. The verdicts come from the wfs.log validity events; without a
+    log (events None) they are reconstructed from the reanalyzed residual RMS with wfssrv's limits.
+    """
+    if events is not None:
+        validity = events[events["kind"] == "validity"]
+        verdict = dict(zip(validity["file"], validity["detail"]))
+    else:
+        verdict = {}
+        for f, resid in zip(frames["file"], frames["residual_rms"]):
+            if resid > FOCUS_VALID_RESID:
+                verdict[f] = "wavefront fit too poor"
+            elif resid >= ALL_VALID_RESID:
+                verdict[f] = "only focus corrections valid"
+    frames["status"] = frames["status"].astype("U10")  # sized to the longest status present, which may be "ok"
+    for i, f in enumerate(frames["file"]):
+        if frames["status"][i] != "ok" or f not in verdict:
+            continue
+        if verdict[f] == "wavefront fit too poor":
+            frames["status"][i] = "invalid"
+        else:
+            for col in FOCUS_ONLY_DROPPED:
+                frames[col][i] = np.nan
+
+
 def _seconds(dt):
     return float(dt / np.timedelta64(1, "s"))
 
@@ -880,6 +912,7 @@ def load_night(path, params=None):
     for i, f in enumerate(frames["file"]):
         if f in spher_of:
             frames["spher"][i] = int(bool(spher_of[f]))
+    apply_validity(frames, logdata.events if logfile.exists() else None)
 
     visit_rows, offsets = build_visits(frames, params)
     events = logdata.events

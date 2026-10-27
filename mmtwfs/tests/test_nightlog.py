@@ -11,7 +11,7 @@ import pytest
 from astropy.io import fits
 
 from mmtwfs.nightlog import (
-    ANALYSIS_COLUMNS, build_visits, calculate_primary_at, EVENT_COLUMNS, find_flags, first_run,
+    ANALYSIS_COLUMNS, apply_validity, build_visits, calculate_primary_at, EVENT_COLUMNS, find_flags, first_run,
     fit_surface_zernikes, FIT_TERMS, FRAME_COLUMNS, frame_wfs, gain_at, get_mmt, get_wfs, load_masked_zv,
     load_night, m1_accounting, m1_consistency, m1_frame_metrics, m1_resid_rms, m2_accounting, night_window,
     parse_log, read_forces, read_frames, SEND_COLUMNS, SETTLE_DEFAULTS, _table, visit_settle,
@@ -553,6 +553,27 @@ def test_find_flags(tmp_path):
     assert "2 frames" in spher["detail"] and "Z11 up to 800 nm" in spher["detail"]
     assert flags[flags["kind"] == "missing_forces"][0]["file"] == "f002.fits"
     assert set(flags["visit"]) == {0}
+
+
+def test_apply_validity_drops_what_wfssrv_rejected():
+    frames = _visit_frames([-450.0, 30.0, 5.0], iq=[4.2, 1.5, 1.0], cc=[2.0, 0.8, 0.1])
+    events = _table([dict(time=frames["time"][0], kind="validity", detail="wavefront fit too poor", file="f000.fits"),
+                     dict(time=frames["time"][1], kind="validity", detail="only focus corrections valid",
+                          file="f001.fits")], EVENT_COLUMNS)
+    apply_validity(frames, events)
+    assert list(frames["status"]) == ["invalid", "ok", "ok"]
+    assert frames["focus"][1] == 30.0
+    assert np.isnan(frames["cc_x_err"][1]) and np.isnan(frames["cc_y_err"][1]) and np.isnan(frames["delivered_iq"][1])
+    assert frames["cc_x_err"][2] == 0.1 and frames["delivered_iq"][2] == 1.0
+
+
+def test_apply_validity_from_residual_without_log():
+    frames = _visit_frames([-450.0, 30.0, 5.0], iq=[4.2, 1.5, 1.0], cc=[2.0, 0.8, 0.1])
+    frames["residual_rms"] = [12000.0, 5000.0, 1500.0]
+    apply_validity(frames)
+    assert list(frames["status"]) == ["invalid", "ok", "ok"]
+    assert frames["focus"][1] == 30.0 and np.isnan(frames["delivered_iq"][1])
+    assert frames["delivered_iq"][2] == 1.0
 
 
 FIXTURE = importlib.resources.files("mmtwfs") / "data" / "test_data" / "nightreport" / "20261003"

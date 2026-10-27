@@ -109,6 +109,7 @@ def summarize(night):
         "n_frames": len(f),
         "n_ok": int(np.sum(f["status"] == "ok")),
         "n_failed": int(np.sum(f["status"] == "failed")),
+        "n_invalid": int(np.sum(f["status"] == "invalid")),
         "n_unanalyzed": int(np.sum(f["status"] == "unanalyzed")),
         "n_visits": len(v),
         "n_clears": dict(Counter(k for k in night.events["kind"] if k.startswith("clear"))),
