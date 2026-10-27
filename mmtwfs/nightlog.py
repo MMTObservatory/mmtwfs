@@ -75,7 +75,7 @@ PATTERNS = [
     ("connect", re.compile(r"^(?P<name>.+?) (?:is|already) (?P<state>connected|disconnected)\.?$")),
     ("validity", re.compile(r"(?P<msg>only focus corrections valid|wavefront fit too poor)")),
 ]
-CELL_REPLIES = {"m1_full": ("full", 1.0), "m1_rejected": ("rejected", 0.0), "m1_unexpected": ("unexpected", 1.0)}
+CELL_REPLIES = {"m1_full": ("full", 1.0), "m1_rejected": ("rejected", 0.0), "m1_unexpected": ("unexpected", 0.0)}
 ERROR_LOGGERS = ("Telescope", "Secondary")
 WFS_NAMES = {key: cfg["name"] for key, cfg in mmtwfs_config["wfs"].items()}  # "Setting <key>" -> "<name> is connected."
 

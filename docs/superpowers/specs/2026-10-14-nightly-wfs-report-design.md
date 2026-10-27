@@ -144,14 +144,14 @@ Columns are `time`, `kind`, `file`, `value`, `value2`, `forces_file`, `fmax`, `f
 | `focus` | `Sending N um focus to secondary` | µm sent to the `wfs` z channel |
 | `coma` | `Sending X arcsec/Y arcsec CC_X/CC_Y to secondary` | `value` = CC_X in ″, `value2` = CC_Y in ″ |
 
-For `m1`, `applied` and `frac` follow `MMT.bend_mirror`:
+For `m1`, `applied` and `frac` follow `MMT.bend_mirror`, except for unexpected replies:
 
 | Cell reply | `applied` | `frac` |
 |---|---|---|
 | `...forces successfully applied in full.` | `full` | 1 |
 | `...applied N% of requested forces.` | `partial` | N/100 |
 | `...forces rejected!` or `...unable to apply forces!` | `rejected` | 0 |
-| `...got unexpected reply...` | `unexpected` | 1, which is what wfssrv itself assumes |
+| `...got unexpected reply...` | `unexpected` | 0. Every such reply in the logs is `Bad force data`, which means the cell rejected the forces. wfssrv itself assumes 1 |
 | no reply found | `unknown` | 1 |
 
 **Only sends that reached the hardware are logged:** focus and coma `Sending ...` lines and `Sending forces from` lines

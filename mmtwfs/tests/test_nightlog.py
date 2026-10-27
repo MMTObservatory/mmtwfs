@@ -80,11 +80,11 @@ def test_parse_send_block(tmp_path):
     assert len(d.events) == 0
 
 
-def test_unexpected_cell_reply_is_frac_one_and_not_an_error_event(tmp_path):
+def test_unexpected_cell_reply_is_frac_zero_and_not_an_error_event(tmp_path):
     d = parse_log(_write(tmp_path, BAD_FORCE_BLOCK), "20261003")
     m1 = d.sends[d.sends["kind"] == "m1"][0]
     assert m1["applied"] == "unexpected"
-    assert m1["frac"] == 1.0
+    assert m1["frac"] == 0.0  # "Bad force data": the cell rejected the forces, though wfssrv counts them as applied
     # the reply and the "\t stderr:" line are part of the send, not separate error events
     assert len(d.events[d.events["kind"] == "error"]) == 0
 
@@ -260,6 +260,14 @@ def test_read_frames_skips_malformed_headers(tmp_path):
     assert counts == {"n_unreadable": 2, "n_untimed": 0}
 
 
+def test_read_frames_bad_output_is_not_ok(tmp_path):
+    _frame(tmp_path, "mmirs_wfs_0001.fits", MMIRS_HDR)
+    (tmp_path / "mmirs_wfs_0001.output").write_text("2026-10-03T08:44:38,mmirs,truncated")
+    frames, _ = read_frames(tmp_path)
+    assert frames["status"][0] != "ok"
+    assert np.isnan(frames["focus"][0])
+
+
 def test_read_frames_empty_dir(tmp_path):
     frames, _ = read_frames(tmp_path)
     assert len(frames) == 0 and "delivered_iq" in frames.colnames
@@ -375,6 +383,13 @@ def test_m1_frame_metrics_missing_files_leave_nan(tmp_path):
     frames = _frames([("2026-10-03T08:44:38", "B", 333.0, 30.0, 0.0, 0.0, "ok", 60.0)])
     m1_frame_metrics(frames, tmp_path, _table([], EVENT_COLUMNS))
     assert np.isnan(frames["m1_force_rms"][0])
+
+
+def test_m1_frame_metrics_unreadable_zernike_leaves_nan(tmp_path):
+    frames = _frames([("2026-10-03T08:44:38", "B", 333.0, 30.0, 0.0, 0.0, "ok", 60.0)])
+    (tmp_path / "f000.reanalyze.zernike").write_text("not json")
+    m1_frame_metrics(frames, tmp_path, _table([], EVENT_COLUMNS))
+    assert np.isnan(frames["focus_unc"][0]) and np.isnan(frames["m1_force_rms"][0])
 
 
 class _FakeTelescope:
@@ -511,6 +526,30 @@ def test_m1_consistency_uses_last_span_with_sends(tmp_path):
     assert fitted == pytest.approx(expected, rel=0.05)
 
 
+def test_m1_consistency_skips_earlier_spans_and_missing_files(tmp_path):
+    mmt = get_mmt()
+    wfs = get_wfs("mmirs")
+    forces, _, zv_masked = calculate_primary_at(wfs, ZernikeVector(Z05=300.0), [], 0.5)
+    zv_masked.save(filename=tmp_path / "a.fits.masked.zernike")
+    other, _, old_masked = calculate_primary_at(wfs, ZernikeVector(Z05=-900.0), [], 0.5)
+    old_masked.save(filename=tmp_path / "old.fits.masked.zernike")
+    sends = _table([dict(time=_t(1), kind="m1", file="old.fits", forces_file="old.fits.forces", frac=1.0),
+                    dict(time=_t(3), kind="m1", file="a.fits", forces_file="a.fits.forces", frac=1.0),
+                    dict(time=_t(4), kind="m1", file="nomask.fits", forces_file="nomask.fits.forces", frac=1.0)],
+                   SEND_COLUMNS)
+    events = _table([dict(time=_t(2), kind="clear_m1"), dict(time=_t(5), kind="clear_m1")], EVENT_COLUMNS)
+    analyses = _table([dict(time=_t(t), file=f) for t, f in [(1, "old.fits"), (3, "a.fits"), (4, "nomask.fits")]],
+                      ANALYSIS_COLUMNS)
+    forces = {"old.fits.forces": np.asarray(other["force"]), "a.fits.forces": np.asarray(forces["force"]),
+              "nomask.fits.forces": np.zeros(mmt.n_act)}
+    m1, _ = m1_accounting(sends, events, forces, mmt)
+    fitted, expected = m1_consistency(sends, events, analyses, tmp_path, m1)["Z05"]
+    assert expected == pytest.approx(-0.5 * 300.0)  # only a.fits: old.fits was cleared, nomask.fits has no file
+    assert fitted == pytest.approx(expected, rel=0.05)
+    # with no accounting rows before the closing clear there is nothing to compare
+    assert m1_consistency(sends, events, analyses, tmp_path, m1[m1["time"] >= _t(5)]) == {}
+
+
 def test_m2_accounting_resets_per_channel():
     sends = _table([
         dict(time=_t(1), kind="focus", value=10.0),
@@ -553,6 +592,15 @@ def test_find_flags(tmp_path):
     assert "2 frames" in spher["detail"] and "Z11 up to 800 nm" in spher["detail"]
     assert flags[flags["kind"] == "missing_forces"][0]["file"] == "f002.fits"
     assert set(flags["visit"]) == {0}
+
+
+def test_find_flags_unreadable_spher_zernike(tmp_path):
+    frames = _visit_frames([5.0, 4.0])
+    analyses = _table([dict(time=frames["time"][0], file="f000.fits", spher=True)], ANALYSIS_COLUMNS)
+    (tmp_path / "f000.reanalyze.zernike").write_text("not json")
+    flags = find_flags(frames, _table([], SEND_COLUMNS), _table([], EVENT_COLUMNS), analyses, {}, tmp_path)
+    spher = flags[flags["kind"] == "spher_ignored"][0]
+    assert "1 frames" in spher["detail"] and "max |F| 0 N" in spher["detail"]
 
 
 def test_apply_validity_drops_what_wfssrv_rejected():
@@ -658,3 +706,15 @@ def test_load_night_drops_frames_outside_window(tmp_path):
     assert "mmirs_wfs_stale.fits" not in night.frames["file"]
     assert night.counts["n_frames_outside"] == 1
     assert any("1 frames outside the night window were ignored" in w for w in night.warnings)
+
+
+def test_load_night_notes_skipped_log_lines_and_frames(tmp_path):
+    nd = tmp_path / "20261003"
+    shutil.copytree(FIXTURE, nd)
+    with open(nd / "wfs.log", "a") as f:
+        f.write("2026-10-05 01:00:00,000 - WFSsrv - INFO - Analyzing /home/mmtop/wfsdat/mmirs_wfs_9999.fits...\n")
+    (nd / "mmirs_wfs_9999.fits").write_text("not a fits file")
+    night = load_night(nd)
+    assert night.counts["n_outside"] == 1 and night.counts["n_unreadable"] == 1
+    assert any("1 log lines outside the night window were ignored" in w for w in night.warnings)
+    assert any("skipped 1 unreadable and 0 untimed frames" in w for w in night.warnings)
