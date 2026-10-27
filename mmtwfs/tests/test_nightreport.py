@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from mmtwfs.nightlog import load_night
-from mmtwfs.scripts.nightreport import (_flag_labels, _summary_value, main, night_dirs, slew_figure, summarize,
+from mmtwfs.scripts.nightreport import (_clip_outliers, _flag_labels, _summary_value, main, night_dirs, slew_figure, summarize,
                                         timeline_figure, write_report)
 
 FIXTURE = importlib.resources.files("mmtwfs") / "data" / "test_data" / "nightreport" / "20261003"
@@ -81,6 +81,22 @@ def test_slew_figure_stacks_settle_on_gap(nightdir):
     assert [b.get_height() for b in gap_bars] == [0.0, 600.0]
     assert [(b.get_y(), b.get_height()) for b in settle_bars] == [(0.0, 40.0), (600.0, 0.0)]
     assert [t.get_text() for t in ax.texts] == ["not settled"]
+
+
+def test_clip_outliers_marks_points_off_scale():
+    import matplotlib.pyplot as plt
+    ax = plt.figure().add_subplot()
+    t = np.arange(200.0)
+    y = np.sin(t / 10)
+    y[[5, 50]] = [-500.0, 300.0]
+    _clip_outliers(ax, t, y)
+    lo, hi = ax.get_ylim()
+    assert -3.1 < lo < -2.9 and 2.9 < hi < 3.1
+    assert [ln.get_ydata()[0] for ln in ax.lines] == [lo, hi]
+    assert ax.get_legend_handles_labels()[1] == ["off scale (2)"]
+    ax = plt.figure().add_subplot()
+    _clip_outliers(ax, t, np.sin(t / 10))  # nothing off scale: limits left to matplotlib
+    assert not ax.lines and ax.get_autoscaley_on()
 
 
 def test_flag_labels_merge_close_flags():

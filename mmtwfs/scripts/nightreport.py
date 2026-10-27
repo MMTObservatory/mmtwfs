@@ -57,8 +57,10 @@ EVENT_KINDS = {
     "m1_partial": "the cell applied only part of the requested M1 forces",
     "missing_forces": "M1 forces were sent but the .forces file isn't in the archive",
 }
-# one font-size step up from matplotlib's defaults, for figures viewed scaled down in a browser
-PLOT_RC = {"font.size": 12, "legend.fontsize": 11, "axes.titlesize": 13}
+# ggplot's gray panels and white gridlines, one font-size step up for figures viewed scaled down in a browser,
+# and matplotlib's ten-color cycle so the colors keep their meaning and ten Zernike terms stay distinct
+PLOT_STYLE = ["ggplot", {"font.size": 12, "legend.fontsize": 11, "axes.titlesize": 13,
+                         "axes.prop_cycle": matplotlib.rcParamsDefault["axes.prop_cycle"]}]
 LEGEND_RIGHT = dict(loc="upper left", bbox_to_anchor=(1.01, 1.0), borderaxespad=0.0)
 
 
@@ -179,8 +181,30 @@ def _twin_steps(ax, table, left, right, left_label, right_label):
     for n, (side, col, label) in enumerate([(ax, c, lbl) for c, lbl in left] + [(right_ax, c, lbl) for c, lbl in right]):
         side.step(table["time"], table[col], where="post", color=f"C{n}", label=label)
     right_ax.set_ylabel(right_label)
+    right_ax.yaxis.grid(True, ls="--", color="k", lw=0.6)  # tell its gridlines from the left axis's white ones
     ax.legend(handles=ax.get_lines() + right_ax.get_lines(), **LEGEND_RIGHT)  # moved past right_ax once drawn
     return right_ax
+
+
+def _clip_outliers(ax, t, y, pad=1.0):
+    """
+    Limit the y axis to the 1st-99th percentile range of y, padded by that span on each side, so a few wild points don't
+    flatten the rest. Points beyond the limits are drawn as triangles on the panel edge and added to the legend.
+    """
+    lo, hi = np.nanpercentile(y, [1, 99])
+    span = max(hi - lo, 1.0)
+    lo, hi = lo - pad * span, hi + pad * span
+    below, above = y < lo, y > hi
+    n_off = int(below.sum() + above.sum())
+    if n_off == 0:
+        return
+    ax.set_ylim(lo, hi)
+    label = f"off scale ({n_off})"
+    for sel, edge, marker in ((below, lo, "v"), (above, hi, "^")):
+        if sel.any():
+            ax.plot(t[sel], np.full(sel.sum(), edge), marker, ls="none", ms=6, color="C3", clip_on=False, zorder=3,
+                    label=label)
+            label = "_nolegend_"
 
 
 def _legends_past(fig, twins):
@@ -219,6 +243,8 @@ def timeline_figure(night):
     ax.axhline(0, color="0.7", lw=0.8)
     ax.errorbar(ok["time"], ok["focus"], yerr=ok["focus_unc"], fmt="o", ms=4, mew=0, lw=0.8, color="C0",
                 label="measured focus error")
+    if len(ok):
+        _clip_outliers(ax, ok["time"], np.asarray(ok["focus"], dtype=float))
     focus_sends = night.sends["time"][night.sends["kind"] == "focus"]
     if len(focus_sends):
         ax.plot(focus_sends, np.full(len(focus_sends), 0.04), "|", ms=14, mew=1.5, color="C1",
@@ -244,7 +270,9 @@ def timeline_figure(night):
         if len(night.m1) and np.max(np.abs(night.m1[term])) > 10:
             ax.step(night.m1["time"], night.m1[term], where="post", label=f"{term} {zv.shortlabel(term).strip()}")
     ax.set_ylabel("cumulative M1\nwavefront (nm)")
-    if not ax.get_lines():
+    if ax.get_lines():
+        ax.legend(ncol=2, **LEGEND_RIGHT)
+    else:
         _nothing_logged(ax)
     ax.set_xlabel("UTC")
     ax.xaxis.set_major_formatter(DateFormatter("%H:%M"))
@@ -335,7 +363,7 @@ def render_html(night, summary):
     if len(night.frames) == 0:
         parts.append("<p>No WFS frames in this night directory.</p></body></html>")
         return "".join(parts)
-    with plt.rc_context(PLOT_RC):
+    with plt.style.context(PLOT_STYLE):
         parts.append("<h2>Night timeline</h2>" + _img(timeline_figure(night)))
         parts.append("<h2>M1 surface</h2>")
         maps = surface_figures(night)
