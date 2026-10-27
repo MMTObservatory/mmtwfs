@@ -32,6 +32,8 @@ test = [
     "flake8",
     "coverage",
     "pytest-benchmark",
+    # pytest 9.2 breaks pytest-benchmark 5.3 (item._nodeid) and pytest-remotedata 0.4.2 (duplicate option dest)
+    "pytest<9.2",
 ]
 docs = [
     "sphinx-astropy",
