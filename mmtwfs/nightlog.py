@@ -375,7 +375,7 @@ def apply_validity(frames, events=None):
                 verdict[f] = "wavefront fit too poor"
             elif resid >= ALL_VALID_RESID:
                 verdict[f] = "only focus corrections valid"
-    frames["status"] = frames["status"].astype("U10")  # sized to the longest status present, which may be "ok"
+    frames.replace_column("status", frames["status"].astype("U10"))  # sized to the longest status present, maybe "ok"
     for i, f in enumerate(frames["file"]):
         if frames["status"][i] != "ok" or f not in verdict:
             continue
