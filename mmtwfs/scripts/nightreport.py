@@ -19,6 +19,7 @@ import re
 from collections import Counter
 from pathlib import Path
 
+import coloredlogs
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
@@ -32,6 +33,7 @@ from mmtwfs.version import version  # noqa: E402
 from mmtwfs.zernike import ZernikeVector  # noqa: E402
 
 log = logging.getLogger("NightReport")
+coloredlogs.install(level="INFO", logger=log)
 
 VISIT_TABLE_COLUMNS = [
     ("catid", "{}"), ("start", "{}"), ("gap", "{:.0f}"), ("focus_settle_thresh", "{:.0f}"),
