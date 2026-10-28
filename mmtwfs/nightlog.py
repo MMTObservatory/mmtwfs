@@ -48,7 +48,7 @@ SEND_COLUMNS = [
     ("time", TIME), ("kind", str), ("file", str), ("value", float), ("value2", float), ("forces_file", str),
     ("fmax", float), ("fmin", float), ("applied", str), ("frac", float),
 ]
-EVENT_COLUMNS = [("time", TIME), ("kind", str), ("detail", str), ("file", str)]
+EVENT_COLUMNS = [("time", TIME), ("kind", str), ("detail", str), ("file", str), ("wfs", str)]
 ANALYSIS_COLUMNS = [("time", TIME), ("file", str), ("spher", bool)]
 
 NUM = r"-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?"
@@ -72,6 +72,7 @@ PATTERNS = [
     ("m1_gain", re.compile(rf"^Setting M1 gain to (?P<v>{NUM})")),
     ("m2_gain", re.compile(rf"^Setting M2 gain to (?P<v>{NUM})")),
     ("wfs_select", re.compile(r"^Setting (?P<wfs>\w+)$")),
+    ("wfs_restart", re.compile(r"^restarting (?P<wfs>\w+)$")),
     ("connect", re.compile(r"^(?P<name>.+?) (?:is|already) (?P<state>connected|disconnected)\.?$")),
     ("validity", re.compile(r"(?P<msg>only focus corrections valid|wavefront fit too poor)")),
 ]
@@ -144,7 +145,7 @@ def parse_log(logfile, night):
     n_lines = n_outside = n_unrecognized = 0
     connected = {}  # wfssrv keeps a connected flag per WFS object, keyed here by WFS name
     last_connected = None  # most recent connect state of any WFS, for resets before any WFS is selected
-    selected = None
+    selected = selected_key = None  # the selected WFS's name and its config key
     last_m1 = None
     prev_kind = None
 
@@ -165,7 +166,8 @@ def parse_log(logfile, night):
             if kind == "connect":
                 last_connected = connected[mm["name"]] = mm["state"] == "connected"
             elif kind == "wfs_select":
-                selected = WFS_NAMES.get(mm["wfs"], mm["wfs"])
+                selected_key = mm["wfs"]
+                selected = WFS_NAMES.get(selected_key, selected_key)
             if not start <= t < end:
                 n_outside += 1  # connection state and WFS selection still carry into the window
                 continue
@@ -204,10 +206,12 @@ def parse_log(logfile, night):
                 if state is not False:
                     events.append(dict(time=t, kind="clear_m2"))
             elif kind in ("m1_gain", "m2_gain"):
-                if prev_kind != "bad_gain":
-                    events.append(dict(time=t, kind=kind, detail=mm["v"]))
+                if prev_kind != "bad_gain":  # wfssrv sets the gain on the selected WFS only
+                    events.append(dict(time=t, kind=kind, detail=mm["v"], wfs=selected_key or ""))
             elif kind == "wfs_select":
                 events.append(dict(time=t, kind="wfs_select", detail=mm["wfs"]))
+            elif kind == "wfs_restart":  # a fresh WFS object, back at its default gains
+                events.append(dict(time=t, kind="wfs_restart", detail=mm["wfs"], wfs=mm["wfs"]))
             elif kind == "connect":
                 events.append(dict(time=t, kind="connect", detail=mm["state"]))
             elif kind == "validity":
@@ -269,16 +273,18 @@ def _dec_deg(value):
 def frame_wfs(name, hdr):
     """
     Which WFS took a frame, using the same clues as mmtwfs.scripts.reanalyze.check_image. The old Apogee F/9 maps to
-    the "f9" WFS key.
+    the "f9" WFS key. Only needed for frames without a reanalyze output, which records the WFS itself.
     """
     if "mmirs" in name or "mmirs" in str(hdr.get("WFSNAME", "")):
         return "mmirs"
-    if "wfs_ff_cal_img" in name or "bino" in name:
+    if "wfs_ff_cal_img" in name or "bino" in name or "Binospec" in str(hdr.get("ORIGIN", "")):
         return "binospec"
     if "f9wfs" in name or "F/9 WFS" in str(hdr.get("OBSERVER", "")) or "F/9 WFS" in str(hdr.get("CAMERA", "")):
         return "newf9"
     if "Apogee" in str(hdr.get("INSTRUME", "")) or "Apogee" in str(hdr.get("DETECTOR", "")):
         return "f9"
+    if "f5wfs" in name or "F/5 WFS" in str(hdr.get("INSTRUME", "")) or "F5" in str(hdr.get("SEC", "")):
+        return "f5"
     return "unknown"
 
 
@@ -301,6 +307,8 @@ def _frame_time(hdr):
         return Time(float(hdr["MJD"]), format="mjd", scale="utc").datetime
     return None
 
+
+OUTPUT_WFS = {"oldf9": "f9"}  # reanalyze's names that differ from the WFS config keys
 
 # reanalyze skips these: reference images, the SOG camera, and derived products such as *.coadded_spot.fits
 DERIVED_MARKERS = ("Ref", "sog", "coadded")
@@ -345,6 +353,7 @@ def read_frames(nightdir):
             row["status"] = "ok"
             row.update({k: output[col] for k, col in FROM_OUTPUT.items()})
             row["method"] = output["method"]
+            row["wfs"] = OUTPUT_WFS.get(output["wfs"], output["wfs"])
         elif (nightdir / f"{stem}.failed").exists():
             row["status"] = "failed"
         else:
@@ -358,23 +367,26 @@ FOCUS_ONLY_DROPPED = ("cc_x_err", "cc_y_err", "delivered_iq")
 ALL_VALID_RESID, FOCUS_VALID_RESID = 4000.0, 7000.0  # nm; wfssrv's residual RMS limits for its corrections
 
 
-def apply_validity(frames, events=None):
+def apply_validity(frames, events, analyses):
     """
     Drop the measurements wfssrv itself rejected. A wavefront residual above 7000 nm logs "wavefront fit too poor"
     and no correction is valid, so the frame's status becomes "invalid". Between 4000 and 7000 nm only focus is
-    valid, so coma and delivered IQ are set to NaN. The verdicts come from the wfs.log validity events; without a
-    log (events None) they are reconstructed from the reanalyzed residual RMS with wfssrv's limits.
+    valid, so coma and delivered IQ are set to NaN. For frames wfssrv analyzed, the verdicts come from the wfs.log
+    validity events. Frames it never analyzed (no log, or wfssrv down) get them from the reanalyzed residual RMS
+    with wfssrv's limits.
     """
-    if events is not None:
-        validity = events[events["kind"] == "validity"]
-        verdict = dict(zip(validity["file"], validity["detail"]))
-    else:
-        verdict = {}
-        for f, resid in zip(frames["file"], frames["residual_rms"]):
-            if resid > FOCUS_VALID_RESID:
-                verdict[f] = "wavefront fit too poor"
-            elif resid >= ALL_VALID_RESID:
-                verdict[f] = "only focus corrections valid"
+    validity = events[events["kind"] == "validity"]
+    logged = dict(zip(validity["file"], validity["detail"]))
+    online = set(analyses["file"])
+    verdict = {}
+    for f, resid in zip(frames["file"], frames["residual_rms"]):
+        if f in online:
+            if f in logged:
+                verdict[f] = logged[f]
+        elif resid > FOCUS_VALID_RESID:
+            verdict[f] = "wavefront fit too poor"
+        elif resid >= ALL_VALID_RESID:
+            verdict[f] = "only focus corrections valid"
     frames.replace_column("status", frames["status"].astype("U10"))  # sized to the longest status present, maybe "ok"
     for i, f in enumerate(frames["file"]):
         if frames["status"][i] != "ok" or f not in verdict:
@@ -408,9 +420,8 @@ def _target(row):
 
 
 def _same_target(a, b, params):
-    if np.isfinite(a["catra"]) and np.isfinite(b["catra"]):
-        return (round(a["catra"], 4), round(a["catdec"], 4), a["catid"]) == \
-               (round(b["catra"], 4), round(b["catdec"], 4), b["catid"])
+    if a["catid"] and b["catid"]:  # the catalog ID stays fixed for the whole of a visit
+        return a["catid"] == b["catid"]
     return _sep_arcsec(*_target(a), *_target(b)) <= params["slew_sep"]
 
 
@@ -464,10 +475,38 @@ def get_wfs(key):
     return _WFS_CACHE[key]
 
 
-def gain_at(events, kind, time, default):
-    """The most recent gain of this kind logged at or before time, or the WFS default."""
-    sel = events[(events["kind"] == kind) & (events["time"] <= time)]
-    return float(sel["detail"][-1]) if len(sel) else default
+def gain_at(events, kind, time, default, wfs=None):
+    """
+    The most recent gain of this kind logged at or before time, or the WFS default. wfssrv keeps a gain per WFS, so
+    with wfs given only that WFS's gains count (or ones logged before any WFS was selected), and a restart of that WFS
+    returns it to the default.
+    """
+    sel = (events["kind"] == kind) & (events["time"] <= time)
+    if wfs is not None:
+        sel &= (events["wfs"] == wfs) | (events["wfs"] == "")
+        restarts = events["time"][(events["kind"] == "wfs_restart") & (events["wfs"] == wfs) & (events["time"] <= time)]
+        if len(restarts):
+            sel &= events["time"] > restarts[-1]
+    gains = events["detail"][sel]
+    return float(gains[-1]) if len(gains) else default
+
+
+@functools.lru_cache
+def default_gain(key, kind, fallback):
+    """A WFS's configured gain, or fallback when the WFS is unknown or can't be built."""
+    if key == "unknown":
+        return fallback
+    try:
+        return getattr(get_wfs(key), kind)
+    except Exception as e:
+        log.warning(f"Can't build WFS {key}: {e}")
+        return fallback
+
+
+def selected_wfs(events, time):
+    """The WFS wfssrv had selected at time, or None."""
+    sel = events["detail"][(events["kind"] == "wfs_select") & (events["time"] <= time)]
+    return str(sel[-1]) if len(sel) else None
 
 
 def m1_resid_rms(zv):
@@ -518,19 +557,20 @@ def focus_uncertainty(zv, wfs):
     return abs(float(u.Quantity(err, z.units).value / wfs.secondary.focus_trans.value))
 
 
-def m1_frame_metrics(frames, nightdir, events):
+def m1_frame_metrics(frames, nightdir, events, analyses=None):
     """
     Fill frames["focus_unc"], frames["m1_resid_rms"] and frames["m1_force_rms"] for ok frames. For M1, use the
     online .masked.zernike, which is exactly what fed the proposed forces. Otherwise recompute from
-    .reanalyze.zernike with the frame's spherical mask and the M1 gain in effect.
+    .reanalyze.zernike with the frame's spherical mask and the M1 gain in effect when wfssrv analyzed it.
     """
+    analysed_at = {} if analyses is None else dict(zip(analyses["file"], analyses["time"]))
     for i in range(len(frames)):
         row = frames[i]
         if row["status"] != "ok" or row["wfs"] == "unknown":
             continue
         try:
             wfs = get_wfs(row["wfs"])
-            gain = gain_at(events, "m1_gain", row["time"], wfs.m1_gain)
+            gain = gain_at(events, "m1_gain", analysed_at.get(row["file"], row["time"]), wfs.m1_gain, row["wfs"])
             zfile = nightdir / f"{row['file'].removesuffix('.fits')}.reanalyze.zernike"
             zv_full = _load_zv(zfile) if zfile.exists() else None
             if zv_full is not None:
@@ -759,7 +799,9 @@ def m1_consistency(sends, events, analyses, nightdir, m1):
         if not masked.exists():
             continue
         zv = load_masked_zv(masked)
-        gain = gain_at(events, "m1_gain", analysed_at.get(s["file"], s["time"]), 0.5)
+        t = analysed_at.get(s["file"], s["time"])
+        key = selected_wfs(events, t)
+        gain = gain_at(events, "m1_gain", t, default_gain(key, "m1_gain", 0.5) if key else 0.5, key)
         for term in FIT_TERMS:
             if term in zv.coeffs:
                 expected[term] -= s["frac"] * gain * zv[term].value
@@ -771,11 +813,11 @@ FLAG_COLUMNS = [("time", TIME), ("kind", str), ("file", str), ("detail", str), (
 M1_FOCUS_GATE = 150.0  # um; wfssrv blocks M1 corrections when pending focus exceeds this (signed comparison)
 
 
-def _spher_detail(files, frames, events, nightdir):
+def _spher_detail(files, frames, events, analysed_at, nightdir):
     """How much spherical was being ignored, and the forces a full correction would have needed."""
     z11 = fmax = frms = 0.0
     wfs_of = dict(zip(frames["file"], frames["wfs"]))
-    time_of = dict(zip(frames["file"], frames["time"]))
+    time_of = {**dict(zip(frames["file"], frames["time"])), **analysed_at}
     for f in files:
         stem = f.removesuffix(".fits")
         zfile = nightdir / f"{stem}.reanalyze.zernike"
@@ -786,7 +828,7 @@ def _spher_detail(files, frames, events, nightdir):
         try:
             zv = _load_zv(zfile)
             wfs = get_wfs(wfs_of[f])
-            gain = gain_at(events, "m1_gain", time_of[f], wfs.m1_gain)
+            gain = gain_at(events, "m1_gain", time_of[f], wfs.m1_gain, wfs_of[f])
             t, _, _ = calculate_primary_at(wfs, zv, ["Z22"], gain)
         except Exception as e:
             log.warning(f"Couldn't size ignored spherical for {f}: {e}")
@@ -800,6 +842,7 @@ def _spher_detail(files, frames, events, nightdir):
 def find_flags(frames, sends, events, analyses, forces, nightdir):
     """Events worth a reviewer's attention, each tied to the visit it happened in."""
     visit_of = dict(zip(frames["file"], frames["visit"]))
+    analysed_at = dict(zip(analyses["file"], analyses["time"]))  # wfssrv used the gains in effect at analysis
     flags = []
 
     def add(time, kind, file, detail):
@@ -820,7 +863,7 @@ def find_flags(frames, sends, events, analyses, forces, nightdir):
         while j + 1 < len(analyses) and spher[j + 1]:
             j += 1
         files = list(analyses["file"][i:j + 1])
-        z11, fmax, frms = _spher_detail(files, frames, events, nightdir)
+        z11, fmax, frms = _spher_detail(files, frames, events, analysed_at, nightdir)
         add(analyses["time"][i], "spher_ignored", files[0],
             f"{analyses['time'][i]} to {analyses['time'][j]} UTC, {len(files)} frames, Z11 up to {z11:.0f} nm; "
             f"full correction would need max |F| {fmax:.0f} N, RMS {frms:.0f} N")
@@ -828,8 +871,8 @@ def find_flags(frames, sends, events, analyses, forces, nightdir):
 
     for row in frames[frames["status"] == "ok"]:
         # mirror wfssrv: pending focus (m2_gain x measured correction) above +150 um blocks M1. The gate is signed.
-        default = get_wfs(row["wfs"]).m2_gain if row["wfs"] != "unknown" else 1.0
-        pending = gain_at(events, "m2_gain", row["time"], default) * row["focus"]
+        default = default_gain(row["wfs"], "m2_gain", 1.0)
+        pending = gain_at(events, "m2_gain", analysed_at.get(row["file"], row["time"]), default, row["wfs"]) * row["focus"]
         if pending > M1_FOCUS_GATE:
             add(row["time"], "m1_blocked_focus", row["file"], f"pending focus {pending:.0f} um")
     for e in events[events["kind"] == "validity"]:
@@ -912,14 +955,14 @@ def load_night(path, params=None):
     for i, f in enumerate(frames["file"]):
         if f in spher_of:
             frames["spher"][i] = int(bool(spher_of[f]))
-    apply_validity(frames, logdata.events if logfile.exists() else None)
+    apply_validity(frames, logdata.events, analyses)
 
     visit_rows, offsets = build_visits(frames, params)
     events = logdata.events
     if offsets:
         events = _table(sorted([dict(zip(events.colnames, r)) for r in events] + offsets, key=lambda e: e["time"]),
                         EVENT_COLUMNS)
-    m1_frame_metrics(frames, path, events)
+    m1_frame_metrics(frames, path, events, analyses)
 
     mmt = get_mmt()
     forces = {}

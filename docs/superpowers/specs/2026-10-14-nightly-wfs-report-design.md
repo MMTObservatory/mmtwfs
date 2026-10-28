@@ -114,7 +114,8 @@ Every table is an `astropy.table.Table`. Times are UTC `numpy.datetime64[ms]` co
 ### `frames`: one row per FITS frame
 
 - **From the header:** `time`, `file`, `wfs`, `exptime`, `catid`, `catra`, `catdec`, `ra`, `dec`, `raoff`, `decoff`,
-  `az`, `el`, `transx`, `transy`, `transz`, `tiltx`, `tilty`.
+  `az`, `el`, `transx`, `transy`, `transz`, `tiltx`, `tilty`. `wfs` comes from the `.output` file when there is one
+  (reanalyze's `oldf9` maps to `f9`), and otherwise from reanalyze's header clues, including `INSTRUME = 'F/5 WFS'`.
 - **From reanalyze `.output`, if present:**
   - `focus`: the measured M2 focus correction in µm, at gain 1 and after errorbar shrinkage. It comes from the
     `.output` **`focerr`** column. The `.output` `focus` column is the hexapod position (`TRANSZ`), which the header
@@ -129,8 +130,9 @@ Every table is an `astropy.table.Table`. Times are UTC `numpy.datetime64[ms]` co
 - **`m1_resid_rms`:** the RMS of the M1-actionable Zernike vector (nm).
 - **`m1_force_rms`:** the RMS of the proposed M1 forces (N).
 - **Sources for those two M1 fields:** the frame's `.masked.zernike` if it exists. Otherwise they are recomputed with
-  `wfs.calculate_primary(zv, mask=spher_mask)` from `.reanalyze.zernike`. The gain is the M1 gain in effect at that
-  time, from the log, or the WFS default if the log doesn't say.
+  `wfs.calculate_primary(zv, mask=spher_mask)` from `.reanalyze.zernike`. The gain is the frame's WFS's M1 gain in
+  effect when wfssrv analyzed it (the exposure time if it never did), from the log, or the WFS default if the log
+  doesn't say.
 - **`visit`:** the index of the visit the frame belongs to.
 
 ### `sends`: one row per correction sent
@@ -168,8 +170,9 @@ These are non-send events. Columns are `time`, `kind`, `detail`, `file`. The kin
 |---|---|
 | `clear_m1` | `Telescope - Clearing forces and spherical aberration focus offsets...`, which is logged only when connected |
 | `clear_m2` | `Secondary - Resetting hexapod's WFS offsets to 0...`. This is logged even when disconnected, so it counts only if the most recent connection line (`<name> is connected.` / `is disconnected.` / `already ...`) isn't a disconnect. |
-| `m1_gain`, `m2_gain` | `Setting M1 gain to N`, `Setting M2 gain to N`. Skipped when the line right before it is `Invalid M1 gain` or `Invalid M2 gain`, because the handler logs "Setting" even for gains it rejected. |
-| `wfs_select` | `WFSsrv - INFO - Setting <wfs>`. It's logged on every WFS page load, so it's informational only. Gains persist per WFS object until wfssrv restarts. |
+| `m1_gain`, `m2_gain` | `Setting M1 gain to N`, `Setting M2 gain to N`. Skipped when the line right before it is `Invalid M1 gain` or `Invalid M2 gain`, because the handler logs "Setting" even for gains it rejected. `wfs` is the WFS selected at the time, since wfssrv sets the gain on that WFS object only. |
+| `wfs_select` | `WFSsrv - INFO - Setting <wfs>`. It's logged on every WFS page load. Gains persist per WFS object until wfssrv restarts. |
+| `wfs_restart` | `WFSsrv - INFO - restarting <wfs>`. wfssrv builds a new object for that WFS, so its gains return to the defaults. |
 | `connect` | `<name> is connected.` / `is disconnected.` / `already connected` / `already disconnected`; `detail` is `connected` or `disconnected` |
 | `error` | `Telescope - ERROR` and `Secondary - ERROR` lines, such as cell `Bad force data` |
 | `validity` | `only focus corrections valid` and `wavefront fit too poor` |
@@ -178,14 +181,16 @@ These are non-send events. Columns are `time`, `kind`, `detail`, `file`. The kin
 
 One row per `Analyzing <file>` line, with columns `time`, `file`, and `spher`.
 
-**Gain in effect:** the most recent `m1_gain` (or `m2_gain`) event before a given time. Before the first one, it's the
-WFS config default. A wfssrv restart resets gains, but it can't be detected reliably, which is a known limitation.
+**Gain in effect:** for a WFS, the most recent `m1_gain` (or `m2_gain`) event for that WFS before a given time, after
+its last `wfs_restart`. Gains logged before any WFS was selected count for every WFS. Before the first one, it's the
+WFS config default. A restart of wfssrv itself also resets gains, but it can't be detected reliably, which is a known
+limitation. Per-frame quantities use the time wfssrv analyzed the frame, because a gain set between the exposure and
+the analysis is the one wfssrv applied.
 
 ### `visits`
 
-A visit is a run of consecutive frames (in time order) that share a target key. The key is
-(`round(catra, 4 decimal places of hours)`, `round(catdec, 4 decimal places of degrees)`, `catid`). If the catalog keys
-are missing, the fallback is the target position (`ra`, `dec` minus `raoff`, `decoff`), and a new visit starts when the
+A visit is a run of consecutive frames (in time order) that share a `catid`, which stays fixed for the whole of a
+visit. If it is missing, the fallback is the target position (`ra`, `dec` minus `raoff`, `decoff`), and a new visit starts when the
 separation exceeds `params["slew_sep"]` (default 60″).
 
 Columns:

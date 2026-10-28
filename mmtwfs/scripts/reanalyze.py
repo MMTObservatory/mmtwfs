@@ -38,9 +38,6 @@ coloredlogs.install(level='INFO', logger=log)
 tz = pytz.timezone("America/Phoenix")
 
 
-# instantiate all of the WFS systems...
-
-
 def delivered_iq(wfskey, zv, seeing):
     """
     FWHM in arcsec of the delivered PSF at 500 nm: the optics PSF from the measured wavefront convolved with the
@@ -80,6 +77,7 @@ def upgrade_cached_line(line, zfile=None):
     return line
 
 
+# instantiate all of the WFS systems...
 wfs_keys = ['f9', 'newf9', 'f5', 'mmirs', 'binospec']
 wfs_systems = {}
 wfs_names = {}

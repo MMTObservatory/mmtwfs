@@ -130,6 +130,18 @@ def test_clears_gains_and_connection(tmp_path):
     assert list(ev["detail"][4:]) == ["disconnected", "connected", "mmirs"]
 
 
+def test_gains_are_tagged_with_the_selected_wfs(tmp_path):
+    text = """\
+2026-10-02 23:42:00,000 - WFSsrv - INFO - Setting M1 gain to 0.4
+2026-10-02 23:53:00,000 - WFSsrv - INFO - Setting mmirs
+2026-10-02 23:54:00,000 - WFSsrv - INFO - Setting M1 gain to 0.2
+2026-10-02 23:55:00,000 - WFSsrv - INFO - restarting mmirs
+"""
+    ev = parse_log(_write(tmp_path, text), "20261003").events
+    assert list(ev["kind"]) == ["m1_gain", "wfs_select", "m1_gain", "wfs_restart"]
+    assert list(ev["wfs"]) == ["", "", "mmirs", "mmirs"]
+
+
 def test_clear_m2_uses_connection_of_selected_wfs(tmp_path):
     # wfssrv keeps a connected flag per WFS object; the reset line belongs to the selected WFS
     text = """\
@@ -205,6 +217,10 @@ def test_frame_wfs():
     assert frame_wfs("wfs_ff_cal_img_2025.02.03T034813.592.fits", {}) == "binospec"
     assert frame_wfs("f9wfs_20240426-212258.fits", {}) == "newf9"
     assert frame_wfs("x.fits", {"INSTRUME": "Apogee"}) == "f9"
+    assert frame_wfs("f5wfs_20260204-123140.fits", {"INSTRUME": "F/5 WFS"}) == "f5"
+    assert frame_wfs("x.fits", {"INSTRUME": "F/5 WFS"}) == "f5"
+    assert frame_wfs("x.fits", {"SEC": "F5"}) == "f5"
+    assert frame_wfs("x.fits", {"ORIGIN": "Binospec"}) == "binospec"
     assert frame_wfs("x.fits", {}) == "unknown"
 
 
@@ -260,6 +276,18 @@ def test_read_frames_skips_malformed_headers(tmp_path):
     assert counts == {"n_unreadable": 2, "n_untimed": 0}
 
 
+def test_read_frames_takes_wfs_from_output(tmp_path):
+    hdr = {k: v for k, v in MMIRS_HDR.items() if k != "WFSNAME"}
+    _frame(tmp_path, "wfs_0001.fits", hdr)
+    _frame(tmp_path, "wfs_0002.fits", {**hdr, "DATE-OBS": "2026-10-03T08:45:00"})
+    _frame(tmp_path, "wfs_0003.fits", {**hdr, "DATE-OBS": "2026-10-03T08:46:00"})
+    for n, key in [(1, "f5"), (2, "oldf9")]:
+        line = OUTPUT_LINE.format(name=f"wfs_000{n}.fits", focus=1.0).replace(",mmirs,", f",{key},")
+        (tmp_path / f"wfs_000{n}.output").write_text(line)
+    frames, _ = read_frames(tmp_path)
+    assert list(frames["wfs"]) == ["f5", "f9", "unknown"]
+
+
 def test_read_frames_bad_output_is_not_ok(tmp_path):
     _frame(tmp_path, "mmirs_wfs_0001.fits", MMIRS_HDR)
     (tmp_path / "mmirs_wfs_0001.output").write_text("2026-10-03T08:44:38,mmirs,truncated")
@@ -302,6 +330,17 @@ def test_build_visits_splits_on_target_and_lists_offsets():
     assert [(o["file"], o["detail"]) for o in offsets] == [("f002.fits", "RA +2.00 Dec -30.00 arcsec")]
 
 
+def test_build_visits_same_catid_is_one_visit():
+    # catalog positions jitter across a rounding boundary; the catalog ID doesn't change
+    frames = _frames([
+        ("2026-10-03T06:40:00", "A", 123.45675, 40.0, 0.0, 0.0, "ok", 50.0),
+        ("2026-10-03T06:41:00", "A", 123.4567499, 40.0, 0.0, 0.0, "ok", 50.0),
+        ("2026-10-03T06:42:00", "B", 123.4567499, 40.0, 0.0, 0.0, "ok", 50.0),
+    ])
+    build_visits(frames, SETTLE_DEFAULTS)
+    assert list(frames["visit"]) == [0, 0, 1]
+
+
 def test_build_visits_fallback_without_catalog():
     nan = np.nan
     frames = _frames([
@@ -331,6 +370,18 @@ def test_gain_at():
     assert gain_at(ev, "m2_gain", np.datetime64("2026-10-03T08:40:00"), 0.7) == 1.0
 
 
+def test_gain_at_is_per_wfs_and_reset_by_restart():
+    ev = _table([dict(time=_t(0), kind="m1_gain", detail="0.3"),  # before any WFS was selected: applies to all
+                 dict(time=_t(1), kind="m1_gain", detail="0.2", wfs="mmirs"),
+                 dict(time=_t(2), kind="m1_gain", detail="0.4", wfs="binospec"),
+                 dict(time=_t(3), kind="wfs_restart", detail="mmirs", wfs="mmirs")], EVENT_COLUMNS)
+    assert gain_at(ev, "m1_gain", _t(2), 0.5, "mmirs") == 0.2
+    assert gain_at(ev, "m1_gain", _t(2), 0.5, "binospec") == 0.4
+    assert gain_at(ev, "m1_gain", _t(2), 0.5, "newf9") == 0.3
+    assert gain_at(ev, "m1_gain", _t(4), 0.5, "mmirs") == 0.5
+    assert gain_at(ev, "m1_gain", _t(4), 0.5, "binospec") == 0.4
+
+
 def test_m1_resid_rms_ignores_focus():
     assert m1_resid_rms(ZernikeVector(Z04=1000.0, Z05=100.0)) == pytest.approx(
         ZernikeVector(Z05=100.0).rms.value)
@@ -347,6 +398,19 @@ def test_m1_frame_metrics_prefers_masked_file(tmp_path):
     expected = get_wfs("mmirs").telescope.bending_forces(zv=masked.copy(), gain=0.2)["force"]
     assert frames["m1_force_rms"][0] == pytest.approx(np.sqrt(np.mean(np.asarray(expected) ** 2)))
     assert frames["m1_resid_rms"][0] == pytest.approx(m1_resid_rms(masked))
+
+
+def test_m1_frame_metrics_uses_gain_at_analysis(tmp_path):
+    # the gain changed between the exposure (08:44:38) and wfssrv's analysis of it (08:44:45)
+    frames = _frames([("2026-10-03T08:44:38", "B", 333.0, 30.0, 0.0, 0.0, "ok", 60.0)])
+    ZernikeVector(Z05=200.0).save(filename=tmp_path / "f000.reanalyze.zernike")
+    ev = _table([dict(time=np.datetime64("2026-10-03T08:44:44"), kind="m1_gain", detail="0.2", wfs="mmirs")],
+                EVENT_COLUMNS)
+    analyses = _table([dict(time=np.datetime64("2026-10-03T08:44:45"), file="f000.fits")], ANALYSIS_COLUMNS)
+    m1_frame_metrics(frames, tmp_path, ev, analyses)
+    at_analysis = frames["m1_force_rms"][0]
+    m1_frame_metrics(frames, tmp_path, ev)  # by exposure time the default 0.5 would apply
+    assert at_analysis == pytest.approx(0.4 * frames["m1_force_rms"][0])
 
 
 def test_m1_frame_metrics_recomputes_from_reanalyze(tmp_path):
@@ -594,6 +658,14 @@ def test_find_flags(tmp_path):
     assert set(flags["visit"]) == {0}
 
 
+def test_find_flags_survives_unbuildable_wfs(tmp_path):
+    frames = _visit_frames([200.0, 5.0])
+    frames["wfs"] = ["nosuchwfs", "unknown"]
+    analyses = _table([], ANALYSIS_COLUMNS)
+    flags = find_flags(frames, _table([], SEND_COLUMNS), _table([], EVENT_COLUMNS), analyses, {}, tmp_path)
+    assert list(flags["kind"]) == ["m1_blocked_focus"]  # gated at the fallback M2 gain of 1
+
+
 def test_find_flags_unreadable_spher_zernike(tmp_path):
     frames = _visit_frames([5.0, 4.0])
     analyses = _table([dict(time=frames["time"][0], file="f000.fits", spher=True)], ANALYSIS_COLUMNS)
@@ -608,7 +680,9 @@ def test_apply_validity_drops_what_wfssrv_rejected():
     events = _table([dict(time=frames["time"][0], kind="validity", detail="wavefront fit too poor", file="f000.fits"),
                      dict(time=frames["time"][1], kind="validity", detail="only focus corrections valid",
                           file="f001.fits")], EVENT_COLUMNS)
-    apply_validity(frames, events)
+    frames["residual_rms"] = [12000.0, 5000.0, 4500.0]  # f002: analyzed online and logged as valid, so kept
+    analyses = _table([dict(time=t, file=f) for t, f in zip(frames["time"], frames["file"])], ANALYSIS_COLUMNS)
+    apply_validity(frames, events, analyses)
     assert list(frames["status"]) == ["invalid", "ok", "ok"]
     assert frames["focus"][1] == 30.0
     assert np.isnan(frames["cc_x_err"][1]) and np.isnan(frames["cc_y_err"][1]) and np.isnan(frames["delivered_iq"][1])
@@ -618,10 +692,20 @@ def test_apply_validity_drops_what_wfssrv_rejected():
 def test_apply_validity_from_residual_without_log():
     frames = _visit_frames([-450.0, 30.0, 5.0], iq=[4.2, 1.5, 1.0], cc=[2.0, 0.8, 0.1])
     frames["residual_rms"] = [12000.0, 5000.0, 1500.0]
-    apply_validity(frames)
+    apply_validity(frames, _table([], EVENT_COLUMNS), _table([], ANALYSIS_COLUMNS))
     assert list(frames["status"]) == ["invalid", "ok", "ok"]
     assert frames["focus"][1] == 30.0 and np.isnan(frames["delivered_iq"][1])
     assert frames["delivered_iq"][2] == 1.0
+
+
+def test_apply_validity_falls_back_for_frames_wfssrv_never_saw():
+    # wfssrv was down for f001 and f002, so the log has no verdicts for them
+    frames = _visit_frames([-450.0, 30.0, 5.0], iq=[4.2, 1.5, 1.0], cc=[2.0, 0.8, 0.1])
+    frames["residual_rms"] = [5000.0, 9000.0, 5000.0]
+    analyses = _table([dict(time=frames["time"][0], file="f000.fits")], ANALYSIS_COLUMNS)
+    apply_validity(frames, _table([], EVENT_COLUMNS), analyses)
+    assert list(frames["status"]) == ["ok", "invalid", "ok"]
+    assert frames["delivered_iq"][0] == 4.2 and np.isnan(frames["delivered_iq"][2])
 
 
 FIXTURE = importlib.resources.files("mmtwfs") / "data" / "test_data" / "nightreport" / "20261003"
