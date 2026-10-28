@@ -4,7 +4,7 @@
 import asyncio
 import logging
 import re
-import importlib
+import importlib.resources
 from pathlib import Path
 
 

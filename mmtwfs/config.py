@@ -5,7 +5,7 @@
 config.py - Configuration data and utility functions
 """
 
-import importlib
+import importlib.resources
 
 import astropy.units as u
 
