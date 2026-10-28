@@ -1,0 +1,804 @@
+# mmtwfs/tests/test_nightlog.py
+# Licensed under a 3-clause BSD style license - see LICENSE.rst
+
+import importlib.resources
+import shutil
+from datetime import datetime
+
+import numpy as np
+import astropy.units as u
+import pytest
+from astropy.io import fits
+
+from mmtwfs.nightlog import (
+    ANALYSIS_COLUMNS, apply_validity, build_visits, calculate_primary_at, EVENT_COLUMNS, find_flags, first_run,
+    fit_surface_zernikes, FIT_TERMS, FRAME_COLUMNS, frame_wfs, gain_at, get_mmt, get_wfs, load_masked_zv,
+    load_night, m1_accounting, m1_consistency, m1_frame_metrics, m1_resid_rms, m2_accounting, night_window,
+    parse_log, read_forces, read_frames, SEND_COLUMNS, SETTLE_DEFAULTS, _table, visit_settle,
+)
+from mmtwfs.zernike import ZernikeVector
+
+# real lines from /Volumes/Samsung_4TB/wfsdat/20261003/wfs.log (2026-10-03 01:44 MST = 08:44 UTC)
+SEND_BLOCK = """\
+2026-10-03 01:44:42,100 - WFSsrv - INFO - Analyzing /home/mmtop/wfsdat/mmirs_wfs_0325.fits...
+2026-10-03 01:44:42,101 - WFSsrv - INFO - Only ignoring the high-order spherical terms ['Z22']...
+2026-10-03 01:44:45,000 - tornado.access - INFO - 200 GET /files?format=json (128.196.100.10) 3.60ms
+2026-10-03 01:44:47,935 - WFSsrv - INFO - Sending 35.7 um focus to secondary...
+2026-10-03 01:44:49,777 - Secondary - INFO - Moving f5 hexapod -1.688 arcsec about the center of curvature along the x axis...
+2026-10-03 01:44:49,777 - WFSsrv - INFO - Sending -1.7 arcsec/-9.7 arcsec CC_X/CC_Y to secondary...
+2026-10-03 01:44:51,077 - WFSsrv - INFO - M1 corrections...
+2026-10-03 01:44:51,078 - Telescope - INFO - Sending forces from /home/mmtop/wfsdat/mmirs_wfs_0325.fits.forces...
+2026-10-03 01:44:51,078 - Telescope - INFO - Using command, /mmt/scripts/cell_send_forces \
+/home/mmtop/wfsdat/mmirs_wfs_0325.fits.forces, to apply forces...
+2026-10-03 01:44:51,343 - Telescope - INFO - ...forces successfully applied in full.
+2026-10-03 01:44:51,343 - Secondary - INFO - Moving f5 hexapod 37.35271826100699 um in Z to correct spherical aberration...
+2026-10-03 01:44:51,344 - WFSsrv - INFO - Maximum force 62.3 N
+2026-10-03 01:44:51,344 - WFSsrv - INFO - Minimum force -80.59 N
+2026-10-03 01:44:51,344 - WFSsrv - INFO - Adjusting M1 focus by 37.4 um
+"""
+
+BAD_FORCE_BLOCK = """\
+2026-10-03 04:00:00,000 - WFSsrv - INFO - Analyzing /home/mmtop/wfsdat/mmirs_wfs_0475.fits...
+2026-10-03 04:00:03,185 - Telescope - INFO - Sending forces from /home/mmtop/wfsdat/mmirs_wfs_0475.fits.forces...
+2026-10-03 04:00:03,337 - Telescope - ERROR - ...got unexpected reply from cell command: Bad force data
+
+2026-10-03 04:00:03,337 - Telescope - ERROR - \t stderr:
+2026-10-03 04:00:03,337 - Secondary - INFO - Moving f5 hexapod -0.1904877834978918 um in Z to correct spherical aberration...
+2026-10-03 04:00:03,338 - WFSsrv - INFO - Maximum force 1.98 N
+"""
+
+
+def _write(tmp_path, text):
+    p = tmp_path / "wfs.log"
+    p.write_text(text)
+    return p
+
+
+def test_night_window():
+    start, end = night_window("20261003")
+    assert start == datetime(2026, 10, 2, 19, 0)
+    assert end == datetime(2026, 10, 3, 19, 0)
+
+
+def test_parse_send_block(tmp_path):
+    d = parse_log(_write(tmp_path, SEND_BLOCK), "20261003")
+    assert list(d.analyses["file"]) == ["mmirs_wfs_0325.fits"]
+    assert d.analyses["time"][0] == np.datetime64("2026-10-03T08:44:42.100")
+    assert not d.analyses["spher"][0]
+    kinds = list(d.sends["kind"])
+    assert kinds == ["focus", "coma", "m1", "m1focus"]
+    focus, coma, m1, m1focus = d.sends
+    assert focus["value"] == pytest.approx(35.7)
+    assert focus["file"] == "mmirs_wfs_0325.fits"
+    assert (coma["value"], coma["value2"]) == pytest.approx((-1.7, -9.7))
+    assert m1["forces_file"] == "mmirs_wfs_0325.fits.forces"
+    assert m1["file"] == "mmirs_wfs_0325.fits"
+    assert m1["applied"] == "full" and m1["frac"] == 1.0
+    assert (m1["fmax"], m1["fmin"]) == pytest.approx((62.3, -80.59))
+    assert m1focus["value"] == pytest.approx(37.3527, rel=1e-4)
+    assert m1focus["file"] == "mmirs_wfs_0325.fits"
+    assert len(d.events) == 0
+
+
+def test_unexpected_cell_reply_is_frac_zero_and_not_an_error_event(tmp_path):
+    d = parse_log(_write(tmp_path, BAD_FORCE_BLOCK), "20261003")
+    m1 = d.sends[d.sends["kind"] == "m1"][0]
+    assert m1["applied"] == "unexpected"
+    assert m1["frac"] == 0.0  # "Bad force data": the cell rejected the forces, though wfssrv counts them as applied
+    # the reply and the "\t stderr:" line are part of the send, not separate error events
+    assert len(d.events[d.events["kind"] == "error"]) == 0
+
+
+@pytest.mark.parametrize("reply, applied, frac", [
+    ("...applied 42.0% of requested forces.", "partial", 0.42),
+    ("...forces rejected!", "rejected", 0.0),
+    ("...unable to apply forces!", "rejected", 0.0),
+])
+def test_cell_replies(tmp_path, reply, applied, frac):
+    text = ("2026-10-03 01:00:00,000 - Telescope - INFO - Sending forces from /x/mmirs_wfs_0001.fits.forces...\n"
+            f"2026-10-03 01:00:00,100 - Telescope - ERROR - {reply}\n")
+    m1 = parse_log(_write(tmp_path, text), "20261003").sends[0]
+    assert (m1["applied"], m1["frac"]) == (applied, pytest.approx(frac))
+
+
+def test_unknown_reply(tmp_path):
+    text = "2026-10-03 01:00:00,000 - Telescope - INFO - Sending forces from /x/mmirs_wfs_0001.fits.forces...\n"
+    m1 = parse_log(_write(tmp_path, text), "20261003").sends[0]
+    assert (m1["applied"], m1["frac"]) == ("unknown", 1.0)
+
+
+def test_clears_gains_and_connection(tmp_path):
+    text = """\
+2026-10-02 23:42:01,546 - WFSsrv - INFO - Setting M1 gain to 0.5
+2026-10-02 23:42:01,547 - WFSsrv - INFO - Setting M2 gain to 1.0
+2026-10-02 23:42:05,000 - WFSsrv - WARNING - Invalid M1 gain: 1.5
+2026-10-02 23:42:05,001 - WFSsrv - INFO - Setting M1 gain to 1.5
+2026-10-02 23:42:10,710 - WFS - INFO - Clearing WFS corrections from M1 and m1spherical offsets from M2.
+2026-10-02 23:42:10,717 - Telescope - INFO - Clearing forces and spherical aberration focus offsets...
+2026-10-02 23:42:10,718 - Secondary - INFO - Resetting hexapod's spherical aberration offset to 0...
+2026-10-02 23:42:11,000 - WFS - INFO - Clearing WFS offsets from M2's hexapod.
+2026-10-02 23:42:11,001 - Secondary - INFO - Resetting hexapod's WFS offsets to 0...
+2026-10-02 23:50:00,000 - WFSsrv - INFO - MMIRS WFS is disconnected.
+2026-10-02 23:51:00,000 - Secondary - INFO - Resetting hexapod's WFS offsets to 0...
+2026-10-02 23:52:00,000 - WFSsrv - INFO - MMIRS WFS is connected.
+2026-10-02 23:53:00,000 - WFSsrv - INFO - Setting mmirs
+"""
+    d = parse_log(_write(tmp_path, text), "20261003")
+    ev = d.events
+    assert list(ev["kind"]) == ["m1_gain", "m2_gain", "clear_m1", "clear_m2", "connect", "connect", "wfs_select"]
+    assert list(ev["detail"][:2]) == ["0.5", "1.0"]
+    assert list(ev["detail"][4:]) == ["disconnected", "connected", "mmirs"]
+
+
+def test_gains_are_tagged_with_the_selected_wfs(tmp_path):
+    text = """\
+2026-10-02 23:42:00,000 - WFSsrv - INFO - Setting M1 gain to 0.4
+2026-10-02 23:53:00,000 - WFSsrv - INFO - Setting mmirs
+2026-10-02 23:54:00,000 - WFSsrv - INFO - Setting M1 gain to 0.2
+2026-10-02 23:55:00,000 - WFSsrv - INFO - restarting mmirs
+"""
+    ev = parse_log(_write(tmp_path, text), "20261003").events
+    assert list(ev["kind"]) == ["m1_gain", "wfs_select", "m1_gain", "wfs_restart"]
+    assert list(ev["wfs"]) == ["", "", "mmirs", "mmirs"]
+
+
+def test_clear_m2_uses_connection_of_selected_wfs(tmp_path):
+    # wfssrv keeps a connected flag per WFS object; the reset line belongs to the selected WFS
+    text = """\
+2026-10-02 11:00:00,000 - WFSsrv - INFO - F/9 WFS with SBIG Camera is connected.
+2026-10-02 20:00:00,000 - WFSsrv - INFO - Binospec WFS is disconnected.
+2026-10-02 20:01:00,000 - WFSsrv - INFO - Setting newf9
+2026-10-02 20:02:00,000 - Secondary - INFO - Resetting hexapod's WFS offsets to 0...
+2026-10-02 20:03:00,000 - WFSsrv - INFO - Setting binospec
+2026-10-02 20:04:00,000 - Secondary - INFO - Resetting hexapod's WFS offsets to 0...
+"""
+    ev = parse_log(_write(tmp_path, text), "20261003").events
+    clears = ev[ev["kind"] == "clear_m2"]
+    assert list(clears["time"]) == [np.datetime64("2026-10-03T03:02:00.000")]
+
+
+def test_validity_spher_and_errors(tmp_path):
+    text = """\
+2026-10-02 19:14:40,000 - WFSsrv - INFO - Analyzing /home/mmtop/wfsdat/mmirs_wfs_0014.fits...
+2026-10-02 19:14:40,001 - WFSsrv - INFO - Ignoring all spherical terms ['Z11', 'Z22']...
+2026-10-02 19:14:49,775 - WFSsrv - WARNING - /home/mmtop/wfsdat/mmirs_wfs_0014.fits: only focus corrections valid.
+2026-10-02 19:15:00,000 - WFSsrv - ERROR - /home/mmtop/wfsdat/mmirs_wfs_0014.fits: wavefront fit too poor; no valid corrections
+2026-10-02 19:16:00,000 - WFSsrv - ERROR - Wavefront measurement failed: /home/mmtop/wfsdat/mmirs_wfs_0015.fits
+2026-10-02 19:17:00,000 - Secondary - ERROR - hexapod socket timed out
+"""
+    d = parse_log(_write(tmp_path, text), "20261003")
+    assert bool(d.analyses["spher"][0])
+    ev = d.events
+    assert list(ev["kind"]) == ["validity", "validity", "error"]
+    assert ev["file"][0] == "mmirs_wfs_0014.fits"
+    assert ev["detail"][2] == "hexapod socket timed out"
+
+
+def test_night_window_drops_outside_lines(tmp_path):
+    text = """\
+2026-10-02 11:59:00,000 - Telescope - INFO - Clearing forces and spherical aberration focus offsets...
+2026-10-02 12:00:00,000 - Telescope - INFO - Clearing forces and spherical aberration focus offsets...
+2026-10-07 21:13:07,013 - WFSsrv - INFO - Sending 10.0 um focus to secondary...
+"""
+    d = parse_log(_write(tmp_path, text), "20261003")
+    assert len(d.events) == 1
+    assert d.events["time"][0] == np.datetime64("2026-10-02T19:00:00.000")
+    assert len(d.sends) == 0
+    assert d.n_outside == 2
+
+
+def test_empty_log_keeps_schema(tmp_path):
+    d = parse_log(_write(tmp_path, ""), "20261003")
+    assert len(d.sends) == 0 and "frac" in d.sends.colnames
+    assert len(d.events) == 0 and "detail" in d.events.colnames
+    assert d.sends["time"].dtype == np.dtype("datetime64[ms]")
+
+
+OUTPUT_LINE = ("2026-10-03T08:44:38,mmirs,{name},12.0,1.2,188.6,56.7,12,11.5,12.3,244.4,167.9,-559.2,2188.5,"
+               "9052.3,{focus},5.5,0.4,256.9,232.5,4.9,5.4,2.4,0.9,0.08,16.3,1387.4,2220.4,full,1.05")
+
+
+def _frame(d, name, hdr0, hdr1=None, data=True):
+    h0 = fits.Header(list(hdr0.items()))
+    hdus = [fits.PrimaryHDU(np.zeros((2, 2), dtype=np.int16) if data else None, header=h0)]
+    if hdr1 is not None:
+        hdus.append(fits.ImageHDU(np.zeros((2, 2), dtype=np.int16), header=fits.Header(list(hdr1.items()))))
+    fits.HDUList(hdus).writeto(d / name)
+
+
+MMIRS_HDR = {"DATE-OBS": "2026-10-03T08:44:38", "WFSNAME": "mmirs2", "EXPTIME": 12.0, "CATID": "HIP109911",
+             "CATRA": 22.26, "CATDEC": 30.1, "RA": 22.26, "DEC": 30.09, "RAOFF": 1.9, "DECOFF": -34.6,
+             "AZ": 80.0, "EL": 60.0, "TRANSX": -600.0, "TRANSY": 2400.0, "TRANSZ": 9000.0, "TILTX": 260.0,
+             "TILTY": 160.0}
+
+
+def test_frame_wfs():
+    assert frame_wfs("mmirs_wfs_0001.fits", {}) == "mmirs"
+    assert frame_wfs("wfs_ff_cal_img_2025.02.03T034813.592.fits", {}) == "binospec"
+    assert frame_wfs("f9wfs_20240426-212258.fits", {}) == "newf9"
+    assert frame_wfs("x.fits", {"INSTRUME": "Apogee"}) == "f9"
+    assert frame_wfs("f5wfs_20260204-123140.fits", {"INSTRUME": "F/5 WFS"}) == "f5"
+    assert frame_wfs("x.fits", {"INSTRUME": "F/5 WFS"}) == "f5"
+    assert frame_wfs("x.fits", {"SEC": "F5"}) == "f5"
+    assert frame_wfs("x.fits", {"ORIGIN": "Binospec"}) == "binospec"
+    assert frame_wfs("x.fits", {}) == "unknown"
+
+
+def test_read_frames_status_and_columns(tmp_path):
+    _frame(tmp_path, "mmirs_wfs_0002.fits", MMIRS_HDR)
+    _frame(tmp_path, "mmirs_wfs_0001.fits", {**MMIRS_HDR, "DATE-OBS": "2026-10-03T08:44:00"})
+    _frame(tmp_path, "mmirs_wfs_0003.fits", {**MMIRS_HDR, "DATE-OBS": "2026-10-03T08:45:00"})
+    _frame(tmp_path, "mmirs_wfs_0001.coadded_spot.fits", {})
+    (tmp_path / "mmirs_wfs_0002.output").write_text(OUTPUT_LINE.format(name="mmirs_wfs_0002.fits", focus=12.5))
+    (tmp_path / "mmirs_wfs_0001.failed").write_text("")
+    frames, counts = read_frames(tmp_path)
+    assert list(frames["file"]) == ["mmirs_wfs_0001.fits", "mmirs_wfs_0002.fits", "mmirs_wfs_0003.fits"]
+    assert list(frames["status"]) == ["failed", "ok", "unanalyzed"]
+    assert frames["focus"][1] == pytest.approx(12.5)  # from the .output focerr column, not the hexapod position
+    assert frames["cc_x_err"][1] == pytest.approx(5.5)
+    assert np.isnan(frames["focus"][0])
+    assert frames["catra"][1] == pytest.approx(22.26 * 15)
+    assert frames["catid"][1] == "HIP109911"
+    assert frames["wfs"][1] == "mmirs"
+    assert list(frames["spher"]) == [-1, -1, -1]
+    assert counts == {"n_unreadable": 0, "n_untimed": 0}
+
+
+def test_read_frames_binospec_headers(tmp_path):
+    # Binospec keeps DATE-OBS/EXPTIME in HDU 1 and writes sexagesimal RA/DEC
+    hdr0 = {"MJD": 60709.15877, "CATID": "SN2025kg", "CATRA": 3.70788333, "CATDEC": -22.50586944,
+            "RA": "03:42:30.083", "DEC": "-22:29:59.850", "RAOFF": 331.3, "DECOFF": -63.6, "AZ": 206.3, "EL": 31.3}
+    _frame(tmp_path, "wfs_ff_cal_img_2025.02.03T034813.592.fits", hdr0,
+           hdr1={"DATE-OBS": "2025-02-03T03:48:13.592", "EXPTIME": 20.0})
+    frames, _ = read_frames(tmp_path)
+    assert frames["time"][0] == np.datetime64("2025-02-03T03:48:13.592")
+    assert frames["exptime"][0] == 20.0
+    assert frames["wfs"][0] == "binospec"
+    assert frames["ra"][0] == pytest.approx((3 + 42 / 60 + 30.083 / 3600) * 15)
+    assert frames["dec"][0] == pytest.approx(-(22 + 29 / 60 + 59.85 / 3600))
+
+
+def test_read_frames_mjd_fallback_and_untimed(tmp_path):
+    _frame(tmp_path, "mmirs_wfs_0001.fits", {"MJD": 61316.26998, "CATID": "X"})
+    _frame(tmp_path, "mmirs_wfs_0002.fits", {"CATID": "X"})
+    (tmp_path / "mmirs_wfs_0003.fits").write_text("not a fits file")
+    frames, counts = read_frames(tmp_path)
+    assert len(frames) == 1
+    assert counts == {"n_unreadable": 1, "n_untimed": 1}
+
+
+def test_read_frames_skips_malformed_headers(tmp_path):
+    _frame(tmp_path, "mmirs_wfs_0001.fits", MMIRS_HDR)
+    _frame(tmp_path, "mmirs_wfs_0002.fits", {**MMIRS_HDR, "CATRA": ""})
+    _frame(tmp_path, "mmirs_wfs_0003.fits", {**MMIRS_HDR, "DATE-OBS": "2026-10-03Tgarbage"})
+    frames, counts = read_frames(tmp_path)
+    assert list(frames["file"]) == ["mmirs_wfs_0001.fits"]
+    assert counts == {"n_unreadable": 2, "n_untimed": 0}
+
+
+def test_read_frames_takes_wfs_from_output(tmp_path):
+    hdr = {k: v for k, v in MMIRS_HDR.items() if k != "WFSNAME"}
+    _frame(tmp_path, "wfs_0001.fits", hdr)
+    _frame(tmp_path, "wfs_0002.fits", {**hdr, "DATE-OBS": "2026-10-03T08:45:00"})
+    _frame(tmp_path, "wfs_0003.fits", {**hdr, "DATE-OBS": "2026-10-03T08:46:00"})
+    for n, key in [(1, "f5"), (2, "oldf9")]:
+        line = OUTPUT_LINE.format(name=f"wfs_000{n}.fits", focus=1.0).replace(",mmirs,", f",{key},")
+        (tmp_path / f"wfs_000{n}.output").write_text(line)
+    frames, _ = read_frames(tmp_path)
+    assert list(frames["wfs"]) == ["f5", "f9", "unknown"]
+
+
+def test_read_frames_bad_output_is_not_ok(tmp_path):
+    _frame(tmp_path, "mmirs_wfs_0001.fits", MMIRS_HDR)
+    (tmp_path / "mmirs_wfs_0001.output").write_text("2026-10-03T08:44:38,mmirs,truncated")
+    frames, _ = read_frames(tmp_path)
+    assert frames["status"][0] != "ok"
+    assert np.isnan(frames["focus"][0])
+
+
+def test_read_frames_empty_dir(tmp_path):
+    frames, _ = read_frames(tmp_path)
+    assert len(frames) == 0 and "delivered_iq" in frames.colnames
+
+
+def _frames(specs):
+    """specs: list of (iso time, catid, catra_deg, catdec_deg, raoff, decoff, status, el)"""
+    rows = [dict(time=np.datetime64(t), file=f"f{i:03d}.fits", wfs="mmirs", catid=c, catra=ra, catdec=dec,
+                 ra=ra, dec=dec, raoff=ro, decoff=do, status=s, el=el, az=100.0)
+            for i, (t, c, ra, dec, ro, do, s, el) in enumerate(specs)]
+    return _table(rows, FRAME_COLUMNS)
+
+
+def test_build_visits_splits_on_target_and_lists_offsets():
+    frames = _frames([
+        ("2026-10-03T06:40:00", "A", 300.0, 40.0, 0.0, 0.0, "ok", 50.0),
+        ("2026-10-03T06:41:00", "A", 300.0, 40.0, 0.0, 0.0, "ok", 50.5),
+        ("2026-10-03T06:42:00", "A", 300.0, 40.0, 2.0, -30.0, "ok", 51.0),
+        ("2026-10-03T08:44:00", "B", 333.0, 30.0, 0.0, 0.0, "failed", 60.0),
+        ("2026-10-03T08:44:30", "B", 333.0, 30.0, 0.0, 0.0, "ok", 60.1),
+    ])
+    visits, offsets = build_visits(frames, SETTLE_DEFAULTS)
+    assert list(frames["visit"]) == [0, 0, 0, 1, 1]
+    assert [v["catid"] for v in visits] == ["A", "B"]
+    a, b = visits
+    assert np.isnan(a["gap"]) and np.isnan(a["slew_sep"])
+    assert b["gap"] == pytest.approx(2 * 3600 + 2 * 60)
+    assert b["t_first_ok"] == pytest.approx(30.0)
+    assert b["d_el"] == pytest.approx(60.0 - 51.0)
+    assert b["n_frames"] == 2 and b["n_ok"] == 1 and b["n_failed"] == 1
+    assert b["slew_sep"] > 20 * 3600
+    assert [(o["file"], o["detail"]) for o in offsets] == [("f002.fits", "RA +2.00 Dec -30.00 arcsec")]
+
+
+def test_build_visits_same_catid_is_one_visit():
+    # catalog positions jitter across a rounding boundary; the catalog ID doesn't change
+    frames = _frames([
+        ("2026-10-03T06:40:00", "A", 123.45675, 40.0, 0.0, 0.0, "ok", 50.0),
+        ("2026-10-03T06:41:00", "A", 123.4567499, 40.0, 0.0, 0.0, "ok", 50.0),
+        ("2026-10-03T06:42:00", "B", 123.4567499, 40.0, 0.0, 0.0, "ok", 50.0),
+    ])
+    build_visits(frames, SETTLE_DEFAULTS)
+    assert list(frames["visit"]) == [0, 0, 1]
+
+
+def test_build_visits_fallback_without_catalog():
+    nan = np.nan
+    frames = _frames([
+        ("2026-10-03T06:40:00", "", nan, nan, 0.0, 0.0, "ok", 50.0),
+        ("2026-10-03T06:41:00", "", nan, nan, 0.0, 0.0, "ok", 50.0),
+        ("2026-10-03T06:42:00", "", nan, nan, 0.0, 0.0, "ok", 50.0),
+    ])
+    frames["ra"] = [300.0, 300.0 + 10 / 3600, 301.0]
+    frames["dec"] = [40.0, 40.0, 40.0]
+    visits, _ = build_visits(frames, SETTLE_DEFAULTS)
+    assert list(frames["visit"]) == [0, 0, 1]
+
+
+def test_build_visits_empty():
+    frames = _table([], FRAME_COLUMNS)
+    visits, offsets = build_visits(frames, SETTLE_DEFAULTS)
+    assert visits == [] and offsets == []
+
+
+def test_gain_at():
+    ev = _table([dict(time=np.datetime64("2026-10-03T08:00:00"), kind="m1_gain", detail="0.2"),
+                 dict(time=np.datetime64("2026-10-03T09:00:00"), kind="m1_gain", detail="0.5"),
+                 dict(time=np.datetime64("2026-10-03T08:30:00"), kind="m2_gain", detail="1.0")], EVENT_COLUMNS)
+    assert gain_at(ev, "m1_gain", np.datetime64("2026-10-03T07:00:00"), 0.5) == 0.5
+    assert gain_at(ev, "m1_gain", np.datetime64("2026-10-03T08:10:00"), 0.5) == 0.2
+    assert gain_at(ev, "m1_gain", np.datetime64("2026-10-03T09:00:00"), 0.5) == 0.5
+    assert gain_at(ev, "m2_gain", np.datetime64("2026-10-03T08:40:00"), 0.7) == 1.0
+
+
+def test_gain_at_is_per_wfs_and_reset_by_restart():
+    ev = _table([dict(time=_t(0), kind="m1_gain", detail="0.3"),  # before any WFS was selected: applies to all
+                 dict(time=_t(1), kind="m1_gain", detail="0.2", wfs="mmirs"),
+                 dict(time=_t(2), kind="m1_gain", detail="0.4", wfs="binospec"),
+                 dict(time=_t(3), kind="wfs_restart", detail="mmirs", wfs="mmirs")], EVENT_COLUMNS)
+    assert gain_at(ev, "m1_gain", _t(2), 0.5, "mmirs") == 0.2
+    assert gain_at(ev, "m1_gain", _t(2), 0.5, "binospec") == 0.4
+    assert gain_at(ev, "m1_gain", _t(2), 0.5, "newf9") == 0.3
+    assert gain_at(ev, "m1_gain", _t(4), 0.5, "mmirs") == 0.5
+    assert gain_at(ev, "m1_gain", _t(4), 0.5, "binospec") == 0.4
+
+
+def test_m1_resid_rms_ignores_focus():
+    assert m1_resid_rms(ZernikeVector(Z04=1000.0, Z05=100.0)) == pytest.approx(
+        ZernikeVector(Z05=100.0).rms.value)
+
+
+def test_m1_frame_metrics_prefers_masked_file(tmp_path):
+    frames = _frames([("2026-10-03T08:44:38", "B", 333.0, 30.0, 0.0, 0.0, "ok", 60.0)])
+    masked = ZernikeVector(Z05=200.0, Z11=50.0)
+    saved = masked.copy()
+    saved.rotate(-90 * u.deg)  # wfssrv's .masked.zernike is in the BCV frame
+    saved.save(filename=tmp_path / "f000.fits.masked.zernike")
+    ev = _table([dict(time=np.datetime64("2026-10-03T08:00:00"), kind="m1_gain", detail="0.2")], EVENT_COLUMNS)
+    m1_frame_metrics(frames, tmp_path, ev)
+    expected = get_wfs("mmirs").telescope.bending_forces(zv=masked.copy(), gain=0.2)["force"]
+    assert frames["m1_force_rms"][0] == pytest.approx(np.sqrt(np.mean(np.asarray(expected) ** 2)))
+    assert frames["m1_resid_rms"][0] == pytest.approx(m1_resid_rms(masked))
+
+
+def test_m1_frame_metrics_uses_gain_at_analysis(tmp_path):
+    # the gain changed between the exposure (08:44:38) and wfssrv's analysis of it (08:44:45)
+    frames = _frames([("2026-10-03T08:44:38", "B", 333.0, 30.0, 0.0, 0.0, "ok", 60.0)])
+    ZernikeVector(Z05=200.0).save(filename=tmp_path / "f000.reanalyze.zernike")
+    ev = _table([dict(time=np.datetime64("2026-10-03T08:44:44"), kind="m1_gain", detail="0.2", wfs="mmirs")],
+                EVENT_COLUMNS)
+    analyses = _table([dict(time=np.datetime64("2026-10-03T08:44:45"), file="f000.fits")], ANALYSIS_COLUMNS)
+    m1_frame_metrics(frames, tmp_path, ev, analyses)
+    at_analysis = frames["m1_force_rms"][0]
+    m1_frame_metrics(frames, tmp_path, ev)  # by exposure time the default 0.5 would apply
+    assert at_analysis == pytest.approx(0.4 * frames["m1_force_rms"][0])
+
+
+def test_m1_frame_metrics_recomputes_from_reanalyze(tmp_path):
+    frames = _frames([("2026-10-03T08:44:38", "B", 333.0, 30.0, 0.0, 0.0, "ok", 60.0)])
+    frames["spher"][0] = 1
+    ZernikeVector(Z05=200.0, Z11=300.0).save(filename=tmp_path / "f000.reanalyze.zernike")
+    m1_frame_metrics(frames, tmp_path, _table([], EVENT_COLUMNS))
+    assert frames["m1_force_rms"][0] > 0
+    # spher=1 masks Z11, so only the Z05 term survives
+    assert frames["m1_resid_rms"][0] == pytest.approx(ZernikeVector(Z05=200.0).rms.value, rel=0.01)
+    assert get_wfs("mmirs").m1_gain == 0.5  # temporary gain restored
+
+
+def test_load_masked_zv_undoes_bending_rotation(tmp_path):
+    # wfssrv saves the zv_masked returned by calculate_primary, which bending_forces has rotated in place into the
+    # BCV frame; loading it must give back the WFS-frame terms that went in
+    _, _, zv_masked = get_wfs("mmirs").calculate_primary(ZernikeVector(Z05=200.0, Z09=100.0))
+    zv_masked.save(filename=tmp_path / "f000.fits.masked.zernike")
+    zv = load_masked_zv(tmp_path / "f000.fits.masked.zernike")
+    assert zv["Z05"].value == pytest.approx(200.0)
+    assert zv["Z09"].value == pytest.approx(100.0)
+
+
+def test_focus_uncertainty_from_reanalyze_errorbars(tmp_path):
+    frames = _frames([("2026-10-03T08:44:38", "B", 333.0, 30.0, 0.0, 0.0, "ok", 60.0)])
+    ZernikeVector(Z04=-1452.0, Z05=100.0, errorbars={"Z04": 114.4}).save(
+        filename=tmp_path / "f000.reanalyze.zernike")
+    m1_frame_metrics(frames, tmp_path, _table([], EVENT_COLUMNS))
+    focus_trans = get_wfs("mmirs").secondary.focus_trans.value  # 40.8 nm/um
+    assert frames["focus_unc"][0] == pytest.approx(114.4 / focus_trans, rel=1e-3)
+
+
+def test_m1_frame_metrics_missing_files_leave_nan(tmp_path):
+    frames = _frames([("2026-10-03T08:44:38", "B", 333.0, 30.0, 0.0, 0.0, "ok", 60.0)])
+    m1_frame_metrics(frames, tmp_path, _table([], EVENT_COLUMNS))
+    assert np.isnan(frames["m1_force_rms"][0])
+
+
+def test_m1_frame_metrics_unreadable_zernike_leaves_nan(tmp_path):
+    frames = _frames([("2026-10-03T08:44:38", "B", 333.0, 30.0, 0.0, 0.0, "ok", 60.0)])
+    (tmp_path / "f000.reanalyze.zernike").write_text("not json")
+    m1_frame_metrics(frames, tmp_path, _table([], EVENT_COLUMNS))
+    assert np.isnan(frames["focus_unc"][0]) and np.isnan(frames["m1_force_rms"][0])
+
+
+class _FakeTelescope:
+    def __init__(self, n_act=3, n_node=4):
+        self._a2s = np.ones((n_act, n_node))
+
+    def load_act2surf(self):
+        return self._a2s
+
+
+def _visit_frames(focus, iq=None, status=None, cc=None):
+    t0 = np.datetime64("2026-10-03T08:44:00")
+    n = len(focus)
+    rows = []
+    for i in range(n):
+        rows.append(dict(time=t0 + np.timedelta64(30 * i, "s"), file=f"f{i:03d}.fits", wfs="mmirs",
+                         status=(status or ["ok"] * n)[i], focus=focus[i], focus_unc=1.0,
+                         cc_x_err=(cc or [0.0] * n)[i], cc_y_err=0.0, wavefront_rms=500.0,
+                         delivered_iq=(iq or [1.0] * n)[i], m1_resid_rms=100.0 - i, m1_force_rms=5.0, visit=0))
+    return _table(rows, FRAME_COLUMNS)
+
+
+def test_first_run():
+    assert first_run(np.array([False, True, False, True, True]), 2) == 3
+    assert first_run(np.array([True, True]), 2) == 0
+    assert first_run(np.array([True, False, True]), 2) is None
+
+
+def test_focus_settle_threshold_needs_k_consecutive():
+    vf = _visit_frames([80.0, 5.0, 40.0, 8.0, 6.0, 4.0])
+    s = visit_settle(vf, _table([], SEND_COLUMNS), SETTLE_DEFAULTS, {}, _FakeTelescope())
+    assert s["focus_settle_thresh"] == pytest.approx(90.0)  # frame 3 starts the first run of two
+    assert s["first_focus"] == 80.0
+    assert s["settle_def"] == "thresh/conv"
+
+
+def test_focus_never_settles():
+    vf = _visit_frames([80.0, 60.0, 50.0])
+    s = visit_settle(vf, _table([], SEND_COLUMNS), SETTLE_DEFAULTS, {}, _FakeTelescope())
+    assert np.isnan(s["focus_settle_thresh"])
+
+
+def test_convergence_definitions():
+    # plateau of |focus| in the last half is 30, so <= 40 counts as converged even though > F
+    vf = _visit_frames([100.0, 90.0, 35.0, 32.0, 30.0, 29.0], iq=[2.0, 1.8, 1.2, 1.0, 1.0, 1.01])
+    s = visit_settle(vf, _table([], SEND_COLUMNS), SETTLE_DEFAULTS, {}, _FakeTelescope())
+    assert s["focus_settle_conv"] == pytest.approx(60.0)
+    assert s["iq_settle_conv"] == pytest.approx(90.0)
+
+
+def test_no_ok_frames():
+    vf = _visit_frames([np.nan, np.nan], status=["failed", "failed"])
+    s = visit_settle(vf, _table([], SEND_COLUMNS), SETTLE_DEFAULTS, {}, _FakeTelescope())
+    assert np.isnan(s["focus_settle_thresh"]) and np.isnan(s["first_focus"])
+
+
+def test_send_windows_and_f9_last_send():
+    vf = _visit_frames([80.0, 40.0, 5.0, 4.0])
+    t0 = vf["time"][0]
+    sends = _table([
+        dict(time=t0 + np.timedelta64(5, "s"), kind="focus", file="f000.fits", value=40.0),
+        dict(time=t0 + np.timedelta64(6, "s"), kind="m1", file="f000.fits", forces_file="f000.fits.forces", frac=0.5),
+        dict(time=t0 + np.timedelta64(35, "s"), kind="coma", file="f001.fits", value=1.0, value2=-2.0),
+        dict(time=t0 + np.timedelta64(95, "s"), kind="focus", file="f003.fits", value=2.0),
+    ], SEND_COLUMNS)
+    forces = {"f000.fits.forces": np.array([2.0, 2.0, 2.0])}
+    s = visit_settle(vf, sends, SETTLE_DEFAULTS, forces, _FakeTelescope())
+    assert s["focus_settle_thresh"] == pytest.approx(60.0)
+    assert s["n_sends_settle"] == 3 and s["n_sends_visit"] == 4
+    assert s["net_focus_settle"] == 40.0 and s["net_focus_visit"] == 42.0
+    assert (s["net_cc_x_visit"], s["net_cc_y_visit"]) == (1.0, -2.0)
+    assert s["m1_sent_rms_visit"] == pytest.approx(1.0)  # 0.5 * 2 N on every actuator
+    assert s["settle_last_send"] == pytest.approx(95.0)
+
+    vf["wfs"] = "newf9"
+    assert visit_settle(vf, sends, SETTLE_DEFAULTS, forces, _FakeTelescope())["settle_def"] == "last_send"
+
+
+def test_read_forces_aligns_by_actuator_id(tmp_path):
+    p = tmp_path / "x.forces"
+    p.write_text("101\t5.0\n1\t-2.5\n")
+    vec = read_forces(p, [1, 2, 101])
+    assert list(vec) == [-2.5, 0.0, 5.0]
+
+
+@pytest.mark.parametrize("term, amp, rel", [("Z05", 200.0, 0.01), ("Z09", -100.0, 0.01), ("Z11", 150.0, 0.05)])
+def test_surface_fit_recovers_bent_term(term, amp, rel):
+    mmt = get_mmt()
+    f = mmt.bending_forces(zv=ZernikeVector(**{term: amp}), gain=1.0)
+    fit = fit_surface_zernikes(np.asarray(f["force"]) @ mmt.load_act2surf(), mmt)
+    assert set(fit) == set(FIT_TERMS)
+    assert fit[term] == pytest.approx(-amp, rel=rel)
+
+
+def _t(minutes):
+    return np.datetime64("2026-10-03T08:00:00") + np.timedelta64(minutes, "m")
+
+
+def test_m1_accounting_sends_clears_and_missing():
+    mmt = get_mmt()
+    n = mmt.n_act
+    sends = _table([
+        dict(time=_t(1), kind="m1", forces_file="a.forces", frac=1.0),
+        dict(time=_t(2), kind="m1", forces_file="b.forces", frac=0.5),
+        dict(time=_t(3), kind="m1", forces_file="missing.forces", frac=1.0),
+        dict(time=_t(5), kind="m1", forces_file="a.forces", frac=1.0),
+    ], SEND_COLUMNS)
+    events = _table([dict(time=_t(4), kind="clear_m1"), dict(time=_t(4), kind="clear_m2")], EVENT_COLUMNS)
+    forces = {"a.forces": np.full(n, 2.0), "b.forces": np.full(n, 4.0)}
+    m1, maps = m1_accounting(sends, events, forces, mmt)
+    assert len(m1) == 4  # three applied sends and one clear; the missing file adds no snapshot
+    assert m1["frms"][1] == pytest.approx(4.0)  # 2 + 0.5 * 4
+    assert m1["frms"][2] == 0.0
+    assert m1["frms"][3] == pytest.approx(2.0)
+    assert [label for _, label, _ in maps] == ["before clear", "end of night"]
+    assert maps[0][2] == pytest.approx(np.full(n, 4.0))
+
+
+def test_m1_consistency_uses_last_span_with_sends(tmp_path):
+    # real nights end with an M1 clear; the check must compare the span before it, not the cleared mirror
+    mmt = get_mmt()
+    wfs = get_wfs("mmirs")
+    forces, _, zv_masked = calculate_primary_at(wfs, ZernikeVector(Z05=300.0, Z06=-200.0), [], 0.5)
+    zv_masked.save(filename=tmp_path / "a.fits.masked.zernike")
+    sends = _table([dict(time=_t(1), kind="m1", file="a.fits", forces_file="a.fits.forces", frac=1.0)],
+                   SEND_COLUMNS)
+    events = _table([dict(time=_t(0), kind="m1_gain", detail="0.5"), dict(time=_t(2), kind="clear_m1")],
+                    EVENT_COLUMNS)
+    analyses = _table([dict(time=_t(1), file="a.fits")], ANALYSIS_COLUMNS)
+    m1, _ = m1_accounting(sends, events, {"a.fits.forces": np.asarray(forces["force"])}, mmt)
+    check = m1_consistency(sends, events, analyses, tmp_path, m1)
+    fitted, expected = check["Z05"]
+    assert expected == pytest.approx(-0.5 * 300.0)
+    assert fitted == pytest.approx(expected, rel=0.05)
+
+
+def test_m1_consistency_skips_earlier_spans_and_missing_files(tmp_path):
+    mmt = get_mmt()
+    wfs = get_wfs("mmirs")
+    forces, _, zv_masked = calculate_primary_at(wfs, ZernikeVector(Z05=300.0), [], 0.5)
+    zv_masked.save(filename=tmp_path / "a.fits.masked.zernike")
+    other, _, old_masked = calculate_primary_at(wfs, ZernikeVector(Z05=-900.0), [], 0.5)
+    old_masked.save(filename=tmp_path / "old.fits.masked.zernike")
+    sends = _table([dict(time=_t(1), kind="m1", file="old.fits", forces_file="old.fits.forces", frac=1.0),
+                    dict(time=_t(3), kind="m1", file="a.fits", forces_file="a.fits.forces", frac=1.0),
+                    dict(time=_t(4), kind="m1", file="nomask.fits", forces_file="nomask.fits.forces", frac=1.0)],
+                   SEND_COLUMNS)
+    events = _table([dict(time=_t(2), kind="clear_m1"), dict(time=_t(5), kind="clear_m1")], EVENT_COLUMNS)
+    analyses = _table([dict(time=_t(t), file=f) for t, f in [(1, "old.fits"), (3, "a.fits"), (4, "nomask.fits")]],
+                      ANALYSIS_COLUMNS)
+    forces = {"old.fits.forces": np.asarray(other["force"]), "a.fits.forces": np.asarray(forces["force"]),
+              "nomask.fits.forces": np.zeros(mmt.n_act)}
+    m1, _ = m1_accounting(sends, events, forces, mmt)
+    fitted, expected = m1_consistency(sends, events, analyses, tmp_path, m1)["Z05"]
+    assert expected == pytest.approx(-0.5 * 300.0)  # only a.fits: old.fits was cleared, nomask.fits has no file
+    assert fitted == pytest.approx(expected, rel=0.05)
+    # with no accounting rows before the closing clear there is nothing to compare
+    assert m1_consistency(sends, events, analyses, tmp_path, m1[m1["time"] >= _t(5)]) == {}
+
+
+def test_m2_accounting_resets_per_channel():
+    sends = _table([
+        dict(time=_t(1), kind="focus", value=10.0),
+        dict(time=_t(2), kind="coma", value=1.0, value2=-1.0),
+        dict(time=_t(3), kind="m1focus", value=5.0),
+        dict(time=_t(5), kind="focus", value=3.0),
+        dict(time=_t(7), kind="m1focus", value=2.0),
+    ], SEND_COLUMNS)
+    events = _table([dict(time=_t(4), kind="clear_m1"), dict(time=_t(6), kind="clear_m2")], EVENT_COLUMNS)
+    m2 = m2_accounting(sends, events)
+    last = m2[-1]
+    assert (last["wfs_z"], last["wfs_cc_x"], last["m1spherical_z"]) == (0.0, 0.0, 2.0)
+    after_m1_clear = m2[m2["time"] == _t(4)][0]
+    assert (after_m1_clear["wfs_z"], after_m1_clear["m1spherical_z"]) == (10.0, 0.0)
+
+
+def test_find_flags(tmp_path):
+    frames = _visit_frames([200.0, 5.0, 4.0])
+    analyses = _table([
+        dict(time=frames["time"][0], file="f000.fits", spher=True),
+        dict(time=frames["time"][1], file="f001.fits", spher=True),
+        dict(time=frames["time"][2], file="f002.fits", spher=False),
+    ], ANALYSIS_COLUMNS)
+    ZernikeVector(Z05=100.0, Z11=800.0).save(filename=tmp_path / "f000.reanalyze.zernike")
+    sends = _table([
+        dict(time=frames["time"][1], kind="m1", file="f001.fits", forces_file="f001.fits.forces",
+             applied="partial", frac=0.4),
+        dict(time=frames["time"][2], kind="m1", file="f002.fits", forces_file="f002.fits.forces",
+             applied="full", frac=1.0),
+    ], SEND_COLUMNS)
+    events = _table([dict(time=frames["time"][2], kind="error", detail="hexapod socket timed out"),
+                     dict(time=frames["time"][0], kind="validity", detail="only focus corrections valid",
+                          file="f000.fits")], EVENT_COLUMNS)
+    forces = {"f001.fits.forces": np.zeros(104)}
+    flags = find_flags(frames, sends, events, analyses, forces, tmp_path)
+    kinds = sorted(flags["kind"])
+    assert kinds == sorted(["spher_ignored", "m1_blocked_focus", "validity", "m1_partial", "missing_forces",
+                            "error"])
+    spher = flags[flags["kind"] == "spher_ignored"][0]
+    assert "2 frames" in spher["detail"] and "Z11 up to 800 nm" in spher["detail"]
+    assert flags[flags["kind"] == "missing_forces"][0]["file"] == "f002.fits"
+    assert set(flags["visit"]) == {0}
+
+
+def test_find_flags_survives_unbuildable_wfs(tmp_path):
+    frames = _visit_frames([200.0, 5.0])
+    frames["wfs"] = ["nosuchwfs", "unknown"]
+    analyses = _table([], ANALYSIS_COLUMNS)
+    flags = find_flags(frames, _table([], SEND_COLUMNS), _table([], EVENT_COLUMNS), analyses, {}, tmp_path)
+    assert list(flags["kind"]) == ["m1_blocked_focus"]  # gated at the fallback M2 gain of 1
+
+
+def test_find_flags_unreadable_spher_zernike(tmp_path):
+    frames = _visit_frames([5.0, 4.0])
+    analyses = _table([dict(time=frames["time"][0], file="f000.fits", spher=True)], ANALYSIS_COLUMNS)
+    (tmp_path / "f000.reanalyze.zernike").write_text("not json")
+    flags = find_flags(frames, _table([], SEND_COLUMNS), _table([], EVENT_COLUMNS), analyses, {}, tmp_path)
+    spher = flags[flags["kind"] == "spher_ignored"][0]
+    assert "1 frames" in spher["detail"] and "max |F| 0 N" in spher["detail"]
+
+
+def test_apply_validity_drops_what_wfssrv_rejected():
+    frames = _visit_frames([-450.0, 30.0, 5.0], iq=[4.2, 1.5, 1.0], cc=[2.0, 0.8, 0.1])
+    events = _table([dict(time=frames["time"][0], kind="validity", detail="wavefront fit too poor", file="f000.fits"),
+                     dict(time=frames["time"][1], kind="validity", detail="only focus corrections valid",
+                          file="f001.fits")], EVENT_COLUMNS)
+    frames["residual_rms"] = [12000.0, 5000.0, 4500.0]  # f002: analyzed online and logged as valid, so kept
+    analyses = _table([dict(time=t, file=f) for t, f in zip(frames["time"], frames["file"])], ANALYSIS_COLUMNS)
+    apply_validity(frames, events, analyses)
+    assert list(frames["status"]) == ["invalid", "ok", "ok"]
+    assert frames["focus"][1] == 30.0
+    assert np.isnan(frames["cc_x_err"][1]) and np.isnan(frames["cc_y_err"][1]) and np.isnan(frames["delivered_iq"][1])
+    assert frames["cc_x_err"][2] == 0.1 and frames["delivered_iq"][2] == 1.0
+
+
+def test_apply_validity_from_residual_without_log():
+    frames = _visit_frames([-450.0, 30.0, 5.0], iq=[4.2, 1.5, 1.0], cc=[2.0, 0.8, 0.1])
+    frames["residual_rms"] = [12000.0, 5000.0, 1500.0]
+    apply_validity(frames, _table([], EVENT_COLUMNS), _table([], ANALYSIS_COLUMNS))
+    assert list(frames["status"]) == ["invalid", "ok", "ok"]
+    assert frames["focus"][1] == 30.0 and np.isnan(frames["delivered_iq"][1])
+    assert frames["delivered_iq"][2] == 1.0
+
+
+def test_apply_validity_falls_back_for_frames_wfssrv_never_saw():
+    # wfssrv was down for f001 and f002, so the log has no verdicts for them
+    frames = _visit_frames([-450.0, 30.0, 5.0], iq=[4.2, 1.5, 1.0], cc=[2.0, 0.8, 0.1])
+    frames["residual_rms"] = [5000.0, 9000.0, 5000.0]
+    analyses = _table([dict(time=frames["time"][0], file="f000.fits")], ANALYSIS_COLUMNS)
+    apply_validity(frames, _table([], EVENT_COLUMNS), analyses)
+    assert list(frames["status"]) == ["ok", "invalid", "ok"]
+    assert frames["delivered_iq"][0] == 4.2 and np.isnan(frames["delivered_iq"][2])
+
+
+FIXTURE = importlib.resources.files("mmtwfs") / "data" / "test_data" / "nightreport" / "20261003"
+
+
+@pytest.fixture(scope="module")
+def night():
+    return load_night(FIXTURE)
+
+
+def test_fixture_visits(night):
+    assert list(night.visits["catid"]) == ["HIP102074", "HIP109911"]
+    second = night.visits[1]
+    assert second["gap"] > 3600  # 06:42 -> 08:44 UTC
+    assert second["n_sends_visit"] > 0
+
+
+def test_fixture_sends_and_clear(night):
+    assert int(np.sum(night.sends["kind"] == "m1")) == 8
+    assert int(np.sum(night.events["kind"] == "clear_m1")) == 1
+    clear_time = night.events["time"][night.events["kind"] == "clear_m1"][0]
+    assert clear_time == np.datetime64("2026-10-03T06:42:10.717")
+    # the M1 state starts at zero and the clear precedes every send in the fixture
+    assert night.m1["frms"][0] == 0.0
+    assert night.m1["frms"][-1] > 0.0
+
+
+def test_fixture_gain_changes_applied(night):
+    gains = night.events[night.events["kind"] == "m1_gain"]
+    assert list(gains["detail"]) == ["0.5", "0.2", "0.5", "0.2"]
+
+
+def test_fixture_m1_consistency(night):
+    checked = 0
+    for term, (fitted, expected) in night.m1_check.items():
+        if abs(expected) > 50:
+            assert fitted == pytest.approx(expected, rel=0.25), term
+            checked += 1
+    assert checked > 0
+
+
+def test_fixture_m2_sums_match_sends(night):
+    focus = night.sends["value"][night.sends["kind"] == "focus"]
+    assert night.m2["wfs_z"][-1] == pytest.approx(np.sum(focus))
+
+
+def test_fixture_frames_have_m1_metrics(night):
+    full = night.frames[(night.frames["status"] == "ok") & (night.frames["method"] == "full")]
+    assert len(full) > 0
+    assert np.all(np.isfinite(full["m1_force_rms"]))
+    assert np.all(np.isfinite(full["focus_unc"]))
+
+
+def test_load_night_without_log_or_outputs(tmp_path):
+    nd = tmp_path / "20261003"
+    nd.mkdir()
+    for f in FIXTURE.iterdir():
+        if f.name.endswith(".fits"):
+            (nd / f.name).write_bytes(f.read_bytes())
+    night = load_night(nd)
+    assert len(night.visits) == 2
+    assert any("wfs.log missing" in w for w in night.warnings)
+    assert any("no reanalyze outputs" in w for w in night.warnings)
+    assert len(night.m1) == 0
+
+
+def test_load_night_empty(tmp_path):
+    nd = tmp_path / "20261003"
+    nd.mkdir()
+    night = load_night(nd)
+    assert len(night.frames) == 0 and len(night.visits) == 0
+
+
+def test_load_night_drops_frames_outside_window(tmp_path):
+    # 20260416 was archived with a stale copy of the 20260325 night alongside its own frames
+    nd = tmp_path / "20261003"
+    shutil.copytree(FIXTURE, nd)
+    n_in = len(load_night(nd).frames)
+    _frame(nd, "mmirs_wfs_stale.fits", {**MMIRS_HDR, "DATE-OBS": "2026-09-12T08:44:38"})
+    night = load_night(nd)
+    assert len(night.frames) == n_in
+    assert "mmirs_wfs_stale.fits" not in night.frames["file"]
+    assert night.counts["n_frames_outside"] == 1
+    assert any("1 frames outside the night window were ignored" in w for w in night.warnings)
+
+
+def test_load_night_notes_skipped_log_lines_and_frames(tmp_path):
+    nd = tmp_path / "20261003"
+    shutil.copytree(FIXTURE, nd)
+    with open(nd / "wfs.log", "a") as f:
+        f.write("2026-10-05 01:00:00,000 - WFSsrv - INFO - Analyzing /home/mmtop/wfsdat/mmirs_wfs_9999.fits...\n")
+    (nd / "mmirs_wfs_9999.fits").write_text("not a fits file")
+    night = load_night(nd)
+    assert night.counts["n_outside"] == 1 and night.counts["n_unreadable"] == 1
+    assert any("1 log lines outside the night window were ignored" in w for w in night.warnings)
+    assert any("skipped 1 unreadable and 0 untimed frames" in w for w in night.warnings)

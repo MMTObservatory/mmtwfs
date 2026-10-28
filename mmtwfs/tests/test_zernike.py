@@ -520,6 +520,14 @@ def test_zernike_slopes():
     assert dy is not None
 
 
+def test_loadsave_errorbars(tmp_path):
+    zv = ZernikeVector(Z04=-1452.0, Z05=100.0, errorbars={"Z04": 114.4})
+    zv.save(filename=tmp_path / "zv.json")
+    zv2 = ZernikeVector(coeffs=str(tmp_path / "zv.json"))
+    assert list(zv2.errorbars) == ["Z04"]
+    assert zv2.errorbars["Z04"] == 114.4 * u.nm
+
+
 def test_load_lmfit():
     import warnings
     import lmfit

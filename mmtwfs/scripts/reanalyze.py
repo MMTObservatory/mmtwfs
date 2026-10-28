@@ -22,6 +22,7 @@ from astropy.time import Time
 from astropy.io import fits
 from mmtwfs.wfs import WFSFactory
 from mmtwfs.zernike import ZernikeVector
+from mmtwfs.outputs import CSV_HEADER, CSV_COLUMNS
 
 from astropy.utils.exceptions import AstropyWarning, AstropyDeprecationWarning
 
@@ -35,13 +36,6 @@ log = logging.getLogger('WFS Reanalyze')
 coloredlogs.install(level='INFO', logger=log)
 
 tz = pytz.timezone("America/Phoenix")
-
-
-# instantiate all of the WFS systems...
-CSV_HEADER = "time,wfs,file,exptime,airmass,az,el,osst,outt,chamt,tiltx,tilty,"\
-    "transx,transy,focus,focerr,cc_x_err,cc_y_err,xcen,ycen,seeing,raw_seeing,"\
-    "vlt_seeing,raw_vlt_seeing,ellipticity,fwhm,wavefront_rms,residual_rms,method,delivered_iq\n"
-CSV_COLUMNS = CSV_HEADER.strip().split(",")
 
 
 def delivered_iq(wfskey, zv, seeing):
@@ -83,6 +77,7 @@ def upgrade_cached_line(line, zfile=None):
     return line
 
 
+# instantiate all of the WFS systems...
 wfs_keys = ['f9', 'newf9', 'f5', 'mmirs', 'binospec']
 wfs_systems = {}
 wfs_names = {}
