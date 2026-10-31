@@ -39,8 +39,10 @@ h1 { font-size: 1.2rem; margin: 0; }
 }
 .day .num { font-size: 0.85rem; font-weight: 600; }
 .day .iq { font-size: 0.7rem; align-self: flex-end; white-space: nowrap; }
-.day.blank { background: transparent; cursor: default; }
+.day.blank { background: transparent; cursor: default; color: var(--muted); }
+.day.blank .num { font-weight: 400; opacity: 0.6; }
 .day.noframes { opacity: 0.45; }
+.day.noframes.selected { opacity: 1; }
 .day.selected { outline: 3px solid var(--fg); outline-offset: -1px; }
 .day:focus-visible { outline: 3px solid var(--muted); }
 .day.selected:focus-visible { outline-color: var(--fg); }
@@ -129,8 +131,10 @@ function render() {
     const d = c - lead + 1;
     const e = d >= 1 && d <= ndays ? byNight.get(key(view.y, view.m, d)) : undefined;
     if (!e) {
+      // no report: an inert cell, with a faint day number when the date is in this month
       const blank = document.createElement("div");
       blank.className = "day blank";
+      if (d >= 1 && d <= ndays) blank.innerHTML = `<span class="num">${d}</span>`;
       grid.append(blank);
       continue;
     }

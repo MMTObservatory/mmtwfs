@@ -1,7 +1,7 @@
 # Night report website: design
 
 Date: 2026-10-28
-Status: draft for review
+Status: approved, implemented
 
 ## Purpose
 
