@@ -171,14 +171,16 @@ function applyHash() {
 
 function select(night) {
   selected = night;
-  const url = `nights/${night}.html`;
+  // versioned by the report's mtime: a regenerated report gets a new URL, an unchanged one stays cached
+  const url = `nights/${night}.html?v=${byNight.get(night).mtime}`;
   $("current").innerHTML = `${pretty(night)} · <a href="${url}">open report alone</a>`;
   document.title = `WFS night ${pretty(night)}`;
   setView(monthOf(night));
   const frame = $("report");
   frame.hidden = false;
   // replace() rather than src=, so switching nights doesn't add iframe entries to the back-button history
-  if (frame.contentWindow.location.pathname.endsWith(url)) return;
+  const shown = frame.contentWindow.location;
+  if ((shown.pathname + shown.search).endsWith(url)) return;
   frame.contentWindow.location.replace(url);
 }
 
@@ -259,7 +261,7 @@ function start(data) {
   applyHash();
 }
 
-fetch("nights.json")
+fetch("nights.json", {cache: "no-cache"})
   .then(r => { if (!r.ok) throw new Error(`nights.json: HTTP ${r.status}`); return r.json(); })
   .then(start)
   .catch(err => {

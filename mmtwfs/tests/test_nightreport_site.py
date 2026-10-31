@@ -9,11 +9,15 @@ import pytest
 from mmtwfs.scripts.nightreport_site import TEMPLATE, NightError, collect, main, read_night, sync_report
 
 
+MTIME = 1790000000
+
+
 def make_night(root, night, wfs=("mmirs",), n_frames=10, iq=1.234, html="<html>report</html>", summary=True):
     d = root / night
     d.mkdir(parents=True)
     if html is not None:
         (d / "nightreport.html").write_text(html)
+        os.utime(d / "nightreport.html", (MTIME, MTIME))
     if summary is True:
         summary = {"night": night, "wfs": list(wfs), "n_frames": n_frames, "median_delivered_iq": iq}
     if summary is not None:
@@ -23,7 +27,7 @@ def make_night(root, night, wfs=("mmirs",), n_frames=10, iq=1.234, html="<html>r
 
 def test_read_night_entry(tmp_path):
     entry = read_night(make_night(tmp_path, "20261003"))
-    assert entry == {"night": "20261003", "wfs": ["mmirs"], "n_frames": 10, "median_delivered_iq": 1.23}
+    assert entry == {"night": "20261003", "wfs": ["mmirs"], "n_frames": 10, "median_delivered_iq": 1.23, "mtime": MTIME}
 
 
 def test_read_night_no_frames_null_iq(tmp_path):
@@ -116,8 +120,8 @@ def test_build_site_outputs(tmp_path):
     make_night(archive, "20261004", wfs=(), n_frames=0, iq=None, html="<html>four</html>")
     assert build(archive, out) == 0
     assert json.loads((out / "nights.json").read_text()) == [
-        {"night": "20261003", "wfs": ["mmirs"], "n_frames": 10, "median_delivered_iq": 1.23},
-        {"night": "20261004", "wfs": [], "n_frames": 0, "median_delivered_iq": None},
+        {"night": "20261003", "wfs": ["mmirs"], "n_frames": 10, "median_delivered_iq": 1.23, "mtime": MTIME},
+        {"night": "20261004", "wfs": [], "n_frames": 0, "median_delivered_iq": None, "mtime": MTIME},
     ]
     for night in ("20261003", "20261004"):
         assert (out / "nights" / f"{night}.html").read_bytes() == (archive / night / "nightreport.html").read_bytes()
@@ -151,6 +155,22 @@ def test_changed_report_is_recopied(tmp_path):
     copy = out / "nights" / "20261003.html"
     assert copy.read_bytes() == src.read_bytes()
     assert copy.stat().st_mtime_ns == src.stat().st_mtime_ns
+
+
+def test_regenerated_report_changes_manifest_mtime(tmp_path):
+    # the page loads nights/N.html?v=<mtime>, so a regenerated report gets a new URL and isn't served from cache
+    archive, out = tmp_path / "archive", tmp_path / "site"
+    src = make_night(archive, "20261003") / "nightreport.html"
+    build(archive, out)
+    os.utime(src, (MTIME + 3600, MTIME + 3600))
+    build(archive, out)
+    assert json.loads((out / "nights.json").read_text())[0]["mtime"] == MTIME + 3600
+
+
+def test_template_versions_report_urls_and_revalidates_manifest():
+    page = TEMPLATE.read_text()
+    assert "?v=${" in page
+    assert 'fetch("nights.json", {cache: "no-cache"})' in page
 
 
 def test_same_size_newer_report_is_recopied(tmp_path):

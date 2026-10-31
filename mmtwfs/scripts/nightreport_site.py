@@ -65,6 +65,8 @@ def read_night(path):
         "wfs": wfs,
         "n_frames": n_frames,
         "median_delivered_iq": None if iq is None else round(float(iq), 2),
+        # the page loads nights/N.html?v=<mtime>, so a regenerated report isn't shown from the browser's cache
+        "mtime": int((path / REPORT).stat().st_mtime),
     }
 
 

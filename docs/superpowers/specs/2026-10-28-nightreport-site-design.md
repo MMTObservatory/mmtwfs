@@ -36,10 +36,13 @@ network. Deployment is, for example, `rsync -a --delete site/ server:/path/`.
 `nights.json` is a list sorted by night:
 
 ```json
-[{"night": "20261003", "wfs": ["mmirs"], "n_frames": 580, "median_delivered_iq": 2.2}, ...]
+[{"night": "20261003", "wfs": ["mmirs"], "n_frames": 580, "median_delivered_iq": 2.2, "mtime": 1790000000}, ...]
 ```
 
-`median_delivered_iq` is rounded to two decimals, or null.
+`median_delivered_iq` is rounded to two decimals, or null. `mtime` is the report's modification time in whole
+seconds. The page loads `nights/YYYYMMDD.html?v=<mtime>`, so a regenerated report gets a new URL instead of being
+shown from the browser's cache, and it fetches `nights.json` with `cache: "no-cache"` so that the browser checks for a
+new manifest on every load.
 
 ## Page
 
