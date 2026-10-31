@@ -8,10 +8,11 @@ from unittest.mock import patch
 
 import numpy as np
 import pytest
+from astropy.table import Table
 
 from mmtwfs.nightlog import load_night
-from mmtwfs.scripts.nightreport import (_clip_outliers, _flag_labels, _summary_value, main, night_dirs, slew_figure, summarize,
-                                        timeline_figure, write_report)
+from mmtwfs.scripts.nightreport import (_clip_outliers, _flag_labels, _flag_legend, _summary_value, main, night_dirs,
+                                        slew_figure, summarize, timeline_figure, write_report)
 
 FIXTURE = importlib.resources.files("mmtwfs") / "data" / "test_data" / "nightreport" / "20261003"
 OUTPUTS = ["nightreport.html", "nightreport_frames.csv", "nightreport_visits.csv", "nightreport_events.csv",
@@ -103,6 +104,34 @@ def test_flag_labels_merge_close_flags():
     frames = np.array([0.0, 100.0])
     flags = np.array([10.0, 11.0, 12.0, 50.0, 90.0, 92.0])
     assert _flag_labels(flags, frames) == [(10.0, "1\u20133"), (50.0, "4"), (90.0, "5\u20136")]
+
+
+def _flags(times, kinds):
+    return Table({"time": np.array(times, dtype="datetime64[ms]"), "kind": np.array(kinds), "file": [""] * len(times),
+                  "detail": [""] * len(times), "visit": np.zeros(len(times), dtype=int)})
+
+
+def test_flag_legend_lists_few_flags():
+    flags = _flags(["2026-09-18T02:36:10", "2026-09-18T02:50:00"], ["validity", "m1_partial"])
+    assert _flag_legend(flags) == ["flag (number, UTC, kind):", "1  02:36  validity", "2  02:50  m1_partial"]
+
+
+def test_flag_legend_summarizes_many_flags_by_kind():
+    times = [f"2026-09-18T03:{m:02d}:00" for m in range(20)] + ["2026-09-18T05:15:00"]
+    flags = _flags(times, ["validity"] * 20 + ["m1_partial"])
+    assert _flag_legend(flags) == ["flag (kind, count, UTC span):", "validity \u00d720  03:00\u201303:19",
+                                   "m1_partial \u00d71  05:15", "numbered as in the Events table"]
+
+
+@pytest.mark.parametrize("n_flags", [20, 117])
+def test_timeline_flag_legend_stays_in_top_panel(nightdir, n_flags):
+    night = load_night(nightdir)
+    t0, t1 = night.frames["time"].min(), night.frames["time"].max()
+    times = t0 + (t1 - t0) * np.arange(n_flags) / n_flags
+    night.flags = _flags(times, ["validity"] * n_flags)
+    fig = timeline_figure(night)
+    renderer = fig.canvas.get_renderer()
+    assert fig.axes[0].get_legend().get_window_extent(renderer).y0 >= fig.axes[1].get_window_extent(renderer).y1
 
 
 def test_rerun_is_identical(nightdir):
