@@ -1,16 +1,268 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><title>MMT WFS night reports</title></head>
-<body>
-<ul id="nights"></ul>
-<script>
-fetch("nights.json").then(r => r.json()).then(nights => {
-  for (const n of nights) {
-    const li = document.createElement("li");
-    li.innerHTML = `<a href="nights/${n.night}.html">${n.night}</a>`;
-    document.getElementById("nights").append(li);
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MMT WFS night reports</title>
+<style>
+:root {
+  --bg: #fafafa; --fg: #1d1d1f; --muted: #6b6b70; --line: #d6d6db; --tile: #ececf0;
+  --f9: #c9dcfb; --f5: #cdeccf; --mmirs: #fbd9b6; --binospec: #e2d2f7; --mixed: #f7f0a8; --other: #dedede;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #17181a; --fg: #ececee; --muted: #9a9aa2; --line: #3a3b40; --tile: #24252a;
+    --f9: #23406e; --f5: #1f4d2c; --mmirs: #66401a; --binospec: #47306b; --mixed: #57521a; --other: #3d3d42;
   }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: system-ui, sans-serif; }
+header, #calendar, #legend, #message { padding: 0 16px; max-width: 640px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; padding-top: 12px; }
+h1 { font-size: 1.2rem; margin: 0; }
+#current { color: var(--muted); }
+#current a { color: inherit; }
+.controls { display: flex; gap: 8px; align-items: center; margin: 12px 0 8px; }
+.controls button, .controls select {
+  font: inherit; color: var(--fg); background: var(--tile); border: 1px solid var(--line); border-radius: 6px;
+  padding: 4px 8px; min-height: 32px;
+}
+.controls button { min-width: 36px; cursor: pointer; }
+.controls button:disabled { opacity: 0.35; cursor: default; }
+.grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.dow { text-align: center; font-size: 0.75rem; color: var(--muted); padding-bottom: 2px; }
+.day {
+  aspect-ratio: 1 / 0.8; min-width: 0; border: 0; border-radius: 6px; padding: 4px; font: inherit; color: var(--fg);
+  display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; text-align: left;
+  background: var(--tile); cursor: pointer;
+}
+.day .num { font-size: 0.85rem; font-weight: 600; }
+.day .iq { font-size: 0.7rem; align-self: flex-end; white-space: nowrap; }
+.day.blank { background: transparent; cursor: default; }
+.day.noframes { opacity: 0.45; }
+.day.selected { outline: 3px solid var(--fg); outline-offset: -1px; }
+.day:focus-visible { outline: 3px solid var(--muted); }
+.day.selected:focus-visible { outline-color: var(--fg); }
+.g-f9 { background: var(--f9); } .g-f5 { background: var(--f5); } .g-mmirs { background: var(--mmirs); }
+.g-binospec { background: var(--binospec); } .g-mixed { background: var(--mixed); } .g-other { background: var(--other); }
+#legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 10px 0 14px; font-size: 0.8rem; color: var(--muted); }
+#legend span::before {
+  content: ""; display: inline-block; width: 0.9em; height: 0.9em; border-radius: 3px; margin-right: 5px;
+  vertical-align: -0.1em; background: var(--swatch);
+}
+#legend .noframes::before { background: var(--tile); opacity: 0.45; }
+#message { color: var(--muted); }
+#report { display: block; width: 100%; height: 80vh; border: 0; border-top: 1px solid var(--line); background: #fff; }
+</style>
+</head>
+<body>
+<header>
+  <h1>MMT WFS night reports</h1>
+  <span id="current"></span>
+</header>
+<div id="calendar" hidden>
+  <div class="controls">
+    <button id="prev" type="button" aria-label="Previous month">‹</button>
+    <select id="month" aria-label="Month"></select>
+    <select id="year" aria-label="Year"></select>
+    <button id="next" type="button" aria-label="Next month">›</button>
+  </div>
+  <div class="grid" id="grid"></div>
+</div>
+<div id="legend" hidden></div>
+<p id="message" hidden></p>
+<iframe id="report" title="Night report" hidden></iframe>
+<script>
+"use strict";
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
+                "November", "December"];
+const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+// WFS key -> display group; anything not listed is "other"
+const GROUP = {newf9: "f9", f9: "f9", oldf9: "f9", f5: "f5", mmirs: "mmirs", binospec: "binospec"};
+const LABEL = {f9: "F/9", f5: "F/5", mmirs: "MMIRS", binospec: "Binospec", mixed: "Mixed", other: "Other"};
+
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2, "0");
+const key = (y, m, d) => `${y}${pad(m + 1)}${pad(d)}`;  // m is 0-based, like Date
+const monthOf = night => ({y: +night.slice(0, 4), m: +night.slice(4, 6) - 1});
+const mi = v => v.y * 12 + v.m;
+const fromMi = i => ({y: Math.floor(i / 12), m: i % 12});
+const pretty = night => `${night.slice(0, 4)}-${night.slice(4, 6)}-${night.slice(6, 8)}`;
+
+let nights = [], byNight = new Map(), withFrames = [], first, last, view, selected = null;
+
+function group(entry) {
+  const groups = new Set(entry.wfs.map(w => GROUP[w] || "other"));
+  return groups.size > 1 ? "mixed" : (groups.values().next().value || "other");
+}
+
+function describe(e) {
+  const parts = [pretty(e.night)];
+  if (e.wfs.length) parts.push(e.wfs.map(w => LABEL[GROUP[w]] || w).join(" + "));
+  parts.push(`${e.n_frames} frames`);
+  if (e.median_delivered_iq !== null) parts.push(`${e.median_delivered_iq.toFixed(2)}″ delivered IQ`);
+  return parts.join(" · ");
+}
+
+function setView(v) {
+  view = fromMi(Math.min(Math.max(mi(v), mi(first)), mi(last)));
+  render();
+}
+
+function render() {
+  $("prev").disabled = mi(view) <= mi(first);
+  $("next").disabled = mi(view) >= mi(last);
+  $("year").value = view.y;
+  for (const opt of $("month").options) {
+    const i = view.y * 12 + +opt.value;
+    opt.disabled = i < mi(first) || i > mi(last);
+  }
+  $("month").value = view.m;
+
+  const grid = $("grid");
+  grid.replaceChildren(...DOW.map(d => Object.assign(document.createElement("div"), {className: "dow", textContent: d})));
+  const lead = new Date(view.y, view.m, 1).getDay();
+  const ndays = new Date(view.y, view.m + 1, 0).getDate();
+  const cells = Math.ceil((lead + ndays) / 7) * 7;
+  for (let c = 0; c < cells; c++) {
+    const d = c - lead + 1;
+    const e = d >= 1 && d <= ndays ? byNight.get(key(view.y, view.m, d)) : undefined;
+    if (!e) {
+      const blank = document.createElement("div");
+      blank.className = "day blank";
+      grid.append(blank);
+      continue;
+    }
+    const tile = document.createElement("button");
+    tile.type = "button";
+    tile.className = "day " + (e.n_frames > 0 ? "g-" + group(e) : "noframes");
+    if (e.night === selected) {
+      tile.classList.add("selected");
+      tile.setAttribute("aria-current", "date");
+    }
+    tile.title = describe(e);
+    tile.setAttribute("aria-label", tile.title);
+    tile.innerHTML = `<span class="num">${d}</span>`;
+    if (e.n_frames > 0 && e.median_delivered_iq !== null) {
+      tile.innerHTML += `<span class="iq">${e.median_delivered_iq.toFixed(2)}″</span>`;
+    }
+    tile.addEventListener("click", () => { location.hash = e.night; });
+    grid.append(tile);
+  }
+}
+
+function defaultNight() {
+  return withFrames.length ? withFrames[withFrames.length - 1] : nights[nights.length - 1].night;
+}
+
+function applyHash() {
+  let night = location.hash.slice(1);
+  if (!byNight.has(night)) {
+    night = defaultNight();
+    history.replaceState(null, "", "#" + night);
+  }
+  select(night);
+}
+
+function select(night) {
+  selected = night;
+  const url = `nights/${night}.html`;
+  $("current").innerHTML = `${pretty(night)} · <a href="${url}">open report alone</a>`;
+  document.title = `WFS night ${pretty(night)}`;
+  setView(monthOf(night));
+  const frame = $("report");
+  frame.hidden = false;
+  // replace() rather than src=, so switching nights doesn't add iframe entries to the back-button history
+  if (frame.contentWindow.location.pathname.endsWith(url)) return;
+  frame.contentWindow.location.replace(url);
+}
+
+function step(dir) {
+  if (!selected || !withFrames.length) return;
+  const target = dir > 0 ? withFrames.find(n => n > selected) : withFrames.findLast(n => n < selected);
+  if (target) location.hash = target;
+}
+
+function onKey(ev) {
+  if (ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
+  const tag = ev.target && ev.target.tagName;
+  if (tag === "SELECT" || tag === "INPUT" || tag === "TEXTAREA") return;
+  if (ev.key === "ArrowLeft") { step(-1); ev.preventDefault(); }
+  if (ev.key === "ArrowRight") { step(1); ev.preventDefault(); }
+}
+
+// Size the iframe to its content so the page has one scrollbar. The report caps its visits table at 70vh, which
+// inside an auto-sized iframe would grow without limit, so that cap is restated against this window's height.
+let observer = null;
+function fitFrame() {
+  const frame = $("report");
+  const doc = frame.contentDocument;
+  if (!doc || !doc.body) return;
+  let style = doc.getElementById("site-fit");
+  if (!style) {
+    style = doc.createElement("style");
+    style.id = "site-fit";
+    doc.head.append(style);
+  }
+  style.textContent = `.scroll{max-height:${Math.round(window.innerHeight * 0.7)}px}`;
+  const body = doc.body;
+  const height = body.getBoundingClientRect().bottom + parseFloat(doc.defaultView.getComputedStyle(body).marginBottom);
+  frame.style.height = Math.ceil(height) + 2 + "px";
+}
+
+$("report").addEventListener("load", () => {
+  const doc = $("report").contentDocument;
+  if (!doc || !doc.body) return;
+  if (observer) observer.disconnect();
+  observer = new ResizeObserver(fitFrame);
+  observer.observe(doc.body);
+  doc.addEventListener("keydown", onKey);
+  fitFrame();
 });
+window.addEventListener("resize", fitFrame);
+
+function start(data) {
+  nights = data;
+  if (!nights.length) throw new Error("nights.json lists no nights");
+  byNight = new Map(nights.map(e => [e.night, e]));
+  withFrames = nights.filter(e => e.n_frames > 0).map(e => e.night);
+  first = monthOf(nights[0].night);
+  last = monthOf(nights[nights.length - 1].night);
+
+  $("month").replaceChildren(...MONTHS.map((name, i) => new Option(name, i)));
+  const years = [];
+  for (let y = first.y; y <= last.y; y++) years.push(new Option(y, y));
+  $("year").replaceChildren(...years);
+  $("prev").addEventListener("click", () => setView(fromMi(mi(view) - 1)));
+  $("next").addEventListener("click", () => setView(fromMi(mi(view) + 1)));
+  $("month").addEventListener("change", ev => setView({y: view.y, m: +ev.target.value}));
+  $("year").addEventListener("change", ev => setView({y: +ev.target.value, m: view.m}));
+
+  const legend = Object.entries(LABEL).map(([g, label]) => {
+    const s = document.createElement("span");
+    s.textContent = label;
+    s.style.setProperty("--swatch", `var(--${g})`);
+    return s;
+  });
+  legend.push(Object.assign(document.createElement("span"), {className: "noframes", textContent: "No frames"}));
+  $("legend").replaceChildren(...legend);
+
+  $("calendar").hidden = false;
+  $("legend").hidden = false;
+  document.addEventListener("keydown", onKey);
+  window.addEventListener("hashchange", applyHash);
+  applyHash();
+}
+
+fetch("nights.json")
+  .then(r => { if (!r.ok) throw new Error(`nights.json: HTTP ${r.status}`); return r.json(); })
+  .then(start)
+  .catch(err => {
+    $("message").textContent = `Couldn't load the list of nights (${err.message}). ` +
+      "If this page was opened from disk, serve the directory over HTTP instead.";
+    $("message").hidden = false;
+  });
 </script>
 </body>
 </html>
