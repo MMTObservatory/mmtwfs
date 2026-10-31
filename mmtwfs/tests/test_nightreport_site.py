@@ -57,6 +57,30 @@ def test_summary_missing_field_is_skipped(tmp_path, missing):
         read_night(make_night(tmp_path, "20261003", summary=summary))
 
 
+BAD_VALUES = [("wfs", None), ("wfs", 3), ("wfs", "mmirs"), ("wfs", [1]), ("n_frames", None), ("n_frames", True),
+              ("n_frames", "3"), ("n_frames", 1.5), ("median_delivered_iq", "1.2x"), ("median_delivered_iq", [1]),
+              ("median_delivered_iq", True), ("median_delivered_iq", "NaN"), ("median_delivered_iq", "Infinity")]
+
+
+@pytest.mark.parametrize("field,value", BAD_VALUES)
+def test_summary_wrong_type_is_skipped(tmp_path, field, value):
+    summary = {"night": "20261003", "wfs": ["f5"], "n_frames": 3, "median_delivered_iq": 1.0}
+    summary[field] = value
+    text = json.dumps(summary)
+    if value in ("NaN", "Infinity"):  # the bare tokens Python's json writes and reads, not strings
+        text = text.replace(f'"{value}"', value)
+    with pytest.raises(NightError):
+        read_night(make_night(tmp_path, "20261003", summary=text))
+
+
+def test_wrong_type_night_skipped_rest_written(tmp_path):
+    archive, out = tmp_path / "archive", tmp_path / "site"
+    make_night(archive, "20261003")
+    make_night(archive, "20261004", summary='{"wfs": ["f5"], "n_frames": 3, "median_delivered_iq": NaN}')
+    assert main([str(archive), "-o", str(out)]) == 1
+    assert [e["night"] for e in json.loads((out / "nights.json").read_text())] == ["20261003"]
+
+
 def test_collect_sorted_and_counts(tmp_path):
     make_night(tmp_path, "20261005")
     make_night(tmp_path, "20261003")

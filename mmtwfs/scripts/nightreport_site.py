@@ -11,6 +11,7 @@ import argparse
 import importlib.resources
 import json
 import logging
+import math
 import os
 import shutil
 from pathlib import Path
@@ -52,11 +53,17 @@ def read_night(path):
     missing = [k for k in ("wfs", "n_frames") if k not in summary]
     if missing:
         raise NightError(f"{path.name}: {SUMMARY} has no {', '.join(missing)}")
-    iq = summary.get("median_delivered_iq")
+    wfs, n_frames, iq = summary["wfs"], summary["n_frames"], summary.get("median_delivered_iq")
+    if not (isinstance(wfs, list) and all(isinstance(w, str) for w in wfs)):
+        raise NightError(f"{path.name}: wfs in {SUMMARY} is not a list of names: {wfs!r}")
+    if not isinstance(n_frames, int) or isinstance(n_frames, bool):
+        raise NightError(f"{path.name}: n_frames in {SUMMARY} is not an integer: {n_frames!r}")
+    if iq is not None and (not isinstance(iq, (int, float)) or isinstance(iq, bool) or not math.isfinite(iq)):
+        raise NightError(f"{path.name}: median_delivered_iq in {SUMMARY} is not a finite number: {iq!r}")
     return {
         "night": path.name,
-        "wfs": list(summary["wfs"]),
-        "n_frames": summary["n_frames"],
+        "wfs": wfs,
+        "n_frames": n_frames,
         "median_delivered_iq": None if iq is None else round(float(iq), 2),
     }
 
@@ -124,7 +131,7 @@ def build_site(dirs, outdir):
     nightsdir.mkdir(parents=True, exist_ok=True)
     sources = unique_nights(dirs)
     copied = sum(sync_report(sources[e["night"]] / REPORT, nightsdir / f"{e['night']}.html") for e in entries)
-    _atomic_write(outdir / "nights.json", json.dumps(entries, indent=1))
+    _atomic_write(outdir / "nights.json", json.dumps(entries, indent=1, allow_nan=False))
     _atomic_write(outdir / "index.html", TEMPLATE.read_text())
     keep = {e["night"] for e in entries}
     pruned = 0
