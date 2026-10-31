@@ -120,6 +120,8 @@ The package uses a factory pattern to instantiate telescope-specific and WFS-spe
 
 Entry points defined in `pyproject.toml` (`[project.scripts]`), installed on `pip install`:
 - `reanalyze`: Batch re-analysis of WFS data (`mmtwfs/scripts/reanalyze.py`)
+- `nightreport`: Per-night HTML report plus CSV/JSON data in each night directory (`mmtwfs/scripts/nightreport.py`)
+- `nightreport_site`: Static calendar website collecting the nightly reports (`mmtwfs/scripts/nightreport_site.py`)
 - `fix_mmtwfs_csvs`, `fix_mmirs_exposure_time`, `rename_mmirs_files`: Data-file maintenance utilities
 
 ### Data Flow

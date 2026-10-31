@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>MMT WFS night reports</title></head>
+<body>
+<ul id="nights"></ul>
+<script>
+fetch("nights.json").then(r => r.json()).then(nights => {
+  for (const n of nights) {
+    const li = document.createElement("li");
+    li.innerHTML = `<a href="nights/${n.night}.html">${n.night}</a>`;
+    document.getElementById("nights").append(li);
+  }
+});
+</script>
+</body>
+</html>

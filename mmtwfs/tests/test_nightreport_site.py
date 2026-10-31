@@ -2,10 +2,11 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 
 import json
+import os
 
 import pytest
 
-from mmtwfs.scripts.nightreport_site import NightError, collect, read_night
+from mmtwfs.scripts.nightreport_site import TEMPLATE, NightError, collect, main, read_night, sync_report
 
 
 def make_night(root, night, wfs=("mmirs",), n_frames=10, iq=1.234, html="<html>report</html>", summary=True):
@@ -71,3 +72,111 @@ def test_duplicate_dirs_give_one_entry(tmp_path):
     entries, skipped = collect([tmp_path, tmp_path / "20261003"])
     assert len(entries) == 1
     assert skipped == 0
+
+
+def test_same_night_in_two_places_gives_one_entry(tmp_path):
+    make_night(tmp_path / "a", "20261003", n_frames=1)
+    make_night(tmp_path / "b", "20261003", n_frames=2)
+    entries, skipped = collect([tmp_path / "a", tmp_path / "b"])
+    assert [e["n_frames"] for e in entries] == [1]
+    assert skipped == 0
+
+
+def build(archive, out):
+    return main([str(archive), "-o", str(out)])
+
+
+def test_build_site_outputs(tmp_path):
+    archive, out = tmp_path / "archive", tmp_path / "site"
+    make_night(archive, "20261003", html="<html>three</html>")
+    make_night(archive, "20261004", wfs=(), n_frames=0, iq=None, html="<html>four</html>")
+    assert build(archive, out) == 0
+    assert json.loads((out / "nights.json").read_text()) == [
+        {"night": "20261003", "wfs": ["mmirs"], "n_frames": 10, "median_delivered_iq": 1.23},
+        {"night": "20261004", "wfs": [], "n_frames": 0, "median_delivered_iq": None},
+    ]
+    for night in ("20261003", "20261004"):
+        assert (out / "nights" / f"{night}.html").read_bytes() == (archive / night / "nightreport.html").read_bytes()
+    index = (out / "index.html").read_text()
+    assert index == TEMPLATE.read_text()
+    assert "nights.json" in index
+    names = sorted(p.name for p in out.rglob("*"))
+    assert names == ["20261003.html", "20261004.html", "index.html", "nights", "nights.json"]
+
+
+def test_rerun_leaves_copies_untouched(tmp_path):
+    archive, out = tmp_path / "archive", tmp_path / "site"
+    src = make_night(archive, "20261003") / "nightreport.html"
+    build(archive, out)
+    copy = out / "nights" / "20261003.html"
+    before = copy.stat()
+    assert build(archive, out) == 0
+    after = copy.stat()
+    assert (after.st_mtime_ns, after.st_ino) == (before.st_mtime_ns, before.st_ino)
+    assert sync_report(src, copy) is False
+
+
+def test_changed_report_is_recopied(tmp_path):
+    archive, out = tmp_path / "archive", tmp_path / "site"
+    src = make_night(archive, "20261003") / "nightreport.html"
+    build(archive, out)
+    src.write_text("<html>new and longer report</html>")
+    st = src.stat()
+    os.utime(src, ns=(st.st_atime_ns, st.st_mtime_ns + 10**10))
+    assert build(archive, out) == 0
+    copy = out / "nights" / "20261003.html"
+    assert copy.read_bytes() == src.read_bytes()
+    assert copy.stat().st_mtime_ns == src.stat().st_mtime_ns
+
+
+def test_same_size_newer_report_is_recopied(tmp_path):
+    archive, out = tmp_path / "archive", tmp_path / "site"
+    src = make_night(archive, "20261003", html="<html>aaaa</html>") / "nightreport.html"
+    build(archive, out)
+    src.write_text("<html>bbbb</html>")
+    st = src.stat()
+    os.utime(src, ns=(st.st_atime_ns, st.st_mtime_ns + 10**10))
+    build(archive, out)
+    assert (out / "nights" / "20261003.html").read_text() == "<html>bbbb</html>"
+
+
+def test_prune_only_touches_night_html(tmp_path):
+    archive, out = tmp_path / "archive", tmp_path / "site"
+    make_night(archive, "20261003")
+    b = make_night(archive, "20261004")
+    build(archive, out)
+    (out / "notes.txt").write_text("keep")
+    (out / "nights" / "readme.txt").write_text("keep")
+    for f in b.iterdir():
+        f.unlink()
+    b.rmdir()
+    assert build(archive, out) == 0
+    assert not (out / "nights" / "20261004.html").exists()
+    assert (out / "nights" / "20261003.html").exists()
+    assert (out / "notes.txt").exists()
+    assert (out / "nights" / "readme.txt").exists()
+
+
+def test_skipped_night_exit_code_and_prune(tmp_path):
+    archive, out = tmp_path / "archive", tmp_path / "site"
+    make_night(archive, "20261003")
+    b = make_night(archive, "20261004")
+    build(archive, out)
+    (b / "nightreport_summary.json").write_text("{bad")
+    assert build(archive, out) == 1
+    assert [e["night"] for e in json.loads((out / "nights.json").read_text())] == ["20261003"]
+    assert not (out / "nights" / "20261004.html").exists()
+
+
+def test_no_nights_writes_nothing(tmp_path):
+    archive, out = tmp_path / "archive", tmp_path / "site"
+    archive.mkdir()
+    assert build(archive, out) == 1
+    assert not out.exists()
+
+
+def test_outdir_created(tmp_path):
+    archive, out = tmp_path / "archive", tmp_path / "a" / "b"
+    make_night(archive, "20261003")
+    assert build(archive, out) == 0
+    assert (out / "nights").is_dir()
