@@ -154,16 +154,48 @@ def _clear_handles(events):
 
 def _flag_labels(flag_times, frame_times):
     """
-    Number the flags 1..N, merging runs closer than 3% of the night into one "first-last" label so they don't
-    overprint. Times are matplotlib date numbers; annotate skips unit conversion. Returns (time, label) pairs.
+    Number the flags 1..N for the timeline. A run of flags each within 3% of the night of the one before shares one
+    "first-last" label centred over the run, and neighbouring labels centred less than 6% of the night apart (room for
+    the widest, e.g. "100-116") are merged too, so labels never overprint. Times are matplotlib date numbers; annotate
+    skips unit conversion. Returns (time, label) pairs.
     """
-    close = 0.03 * (frame_times.max() - frame_times.min())
-    labels, first = [], 0
-    for n in range(1, len(flag_times) + 1):
-        if n == len(flag_times) or flag_times[n] - flag_times[first] > close:
-            labels.append((flag_times[first], str(first + 1) if n == first + 1 else f"{first + 1}\u2013{n}"))
-            first = n
-    return labels
+    night = frame_times.max() - frame_times.min()
+    runs = []  # [first index, last index], 0-based
+    for n in range(len(flag_times)):
+        if runs and flag_times[n] - flag_times[n - 1] <= 0.03 * night:
+            runs[-1][1] = n
+        else:
+            runs.append([n, n])
+
+    def centre(run):
+        return (flag_times[run[0]] + flag_times[run[1]]) / 2
+
+    merged = []
+    for run in runs:
+        if merged and centre(run) - centre(merged[-1]) < 0.06 * night:
+            merged[-1][1] = run[1]
+        else:
+            merged.append(run)
+    return [(float(centre(r)), str(r[0] + 1) if r[0] == r[1] else f"{r[0] + 1}\u2013{r[1] + 1}") for r in merged]
+
+
+MAX_LISTED_FLAGS = 20  # beyond this the per-flag legend rows run past the top panel; the Events table lists them all
+
+
+def _flag_legend(flags):
+    """
+    Legend rows for the flags in the timeline's top panel: a header, then one row per flag, or, when there are more
+    than MAX_LISTED_FLAGS, one row per kind with its count and UTC span.
+    """
+    hhmm = [str(t)[11:16] for t in flags["time"]]
+    if len(flags) <= MAX_LISTED_FLAGS:
+        return ["flag (number, UTC, kind):"] + [f"{n}  {hm}  {k}" for n, (hm, k) in enumerate(zip(hhmm, flags["kind"]), 1)]
+    rows = []
+    for kind, count in Counter(flags["kind"]).most_common():
+        times = [hm for hm, k in zip(hhmm, flags["kind"]) if k == kind]
+        span = times[0] if count == 1 else f"{times[0]}\u2013{times[-1]}"
+        rows.append(f"{kind} \u00d7{count}  {span}")
+    return ["flag (kind, count, UTC span):"] + rows + ["numbered as in the Events table"]
 
 
 def _nothing_logged(ax):
@@ -237,9 +269,9 @@ def timeline_figure(night):
         for t, label in _flag_labels(date2num(night.flags["time"]), date2num(f["time"])):
             ax.annotate(label, (t, 0.9), xycoords=xform, xytext=(0, 7), textcoords="offset points", ha="center",
                         fontsize=10, color="C3")
-        handles.append(Line2D([], [], marker="v", ls="none", color="C3", label="flag (number, UTC, kind):"))
-        handles += [Line2D([], [], ls="none", label=f"{n}  {str(fl['time'])[11:16]}  {fl['kind']}")
-                    for n, fl in enumerate(night.flags, 1)]
+        header, *rows = _flag_legend(night.flags)
+        handles.append(Line2D([], [], marker="v", ls="none", color="C3", label=header))
+        handles += [Line2D([], [], ls="none", label=row) for row in rows]
     ax.legend(handles=handles, ncol=2 if len(handles) > 14 else 1, **LEGEND_RIGHT)
     ax.set_ylabel("EL (deg)")
     ax = axes[1]
