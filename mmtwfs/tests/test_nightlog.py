@@ -267,6 +267,39 @@ def test_read_frames_mjd_fallback_and_untimed(tmp_path):
     assert counts == {"n_unreadable": 1, "n_untimed": 1}
 
 
+def test_read_frames_old_header_times(tmp_path):
+    # pre-2017 F/9 (DATEOBS + UT) and old Apogee F/9 (DATE-OBS date + TIME-OBS) headers, as reanalyze reads them
+    _frame(tmp_path, "auto_wfs_0000.fits", {"DATEOBS": "Tue Feb 21 2012", "UT": "      02:02:24"})
+    _frame(tmp_path, "auto_wfs_0001.fits", {"DATEOBS": "2012-02-21", "TIME-OBS": "02:03:00"})
+    _frame(tmp_path, "apogee_0001.fits", {"DATE-OBS": "21/02/105", "TIME-OBS": "02:04:00"})
+    _frame(tmp_path, "apogee_0002.fits", {"DATE-OBS": "2012-02-21", "TIME-OBS": "02:05:00"})
+    frames, counts = read_frames(tmp_path)
+    assert counts == {"n_unreadable": 0, "n_untimed": 0}
+    assert list(frames["time"]) == [np.datetime64(t) for t in (
+        "2005-02-21T02:04:00", "2012-02-21T02:02:24", "2012-02-21T02:03:00", "2012-02-21T02:05:00")]
+
+
+def test_read_frames_prefers_output_time(tmp_path):
+    # reanalyze already normalized the time, e.g. pre-2019 MMIRS DATE-OBS is local time
+    _frame(tmp_path, "mmirs_wfs_0001.fits", {**MMIRS_HDR, "DATE-OBS": "2018-10-03T01:44:38"})
+    _frame(tmp_path, "mmirs_wfs_0002.fits", {"CATID": "X"})  # untimed header, but the output has a time
+    for n in (1, 2):
+        line = OUTPUT_LINE.format(name=f"mmirs_wfs_000{n}.fits", focus=1.0)
+        (tmp_path / f"mmirs_wfs_000{n}.output").write_text(line.replace("2026-10-03T08:44:38", f"2018-10-03T08:4{n}:38"))
+    frames, counts = read_frames(tmp_path)
+    assert counts == {"n_unreadable": 0, "n_untimed": 0}
+    assert list(frames["time"]) == [np.datetime64("2018-10-03T08:41:38"), np.datetime64("2018-10-03T08:42:38")]
+
+
+def test_read_frames_output_without_time_uses_header(tmp_path):
+    _frame(tmp_path, "mmirs_wfs_0001.fits", MMIRS_HDR)
+    (tmp_path / "mmirs_wfs_0001.output").write_text(
+        OUTPUT_LINE.format(name="mmirs_wfs_0001.fits", focus=1.0).replace("2026-10-03T08:44:38", "None"))
+    frames, _ = read_frames(tmp_path)
+    assert frames["time"][0] == np.datetime64("2026-10-03T08:44:38")
+    assert frames["status"][0] == "ok"
+
+
 def test_read_frames_skips_malformed_headers(tmp_path):
     _frame(tmp_path, "mmirs_wfs_0001.fits", MMIRS_HDR)
     _frame(tmp_path, "mmirs_wfs_0002.fits", {**MMIRS_HDR, "CATRA": ""})
