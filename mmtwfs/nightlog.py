@@ -299,13 +299,39 @@ def _read_header(path):
     return hdr
 
 
+def _date_and_time(date, ut):
+    """A UT date ("2012-02-21", "Tue Feb 21 2012", or the old Apogee "21/02/105") and a UT "HH:MM:SS"."""
+    date, ut = date.strip(), ut.strip()
+    if "/" in date:
+        day, month, year = date.split("/")
+        date = f"{int(year) + 1900}-{month}-{day}"
+    fmt = "%Y-%m-%d" if "-" in date else "%a %b %d %Y"
+    return datetime.strptime(f"{date} {ut}", f"{fmt} %H:%M:%S")
+
+
 def _frame_time(hdr):
+    """
+    Frame time from the header, for frames without a reanalyze output to take it from. Covers the same header
+    layouts as reanalyze.check_image except its file-time fallbacks.
+    """
     dateobs = str(hdr.get("DATE-OBS", ""))
     if "T" in dateobs:
         return datetime.fromisoformat(dateobs.rstrip("Z"))
+    if "DATEOBS" in hdr and ("UT" in hdr or "TIME-OBS" in hdr):  # F/9 before 2017
+        return _date_and_time(str(hdr["DATEOBS"]), str(hdr.get("UT", hdr.get("TIME-OBS"))))
+    if dateobs and "TIME-OBS" in hdr:  # old Apogee F/9
+        return _date_and_time(dateobs, str(hdr["TIME-OBS"]))
     if "MJD" in hdr:
         return Time(float(hdr["MJD"]), format="mjd", scale="utc").datetime
     return None
+
+
+def _output_time(output):
+    """The time reanalyze recorded, which already allows for each era's header quirks, or None if it has none."""
+    try:
+        return datetime.fromisoformat(output["time"])
+    except (TypeError, ValueError):
+        return None
 
 
 OUTPUT_WFS = {"oldf9": "f9"}  # reanalyze's names that differ from the WFS config keys
@@ -323,9 +349,17 @@ def read_frames(nightdir):
     for f in sorted(nightdir.glob("*.fits")):
         if any(s in f.name for s in DERIVED_MARKERS):
             continue  # same skip rule as reanalyze; Binospec names have dots in their timestamps
+        stem = f.name.removesuffix(".fits")
+        output = None
+        outfile = nightdir / f"{stem}.output"
+        if outfile.exists():
+            try:
+                output = read_output(outfile)
+            except ValueError as e:
+                log.warning(str(e))
         try:
             hdr = _read_header(f)
-            t = _frame_time(hdr)
+            t = (output is not None and _output_time(output)) or _frame_time(hdr)
             if t is not None:
                 coords = dict(catra=_ra_deg(hdr.get("CATRA")), catdec=_dec_deg(hdr.get("CATDEC")),
                               ra=_ra_deg(hdr.get("RA")), dec=_dec_deg(hdr.get("DEC")))
@@ -336,19 +370,11 @@ def read_frames(nightdir):
         if t is None:
             counts["n_untimed"] += 1
             continue
-        stem = f.name.removesuffix(".fits")
         row = dict(
             time=t, file=f.name, wfs=frame_wfs(f.name, hdr), catid=str(hdr.get("CATID", "") or "").strip(),
             spher=-1, visit=-1, **coords,
         )
         row.update({k: _float(hdr.get(key)) for k, key in HEADER_FLOATS.items()})
-        output = None
-        outfile = nightdir / f"{stem}.output"
-        if outfile.exists():
-            try:
-                output = read_output(outfile)
-            except ValueError as e:
-                log.warning(str(e))
         if output is not None:
             row["status"] = "ok"
             row.update({k: output[col] for k, col in FROM_OUTPUT.items()})
