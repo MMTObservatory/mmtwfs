@@ -16,7 +16,7 @@ on:
 # workers and running tox.
 jobs:
   test:
-    uses: OpenAstronomy/github-actions-workflows/.github/workflows/tox.yml@v3
+    uses: OpenAstronomy/github-actions-workflows/.github/workflows/tox.yml@v3.2.2
     with:
       envs: |
         - linux: codestyle
@@ -35,6 +35,6 @@ jobs:
           pytest: false
       # codestyle and build_docs have no python version in their env names. The
       # runner default is older than this package supports, so pin it.
-      default_python: '3.13'
+      default_python: '3.14'
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV }}

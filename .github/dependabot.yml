@@ -1,0 +1,17 @@
+# Keep the CI actions (including the OpenAstronomy reusable workflows, which are pinned to exact
+# releases so that updates show up here) and the Docker base image current.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
