@@ -154,16 +154,29 @@ def _clear_handles(events):
 
 def _flag_labels(flag_times, frame_times):
     """
-    Number the flags 1..N, merging runs closer than 3% of the night into one "first-last" label so they don't
-    overprint. Times are matplotlib date numbers; annotate skips unit conversion. Returns (time, label) pairs.
+    Number the flags 1..N for the timeline. A run of flags each within 3% of the night of the one before shares one
+    "first-last" label centred over the run, and neighbouring labels centred less than 6% of the night apart (room for
+    the widest, e.g. "100-116") are merged too, so labels never overprint. Times are matplotlib date numbers; annotate
+    skips unit conversion. Returns (time, label) pairs.
     """
-    close = 0.03 * (frame_times.max() - frame_times.min())
-    labels, first = [], 0
-    for n in range(1, len(flag_times) + 1):
-        if n == len(flag_times) or flag_times[n] - flag_times[first] > close:
-            labels.append((flag_times[first], str(first + 1) if n == first + 1 else f"{first + 1}\u2013{n}"))
-            first = n
-    return labels
+    night = frame_times.max() - frame_times.min()
+    runs = []  # [first index, last index], 0-based
+    for n in range(len(flag_times)):
+        if runs and flag_times[n] - flag_times[n - 1] <= 0.03 * night:
+            runs[-1][1] = n
+        else:
+            runs.append([n, n])
+
+    def centre(run):
+        return (flag_times[run[0]] + flag_times[run[1]]) / 2
+
+    merged = []
+    for run in runs:
+        if merged and centre(run) - centre(merged[-1]) < 0.06 * night:
+            merged[-1][1] = run[1]
+        else:
+            merged.append(run)
+    return [(float(centre(r)), str(r[0] + 1) if r[0] == r[1] else f"{r[0] + 1}\u2013{r[1] + 1}") for r in merged]
 
 
 MAX_LISTED_FLAGS = 20  # beyond this the per-flag legend rows run past the top panel; the Events table lists them all

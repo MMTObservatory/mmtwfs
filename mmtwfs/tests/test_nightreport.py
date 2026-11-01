@@ -103,7 +103,21 @@ def test_clip_outliers_marks_points_off_scale():
 def test_flag_labels_merge_close_flags():
     frames = np.array([0.0, 100.0])
     flags = np.array([10.0, 11.0, 12.0, 50.0, 90.0, 92.0])
-    assert _flag_labels(flags, frames) == [(10.0, "1\u20133"), (50.0, "4"), (90.0, "5\u20136")]
+    assert _flag_labels(flags, frames) == [(11.0, "1\u20133"), (50.0, "4"), (91.0, "5\u20136")]
+
+
+def test_flag_labels_steady_stream_is_one_label():
+    # a flag every 1% of the night: each is close to the one before, so the whole stream is one run
+    frames = np.array([0.0, 100.0])
+    flags = np.arange(20.0, 61.0)
+    assert _flag_labels(flags, frames) == [(40.0, "1\u201341")]
+
+
+def test_flag_labels_merge_runs_whose_labels_would_touch():
+    # 4% apart is a new run, but labels centred 5% apart would overprint, so the two runs share one label
+    frames = np.array([0.0, 100.0])
+    flags = np.array([10.0, 11.0, 15.0, 16.0])
+    assert _flag_labels(flags, frames) == [(13.0, "1\u20134")]
 
 
 def _flags(times, kinds):
