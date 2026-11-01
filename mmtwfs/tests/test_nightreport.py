@@ -6,6 +6,7 @@ import json
 import shutil
 from unittest.mock import patch
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 from astropy.table import Table
@@ -17,6 +18,14 @@ from mmtwfs.scripts.nightreport import (_clip_outliers, _flag_labels, _flag_lege
 FIXTURE = importlib.resources.files("mmtwfs") / "data" / "test_data" / "nightreport" / "20261003"
 OUTPUTS = ["nightreport.html", "nightreport_frames.csv", "nightreport_visits.csv", "nightreport_events.csv",
            "nightreport_m1.csv", "nightreport_m2.csv", "nightreport_summary.json"]
+
+
+@pytest.fixture(autouse=True)
+def close_figures():
+    # tests here open figures without closing them; past 20 matplotlib warns, and pytest turns that into an error in
+    # whichever later test opens the next one
+    yield
+    plt.close("all")
 
 
 @pytest.fixture
@@ -85,7 +94,6 @@ def test_slew_figure_stacks_settle_on_gap(nightdir):
 
 
 def test_clip_outliers_marks_points_off_scale():
-    import matplotlib.pyplot as plt
     ax = plt.figure().add_subplot()
     t = np.arange(200.0)
     y = np.sin(t / 10)
