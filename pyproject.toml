@@ -36,7 +36,13 @@ test = [
     "pytest<9.2",
 ]
 docs = [
-    "sphinx-astropy",
+    # The Read the Docs theme plus sphinx-astropy's extension/intersphinx
+    # machinery (autodoc, automodapi, numpydoc, jquery). sphinx-copybutton is
+    # listed explicitly because conf.v3's extension list references it but it
+    # only ships in sphinx-astropy's theme extras, which we drop.
+    "sphinx-astropy>=1.11",
+    "sphinx-copybutton",
+    "sphinx-rtd-theme>=3.0",
 ]
 extra = [
     "jupyter",
