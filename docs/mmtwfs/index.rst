@@ -5,7 +5,7 @@ Introduction
 ------------
 
 .. note::
-    `mmtwfs` works only with astropy version 3.0 or later and python 3.6 or later.
+    `mmtwfs` requires Python 3.13 or later.
 
 The `mmtwfs` package provides:
 
