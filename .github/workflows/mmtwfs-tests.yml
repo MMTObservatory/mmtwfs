@@ -16,6 +16,11 @@ on:
 # workers and running tox.
 jobs:
   test:
+    # Codecov authenticates through GitHub OIDC (coverage: codecov-oidc), so no upload token is stored.
+    # That also covers Dependabot PRs, which can't read the repository's Actions secrets.
+    permissions:
+      contents: read
+      id-token: write
     uses: OpenAstronomy/github-actions-workflows/.github/workflows/tox.yml@v3.2.2
     with:
       envs: |
@@ -26,7 +31,7 @@ jobs:
         # coverage comes from this job only; the code has no version-specific paths
         - linux: py314-alldeps-cov
           name: py314
-          coverage: 'codecov'
+          coverage: 'codecov-oidc'
         - linux: py314-devdeps
           name: py314-devdeps
         - linux: py315-devdeps
@@ -36,5 +41,3 @@ jobs:
       # codestyle and build_docs have no python version in their env names. The
       # runner default is older than this package supports, so pin it.
       default_python: '3.14'
-    secrets:
-      CODECOV_TOKEN: ${{ secrets.CODECOV }}
