@@ -23,7 +23,7 @@ from astropy.table import Table
 from astropy.time import Time
 from astropy.utils.exceptions import AstropyWarning
 
-from mmtwfs.outputs import read_output
+from mmtwfs.outputs import MAX_RAW_SEEING, read_output
 from mmtwfs.telescope import MMT
 from mmtwfs.config import mmtwfs_config
 from mmtwfs.wfs import WFSFactory
@@ -378,6 +378,8 @@ def read_frames(nightdir):
         if output is not None:
             row["status"] = "ok"
             row.update({k: output[col] for k, col in FROM_OUTPUT.items()})
+            if row["raw_vlt_seeing"] > MAX_RAW_SEEING:  # bogus, and the zenith seeing and IQ are derived from it
+                row["raw_vlt_seeing"] = row["vlt_seeing"] = row["delivered_iq"] = np.nan
             row["method"] = output["method"]
             row["wfs"] = OUTPUT_WFS.get(output["wfs"], output["wfs"])
         elif (nightdir / f"{stem}.failed").exists():

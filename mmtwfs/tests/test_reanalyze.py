@@ -57,7 +57,9 @@ def test_upgrade_backfills_delivered_iq(tmp_path):
     assert upgrade_cached_line(new, zfile=zfile) == new
 
     # focus-only rows have no seeing, and a missing or unusable seeing gives no delivered IQ
-    for line in [_cached_line(method="periodicity"), _cached_line(raw_vlt_seeing="nan")]:
+    # (a raw seeing over 4" is bogus, and once was 8e9" and took the PSF grid with it)
+    for line in [_cached_line(method="periodicity"), _cached_line(raw_vlt_seeing="nan"),
+                 _cached_line(raw_vlt_seeing="4.5"), _cached_line(raw_vlt_seeing="8327362355.9")]:
         assert _field(upgrade_cached_line(line, zfile=zfile), "delivered_iq") == "nan"
     # neither does a missing or unreadable wavefront
     assert _field(upgrade_cached_line(_cached_line(), zfile=tmp_path / "nope"), "delivered_iq") == "nan"
