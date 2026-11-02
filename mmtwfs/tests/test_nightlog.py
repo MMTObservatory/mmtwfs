@@ -291,6 +291,22 @@ def test_read_frames_prefers_output_time(tmp_path):
     assert list(frames["time"]) == [np.datetime64("2018-10-03T08:41:38"), np.datetime64("2018-10-03T08:42:38")]
 
 
+def test_read_frames_drops_bogus_seeing(tmp_path):
+    # a raw seeing above MAX_RAW_SEEING is a failed measurement; the zenith seeing and IQ derived from it go too
+    for n, raw in [(1, "0.9"), (2, "8327362355.9")]:
+        _frame(tmp_path, f"mmirs_wfs_000{n}.fits", {**MMIRS_HDR, "DATE-OBS": f"2026-10-03T08:4{n}:00"})
+        line = OUTPUT_LINE.format(name=f"mmirs_wfs_000{n}.fits", focus=1.0).replace(",2.4,0.9,", f",2.4,{raw},")
+        (tmp_path / f"mmirs_wfs_000{n}.output").write_text(line)
+    frames, _ = read_frames(tmp_path)
+    assert list(frames["status"]) == ["ok", "ok"]
+    assert frames["raw_vlt_seeing"][0] == 0.9
+    assert frames["delivered_iq"][0] == 1.05
+    assert np.isnan(frames["raw_vlt_seeing"][1])
+    assert np.isnan(frames["vlt_seeing"][1])
+    assert np.isnan(frames["delivered_iq"][1])
+    assert frames["focus"][1] == 1.0  # the rest of the frame's results stay
+
+
 def test_read_frames_output_without_time_uses_header(tmp_path):
     _frame(tmp_path, "mmirs_wfs_0001.fits", MMIRS_HDR)
     (tmp_path / "mmirs_wfs_0001.output").write_text(

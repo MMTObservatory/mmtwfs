@@ -13,6 +13,10 @@ CSV_HEADER = "time,wfs,file,exptime,airmass,az,el,osst,outt,chamt,tiltx,tilty,"\
 CSV_COLUMNS = CSV_HEADER.strip().split(",")
 STRING_COLUMNS = ("time", "wfs", "file", "method")
 
+# arcsec. A raw (uncorrected for airmass) seeing above this is a failed measurement, not real seeing: it comes from
+# frames far out of focus or with too few good spots, and some are billions of arcsec.
+MAX_RAW_SEEING = 4.0
+
 
 def read_output(path):
     """

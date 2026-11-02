@@ -151,6 +151,12 @@ def test_delivered_includes_aberrations():
     assert r.delivered_fwhm > 1.1 * seeing_only.delivered_fwhm
 
 
+def test_huge_seeing_raises():
+    # the delivered-PSF binning follows the seeing, so an absurd seeing would size the optics grid without limit
+    with pytest.raises(ValueError, match="too large"):
+        clear_psf(seeing=8e9 * u.arcsec)
+
+
 def test_seeing_without_units():
     r = clear_psf(seeing=0.8)
     assert u.isclose(r.seeing_fwhm, 0.8 * u.arcsec, rtol=0.01)

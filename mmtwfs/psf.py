@@ -237,6 +237,10 @@ def broadband_psf(
             bin_factor -= 1
     nbin = _odd(nopt / bin_factor)
     nopt = nbin * bin_factor
+    if nopt > 2 * MAX_OPTICS_NPIX:
+        # rounding up to whole bins only adds a few bins; more means the seeing is many times the optics field and
+        # the grid would grow with it, without limit for a bogus seeing
+        raise ValueError(f"Seeing of {seeing:.3g} is too large for an optics PSF field of {fov:.2f} arcsec")
     fov = nopt * pix
 
     # the transform of the sampled pupil repeats every N lambda / D so make the pupil grid fine enough to keep

@@ -22,7 +22,7 @@ from astropy.time import Time
 from astropy.io import fits
 from mmtwfs.wfs import WFSFactory
 from mmtwfs.zernike import ZernikeVector
-from mmtwfs.outputs import CSV_HEADER, CSV_COLUMNS
+from mmtwfs.outputs import CSV_HEADER, CSV_COLUMNS, MAX_RAW_SEEING
 
 from astropy.utils.exceptions import AstropyWarning, AstropyDeprecationWarning
 
@@ -43,7 +43,7 @@ def delivered_iq(wfskey, zv, seeing):
     FWHM in arcsec of the delivered PSF at 500 nm: the optics PSF from the measured wavefront convolved with the
     seeing as observed. NaN when there's no usable seeing or the PSF can't be calculated.
     """
-    if not np.isfinite(seeing) or seeing <= 0:
+    if not np.isfinite(seeing) or seeing <= 0 or seeing > MAX_RAW_SEEING:  # above MAX_RAW_SEEING it's bogus
         return np.nan
     try:
         psf, _ = wfs_systems[wfskey].telescope.psf(zv, band="500nm", seeing=seeing * u.arcsec, plot=False)
