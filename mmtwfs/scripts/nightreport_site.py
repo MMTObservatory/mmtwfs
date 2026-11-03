@@ -4,7 +4,8 @@
 
 """
 Collect the per-night reports written by nightreport into a static website: a month calendar page (index.html), a
-manifest of the nights (nights.json), and a copy of each night's report (nights/YYYYMMDD.html).
+manifest of the nights (nights.json), a guide to reading the reports (readme.html), and a copy of each night's report
+(nights/YYYYMMDD.html).
 """
 
 import argparse
@@ -18,7 +19,7 @@ from pathlib import Path
 
 import coloredlogs
 
-from mmtwfs.scripts.nightreport import night_dirs
+from mmtwfs.scripts.nightreport import night_dirs, render_readme
 
 log = logging.getLogger("NightReportSite")
 coloredlogs.install(level="INFO", logger=log)
@@ -135,6 +136,7 @@ def build_site(dirs, outdir):
     copied = sum(sync_report(sources[e["night"]] / REPORT, nightsdir / f"{e['night']}.html") for e in entries)
     _atomic_write(outdir / "nights.json", json.dumps(entries, indent=1, allow_nan=False))
     _atomic_write(outdir / "index.html", TEMPLATE.read_text())
+    _atomic_write(outdir / "readme.html", render_readme())
     keep = {e["night"] for e in entries}
     pruned = 0
     for page in nightsdir.glob("*.html"):

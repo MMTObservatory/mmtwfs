@@ -6,6 +6,7 @@ import os
 
 import pytest
 
+from mmtwfs.scripts.nightreport import render_readme
 from mmtwfs.scripts.nightreport_site import TEMPLATE, NightError, collect, main, read_night, sync_report
 
 
@@ -128,8 +129,10 @@ def test_build_site_outputs(tmp_path):
     index = (out / "index.html").read_text()
     assert index == TEMPLATE.read_text()
     assert "nights.json" in index
+    assert (out / "readme.html").read_text() == render_readme()
+    assert 'href="readme.html"' in index
     names = sorted(p.name for p in out.rglob("*"))
-    assert names == ["20261003.html", "20261004.html", "index.html", "nights", "nights.json"]
+    assert names == ["20261003.html", "20261004.html", "index.html", "nights", "nights.json", "readme.html"]
 
 
 def test_rerun_leaves_copies_untouched(tmp_path):
