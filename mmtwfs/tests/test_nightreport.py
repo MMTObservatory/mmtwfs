@@ -3,6 +3,7 @@
 
 import importlib.resources
 import json
+import re
 import shutil
 from unittest.mock import patch
 
@@ -12,8 +13,9 @@ import pytest
 from astropy.table import Table
 
 from mmtwfs.nightlog import load_night
-from mmtwfs.scripts.nightreport import (_clip_outliers, _flag_labels, _flag_legend, _summary_value, main, night_dirs,
-                                        slew_figure, summarize, timeline_figure, write_report)
+from mmtwfs.scripts.nightreport import (EVENT_KINDS, README, _clip_outliers, _flag_labels, _flag_legend, _summary_value,
+                                        main, night_dirs, render_readme, slew_figure, summarize, timeline_figure,
+                                        write_report)
 
 FIXTURE = importlib.resources.files("mmtwfs") / "data" / "test_data" / "nightreport" / "20261003"
 OUTPUTS = ["nightreport.html", "nightreport_frames.csv", "nightreport_visits.csv", "nightreport_events.csv",
@@ -53,6 +55,29 @@ def test_write_report_files_and_contents(nightdir):
     assert summary["median_zenith_seeing"] < summary["median_raw_vlt_seeing"]
     assert "np.str_" not in html and "['" not in html
     assert "<div class='scroll'><table>" in html
+
+
+def test_report_links_readme_and_states_thresholds(nightdir):
+    write_report(load_night(nightdir, {"focus_thresh": 15.0}))
+    html = (nightdir / "nightreport.html").read_text()
+    assert f"href='{README}' target='_blank'" in html
+    assert "focus &lt; 15 \u00b5m, coma &lt; 2\u2033, 2 consecutive frames" in html  # this night's, not the defaults
+    # each section's help link lands on a section of the README
+    readme = render_readme()
+    anchors = re.findall(rf"href='{re.escape(README)}#([\w-]+)'", html)
+    assert len(anchors) == 6
+    for a in anchors:
+        assert f'id="{a}"' in readme
+
+
+def test_readme_filled_from_code():
+    readme = render_readme()
+    assert "$" not in readme  # every placeholder substituted
+    assert "10 \u00b5m" in readme and "2\u2033" in readme and "150 \u00b5m" in readme
+    assert "above 7000 nm" in readme and "4\u2033" in readme
+    for kind in EVENT_KINDS:
+        assert f"<code>{kind}</code>" in readme
+    assert "12 \u00b5m" in render_readme({"focus_thresh": 12.0})
 
 
 def test_summary_value_formatting():

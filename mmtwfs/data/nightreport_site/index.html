@@ -22,7 +22,8 @@ header, #calendar, #legend, #message { padding: 0 16px; max-width: 640px; }
 header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; padding-top: 12px; }
 h1 { font-size: 1.2rem; margin: 0; }
 #current { color: var(--muted); }
-#current a { color: inherit; }
+#current a, #about { color: inherit; }
+#about { color: var(--muted); }
 .controls { display: flex; gap: 8px; align-items: center; margin: 12px 0 8px; }
 .controls button, .controls select {
   font: inherit; color: var(--fg); background: var(--tile); border: 1px solid var(--line); border-radius: 6px;
@@ -61,6 +62,7 @@ h1 { font-size: 1.2rem; margin: 0; }
 <body>
 <header>
   <h1>MMT WFS night reports</h1>
+  <a id="about" href="readme.html">How to read the reports</a>
   <span id="current"></span>
 </header>
 <div id="calendar" hidden>

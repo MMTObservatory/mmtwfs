@@ -11,12 +11,14 @@ import argparse
 import base64
 import concurrent.futures
 import html
+import importlib.resources
 import io
 import json
 import logging
 import os
 import re
 from collections import Counter
+from string import Template
 from pathlib import Path
 
 import coloredlogs
@@ -28,7 +30,10 @@ from matplotlib.lines import Line2D  # noqa: E402
 import numpy as np  # noqa: E402
 from astropy.table import Table, vstack  # noqa: E402
 
-from mmtwfs.nightlog import FIT_TERMS, get_mmt, load_night, SETTLE_DEFAULTS  # noqa: E402
+from mmtwfs.nightlog import (  # noqa: E402
+    ALL_VALID_RESID, FIT_TERMS, FOCUS_VALID_RESID, M1_FOCUS_GATE, get_mmt, load_night, SETTLE_DEFAULTS,
+)
+from mmtwfs.outputs import MAX_RAW_SEEING  # noqa: E402
 from mmtwfs.version import version  # noqa: E402
 from mmtwfs.zernike import ZernikeVector  # noqa: E402
 
@@ -386,15 +391,50 @@ def _html_table(table, columns):
 
 CSS = """body{font-family:system-ui,sans-serif;margin:16px;color:#222;background:#fff}
 table{border-collapse:collapse;font-size:12px}td,th{border:1px solid #ccc;padding:2px 6px;text-align:right}
-th{background:#f0f0f0}.warn{color:#a40}img{max-width:100%}
+th{background:#f0f0f0}.warn{color:#a40}img{max-width:100%}.about{color:#555}
+h2 a.help{font-size:13px;font-weight:normal;margin-left:8px;text-decoration:none}
 .scroll{overflow:auto;max-height:70vh;max-width:100%;border:1px solid #ccc}
 .scroll th{position:sticky;top:0}dt{font-weight:bold;float:left;clear:left;width:11em}dd{margin-left:11em}"""
 
 
+# the site serves reports from nights/ and the README from its root; target=_blank because the site shows reports in
+# an iframe
+README = "../readme.html"
+README_TEMPLATE = importlib.resources.files("mmtwfs") / "data" / "nightreport_site" / "readme.html"
+
+
+def _num(value):
+    return f"{value:g}"
+
+
+def render_readme(params=None):
+    """The site's guide to the reports, with the default thresholds and limits filled in from the code."""
+    p = {**SETTLE_DEFAULTS, **(params or {})}
+    kinds = "\n".join(f"<dt><code>{k}</code></dt><dd>{html.escape(desc)}</dd>" for k, desc in EVENT_KINDS.items())
+    return Template(README_TEMPLATE.read_text()).substitute(
+        version=html.escape(version), focus_thresh=_num(p["focus_thresh"]), coma_thresh=_num(p["coma_thresh"]),
+        consecutive=p["consecutive"], iq_abs=_num(p["iq_abs"]), iq_frac_pct=_num(100 * p["iq_frac"]),
+        slew_sep=_num(p["slew_sep"]), max_raw_seeing=_num(MAX_RAW_SEEING), all_valid=_num(ALL_VALID_RESID),
+        focus_valid=_num(FOCUS_VALID_RESID), m1_gate=_num(M1_FOCUS_GATE), max_flags=MAX_LISTED_FLAGS,
+        event_kinds=kinds,
+    )
+
+
+def _h2(title, anchor):
+    return f"<h2>{title}<a class='help' href='{README}#{anchor}' target='_blank' title='What this shows'>?</a></h2>"
+
+
+def _about(params):
+    return (f"<p class='about'><a href='{README}' target='_blank'>How to read this report</a> · settle thresholds: "
+            f"focus &lt; {_num(params['focus_thresh'])} \u00b5m, coma &lt; {_num(params['coma_thresh'])}\u2033, "
+            f"{params['consecutive']} consecutive frames; IQ within {_num(params['iq_abs'])}\u2033 or "
+            f"{_num(100 * params['iq_frac'])}% of its plateau</p>")
+
+
 def render_html(night, summary):
     parts = [f"<!doctype html><html><head><meta charset='utf-8'><title>WFS night {summary['night']}</title>"
-             f"<style>{CSS}</style></head><body><h1>WFS night {summary['night']}</h1>"]
-    parts.append("<h2>Summary</h2><table>" + "".join(
+             f"<style>{CSS}</style></head><body><h1>WFS night {summary['night']}</h1>", _about(night.params)]
+    parts.append(_h2("Summary", "summary") + "<table>" + "".join(
         f"<tr><th>{html.escape(k)}</th><td>{html.escape(_summary_value(val))}</td></tr>"
         for k, val in summary.items() if k not in ("warnings", "params", "counts")) + "</table>")
     parts += [f"<p class='warn'>{html.escape(w)}</p>" for w in night.warnings]
@@ -402,13 +442,13 @@ def render_html(night, summary):
         parts.append("<p>No WFS frames in this night directory.</p></body></html>")
         return "".join(parts)
     with plt.style.context(PLOT_STYLE):
-        parts.append("<h2>Night timeline</h2>" + _img(timeline_figure(night)))
-        parts.append("<h2>M1 surface</h2>")
+        parts.append(_h2("Night timeline", "timeline") + _img(timeline_figure(night)))
+        parts.append(_h2("M1 surface", "m1-surface"))
         maps = surface_figures(night)
         parts.append("".join(_img(fig) for fig in maps) if maps else "<p>No M1 forces applied.</p>")
-        parts.append("<h2>Slew response</h2>" + _img(slew_figure(night)))
+        parts.append(_h2("Slew response", "slew") + _img(slew_figure(night)))
     parts.append("<p>Gaps between tracks are as seen by the WFS: slew, acquisition, and WFS restart together.</p>")
-    parts.append("<h2>Visits</h2><p>Times in seconds from each visit's first frame.</p>"
+    parts.append(_h2("Visits", "visits") + "<p>Times in seconds from each visit's first frame.</p>"
                  + "<div class='scroll'>" + _html_table(night.visits, VISIT_TABLE_COLUMNS) + "</div>")
     events = night.events[[k not in ("validity", "error") for k in night.events["kind"]]]  # listed again as flags
     events["flag"] = ""
@@ -419,7 +459,7 @@ def render_html(night, summary):
     combined.sort("time")
     kinds = "".join(f"<dt>{k}</dt><dd>{html.escape(desc)}</dd>" for k, desc in EVENT_KINDS.items()
                     if k in set(combined["kind"]))
-    parts.append("<h2>Events</h2><p>Rows with a flag number are flags, numbered as in the timeline.</p>"
+    parts.append(_h2("Events", "events") + "<p>Rows with a flag number are flags, numbered as in the timeline.</p>"
                  f"<dl>{kinds}</dl>" + _html_table(combined, EVENT_TABLE_COLUMNS))
     parts.append("</body></html>")
     return "".join(parts)
